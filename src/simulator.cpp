@@ -21,6 +21,7 @@
 #include <mutex>
 #include <chrono>
 
+#include "xbot2_bt_joint.h"
 
 //-------------------------------- global -----------------------------------------------
 
@@ -57,6 +58,12 @@ GLFWwindow* window = NULL;
 mjuiState uistate;
 mjUI ui0, ui1;
 
+// xbot2
+XBot::JointBtServer::UniquePtr xbot2_joint;
+
+void mj_control_callback(const mjModel* m, mjData* d);
+
+mjfGeneric mjcb_control = mj_control_callback;
 
 // UI settings not contained in MuJoCo structures
 struct
@@ -1133,8 +1140,12 @@ void loadmodel(void)
     // delete old model, assign new
     mj_deleteData(d);
     mj_deleteModel(m);
+    xbot2_joint.release();
     m = mnew;
     d = mj_makeData(m);
+    m->opt.timestep = 0.001;
+    m->opt.integrator = mjtIntegrator::mjINT_RK4;
+    xbot2_joint = std::make_unique<XBot::JointBtServer>(m);
     mj_forward(m, d);
 
     // re-create scene and context
@@ -1834,6 +1845,7 @@ void simulate(void)
     double cpusync = 0;
     mjtNum simsync = 0;
 
+
     // run until asked to exit
     while( !settings.exitrequest )
     {
@@ -2004,6 +2016,31 @@ void init(void)
 }
 
 
+void mj_control_callback(const mjModel* m, mjData* d)
+{
+    if(!xbot2_joint)
+    {
+        return;
+    }
+
+    for(auto& j : xbot2_joint->joints)
+    {
+        int qi = m->jnt_qposadr[j->get_id()];
+        int vi = m->jnt_dofadr[j->get_id()];
+        j->rx().link_pos = d->qpos[qi];
+        j->rx().link_vel = d->qvel[vi];
+        j->rx().torque = j->pid_torque();
+    }
+
+    xbot2_joint->run();
+
+    for(auto& j : xbot2_joint->joints)
+    {
+        int vi = m->jnt_dofadr[j->get_id()];
+        d->ctrl[vi] = j->pid_torque();
+    }
+
+}
 
 // run event loop
 int main(int argc, const char** argv)

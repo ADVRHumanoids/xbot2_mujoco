@@ -1,11 +1,27 @@
 cmake_minimum_required(VERSION 3.0)
 project(xbot2_mujoco)
 
-find_package(mujoco_hhcm REQUIRED)
+find_package(mujoco_cmake REQUIRED)
+find_package(xbot2 REQUIRED)
+
+add_library(xbot2_mujoco STATIC
+    src/xbot2_bt_joint.cpp
+    )
+
+target_link_libraries(xbot2_mujoco
+    PUBLIC
+    mujoco_cmake::mujoco
+    xbot2::xbot2)
 
 add_executable(mujoco_simulator
     src/simulator.cpp
-    src/uitools.cpp)
+    src/uitools.cpp
+    src/control.cpp)
 
 target_link_libraries(mujoco_simulator
-    mujoco_hhcm::mujoco)
+    xbot2_mujoco)
+
+install(TARGETS mujoco_simulator
+    DESTINATION bin)
+
+
