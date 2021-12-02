@@ -71,7 +71,6 @@ bool JointInstanceBt::sense()
 
 bool JointInstanceBt::move()
 {
-
     return true;
 }
 

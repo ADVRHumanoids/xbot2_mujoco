@@ -23,6 +23,7 @@
 
 #include "xbot2_bt_joint.h"
 
+
 //-------------------------------- global -----------------------------------------------
 
 // constants
@@ -1143,8 +1144,6 @@ void loadmodel(void)
     xbot2_joint.release();
     m = mnew;
     d = mj_makeData(m);
-    m->opt.timestep = 0.001;
-    m->opt.integrator = mjtIntegrator::mjINT_RK4;
     xbot2_joint = std::make_unique<XBot::JointBtServer>(m);
     mj_forward(m, d);
 
@@ -2037,7 +2036,7 @@ void mj_control_callback(const mjModel* m, mjData* d)
     for(auto& j : xbot2_joint->joints)
     {
         int vi = m->jnt_dofadr[j->get_id()];
-        d->ctrl[vi] = j->pid_torque();
+        d->ctrl[vi] = j->rx().torque;
     }
 
 }
