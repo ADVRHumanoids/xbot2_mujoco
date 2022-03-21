@@ -4,6 +4,8 @@ project(xbot2_mujoco)
 find_package(mujoco_cmake REQUIRED)
 find_package(xbot2 REQUIRED)
 
+set(CMAKE_CXX_STANDARD 17)
+
 add_library(xbot2_mujoco STATIC
     src/xbot2_bt_joint.cpp
     )

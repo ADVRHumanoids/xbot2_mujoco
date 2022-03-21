@@ -1,9 +1,19 @@
 #include "xbot2_bt_joint.h"
+#include <fnmatch.h>
+#include <yaml-cpp/yaml.h>
 
 using namespace XBot;
 
-JointBtServer::JointBtServer(mjModel * mj_model)
+JointBtServer::JointBtServer(mjModel * mj_model, std::string cfg_path)
 {
+    YAML::Node cfg;
+    if(!cfg_path.empty())
+    {
+        cfg = YAML::LoadFile(cfg_path);
+    }
+
+    auto motor_pd = cfg["motor_pd"];
+
     for(int i = 0; i < mj_model->njnt; i++)
     {
         if(mj_model->jnt_type[i] != mjtJoint::mjJNT_HINGE &&
@@ -19,8 +29,22 @@ JointBtServer::JointBtServer(mjModel * mj_model)
                      );
 
         j->rx().pos_ref = j->rx().link_pos;
-        j->rx().gain_kp = 500;
-        j->rx().gain_kd = 10;
+        j->rx().gain_kp = 100;
+        j->rx().gain_kd = 5;
+
+        for(auto pair: motor_pd)
+        {
+            auto pattern = pair.first.as<std::string>();
+            auto gains = pair.second.as<std::pair<double, double>>();
+
+            if(fnmatch(pattern.c_str(), jname.c_str(), 0) == 0)
+            {
+                j->rx().gain_kp = gains.first;
+                j->rx().gain_kd = gains.second;
+                printf("joint %s setting gains %f, %f\n", jname.c_str(), gains.first, gains.second);
+            }
+        }
+
         j->tx().reset(j->rx());
 
         joints.push_back(j);

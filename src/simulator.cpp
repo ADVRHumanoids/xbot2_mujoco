@@ -23,6 +23,7 @@
 
 #include "xbot2_bt_joint.h"
 
+#include <Eigen/Dense>
 
 //-------------------------------- global -----------------------------------------------
 
@@ -61,6 +62,7 @@ mjUI ui0, ui1;
 
 // xbot2
 XBot::JointBtServer::UniquePtr xbot2_joint;
+std::string xbot2_cfg_path;
 
 void mj_control_callback(const mjModel* m, mjData* d);
 
@@ -1144,7 +1146,7 @@ void loadmodel(void)
     xbot2_joint.release();
     m = mnew;
     d = mj_makeData(m);
-    xbot2_joint = std::make_unique<XBot::JointBtServer>(m);
+    xbot2_joint = std::make_unique<XBot::JointBtServer>(m, xbot2_cfg_path);
     mj_forward(m, d);
 
     // re-create scene and context
@@ -2053,6 +2055,13 @@ int main(int argc, const char** argv)
         mju_strncpy(filename, argv[1], 1000);
         settings.loadrequest = 2;
     }
+
+    // xbot2 config
+    if( argc>2 )
+    {
+        xbot2_cfg_path = argv[2];
+    }
+
 
     // start simulation thread
     std::thread simthread(simulate);

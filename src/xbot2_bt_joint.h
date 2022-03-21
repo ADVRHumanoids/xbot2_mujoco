@@ -39,7 +39,7 @@ public:
 
     XBOT2_DECLARE_SMART_PTR(JointBtServer);
 
-    JointBtServer(mjModel * mj_model);
+    JointBtServer(mjModel * mj_model, std::string cfg_path);
 
     void run();
 
