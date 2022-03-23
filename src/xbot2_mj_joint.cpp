@@ -1,10 +1,11 @@
-#include "xbot2_bt_joint.h"
+#include "xbot2_mj_joint.h"
 #include <fnmatch.h>
 #include <yaml-cpp/yaml.h>
 
 using namespace XBot;
 
-JointBtServer::JointBtServer(mjModel * mj_model, std::string cfg_path)
+JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
+    _m(mj_model)
 {
     YAML::Node cfg;
     if(!cfg_path.empty())
@@ -16,15 +17,15 @@ JointBtServer::JointBtServer(mjModel * mj_model, std::string cfg_path)
 
     for(int i = 0; i < mj_model->njnt; i++)
     {
-        if(mj_model->jnt_type[i] != mjtJoint::mjJNT_HINGE &&
-               mj_model->jnt_type[i] != mjtJoint::mjJNT_SLIDE)
+        if(_m->jnt_type[i] != mjtJoint::mjJNT_HINGE &&
+               _m->jnt_type[i] != mjtJoint::mjJNT_SLIDE)
         {
             continue;
         }
 
-        std::string jname = &mj_model->names[mj_model->name_jntadr[i]];
+        std::string jname = &_m->names[mj_model->name_jntadr[i]];
 
-        auto j = std::make_shared<JointInstanceBt>(
+        auto j = std::make_shared<JointInstanceMj>(
                      Hal::DeviceInfo{jname, "joint_mj", i}
                      );
 
@@ -47,18 +48,23 @@ JointBtServer::JointBtServer(mjModel * mj_model, std::string cfg_path)
 
         j->tx().reset(j->rx());
 
-        joints.push_back(j);
+        _joints.push_back(j);
     }
 
-    std::vector<Hal::DeviceRt::Ptr> devs(joints.begin(), joints.end());
+    std::vector<Hal::DeviceRt::Ptr> devs(_joints.begin(), _joints.end());
 
     _srv = std::make_unique<ServerManager>(devs, "sock", "joint_gz");
 }
 
-void JointBtServer::run()
+void JointMjServer::run(mjData * d)
 {
-    for(auto& j : joints)
+    for(auto& j : _joints)
     {
+        int qi = _m->jnt_qposadr[j->get_id()];
+        int vi = _m->jnt_dofadr[j->get_id()];
+        j->rx().link_pos = d->qpos[qi];
+        j->rx().link_vel = d->qvel[vi];
+        j->rx().torque = j->pid_torque();
         j->sense();
     }
 
@@ -66,20 +72,21 @@ void JointBtServer::run()
 
     _srv->run();
 
-    for(auto& j : joints)
+    for(auto& j : _joints)
     {
+        int vi = _m->jnt_dofadr[j->get_id()];
+        d->ctrl[vi] = j->rx().torque;
         j->move();
     }
-
 }
 
-JointInstanceBt::JointInstanceBt(Hal::DeviceInfo devinfo):
+JointInstanceMj::JointInstanceMj(Hal::DeviceInfo devinfo):
     BaseType(devinfo)
 {
 
 }
 
-bool JointInstanceBt::sense()
+bool JointInstanceMj::sense()
 {
     _rx.pos_ref = _tx.pos_ref;
     _rx.vel_ref = _tx.vel_ref;
@@ -93,12 +100,12 @@ bool JointInstanceBt::sense()
     return true;
 }
 
-bool JointInstanceBt::move()
+bool JointInstanceMj::move()
 {
     return true;
 }
 
-double JointInstanceBt::pid_torque()
+double JointInstanceMj::pid_torque()
 {
     double qerr = _tx.pos_ref - _rx.link_pos;
     double dqerr = _tx.vel_ref - _rx.link_vel;

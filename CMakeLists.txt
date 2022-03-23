@@ -7,7 +7,8 @@ find_package(xbot2 REQUIRED)
 set(CMAKE_CXX_STANDARD 17)
 
 add_library(xbot2_mujoco STATIC
-    src/xbot2_bt_joint.cpp
+    src/xbot2_mj_joint.cpp
+    src/xbot2_mj_imu.cpp
     )
 
 target_link_libraries(xbot2_mujoco

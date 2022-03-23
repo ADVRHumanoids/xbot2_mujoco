@@ -21,7 +21,7 @@
 #include <mutex>
 #include <chrono>
 
-#include "xbot2_bt_joint.h"
+#include "xbot2_bridge.h"
 
 #include <Eigen/Dense>
 
@@ -61,7 +61,7 @@ mjuiState uistate;
 mjUI ui0, ui1;
 
 // xbot2
-XBot::JointBtServer::UniquePtr xbot2_joint;
+XBot::MjWrapper::UniquePtr xbot2_wrapper;
 std::string xbot2_cfg_path;
 
 void mj_control_callback(const mjModel* m, mjData* d);
@@ -1143,10 +1143,10 @@ void loadmodel(void)
     // delete old model, assign new
     mj_deleteData(d);
     mj_deleteModel(m);
-    xbot2_joint.release();
+    xbot2_wrapper.release();
     m = mnew;
     d = mj_makeData(m);
-    xbot2_joint = std::make_unique<XBot::JointBtServer>(m, xbot2_cfg_path);
+    xbot2_wrapper = std::make_unique<XBot::MjWrapper>(m, xbot2_cfg_path);
     mj_forward(m, d);
 
     // re-create scene and context
@@ -2019,27 +2019,12 @@ void init(void)
 
 void mj_control_callback(const mjModel* m, mjData* d)
 {
-    if(!xbot2_joint)
+    if(!xbot2_wrapper)
     {
         return;
     }
 
-    for(auto& j : xbot2_joint->joints)
-    {
-        int qi = m->jnt_qposadr[j->get_id()];
-        int vi = m->jnt_dofadr[j->get_id()];
-        j->rx().link_pos = d->qpos[qi];
-        j->rx().link_vel = d->qvel[vi];
-        j->rx().torque = j->pid_torque();
-    }
-
-    xbot2_joint->run();
-
-    for(auto& j : xbot2_joint->joints)
-    {
-        int vi = m->jnt_dofadr[j->get_id()];
-        d->ctrl[vi] = j->rx().torque;
-    }
+    xbot2_wrapper->run(d);
 
 }
 

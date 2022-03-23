@@ -8,18 +8,18 @@
 namespace XBot
 {
 
-class JointInstanceBt : public Hal::DeviceTplCommon<Hal::joint_rx,
+class JointInstanceMj : public Hal::DeviceTplCommon<Hal::joint_rx,
         Hal::joint_tx>
 {
 
 public:
 
-    XBOT2_DECLARE_SMART_PTR(JointInstanceBt)
+    XBOT2_DECLARE_SMART_PTR(JointInstanceMj)
 
     typedef DeviceTplCommon<Hal::joint_rx,
     Hal::joint_tx> BaseType;
 
-    JointInstanceBt(Hal::DeviceInfo devinfo);
+    JointInstanceMj(Hal::DeviceInfo devinfo);
 
     bool sense() override;
 
@@ -32,22 +32,23 @@ private:
 
 };
 
-class JointBtServer
+class JointMjServer
 {
 
 public:
 
-    XBOT2_DECLARE_SMART_PTR(JointBtServer);
+    XBOT2_DECLARE_SMART_PTR(JointMjServer);
 
-    JointBtServer(mjModel * mj_model, std::string cfg_path);
+    JointMjServer(mjModel * mj_model, std::string cfg_path);
 
-    void run();
+    void run(mjData * d);
 
-    std::vector<JointInstanceBt::Ptr> joints;
 
 private:
 
     ServerManager::UniquePtr _srv;
+    mjModel * _m;
+    std::vector<JointInstanceMj::Ptr> _joints;
 
 };
 
