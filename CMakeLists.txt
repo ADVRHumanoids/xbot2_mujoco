@@ -27,4 +27,7 @@ target_link_libraries(mujoco_simulator
 install(TARGETS mujoco_simulator
     DESTINATION bin)
 
+install(PROGRAMS src/mujoco_simulator_wrapper.py 
+    DESTINATION bin)
+
 
