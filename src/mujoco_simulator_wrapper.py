@@ -171,6 +171,7 @@ for sb in site_bodies:
     body.append(site)
 
 open(mj_xml_path, 'w').write(etree.tostring(xml_merged, pretty_print=True).decode())
+print(f'running mujoco_simulator {mj_xml_path} {args.ctrlcfg}')
 subprocess.run(['mujoco_simulator', mj_xml_path, args.ctrlcfg])
 
 print('bye')

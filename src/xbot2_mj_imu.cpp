@@ -96,8 +96,10 @@ void ImuMjServer::run(mjData * d)
 
 bool XBot::ImuInstanceMj::sense()
 {
+    return true;
 }
 
 bool XBot::ImuInstanceMj::move()
 {
+    return true;
 }

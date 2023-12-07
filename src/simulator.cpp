@@ -1143,7 +1143,7 @@ void loadmodel(void)
     // delete old model, assign new
     mj_deleteData(d);
     mj_deleteModel(m);
-    xbot2_wrapper.release();
+    xbot2_wrapper.reset();
     m = mnew;
     d = mj_makeData(m);
     xbot2_wrapper = std::make_unique<XBot::MjWrapper>(m, xbot2_cfg_path);
@@ -2080,12 +2080,16 @@ int main(int argc, const char** argv)
     settings.exitrequest = 1;
     simthread.join();
 
+    fprintf(stderr, "destroying xbot2 wrapper \n");
+    xbot2_wrapper.reset();
+
     // delete everything we allocated
     uiClearCallback(window);
     mj_deleteData(d);
     mj_deleteModel(m);
     mjv_freeScene(&scn);
     mjr_freeContext(&con);
+
 
     // terminate GLFW (crashes with Linux NVidia drivers)
     #if defined(__APPLE__) || defined(_WIN32)

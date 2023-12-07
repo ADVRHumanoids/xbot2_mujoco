@@ -64,6 +64,8 @@ void JointMjServer::run(mjData * d)
         int vi = _m->jnt_dofadr[j->get_id()];
         j->rx().link_pos = d->qpos[qi];
         j->rx().link_vel = d->qvel[vi];
+        j->rx().motor_pos = d->qpos[qi];
+        j->rx().motor_vel = d->qvel[vi];
         j->rx().torque = j->pid_torque();
         j->sense();
     }
