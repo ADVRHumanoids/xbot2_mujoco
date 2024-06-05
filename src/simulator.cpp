@@ -67,10 +67,16 @@ using Seconds = std::chrono::duration<double>;
 XBot::MjWrapper::UniquePtr xbot2_wrapper;
 std::string xbot2_cfg_path;
 
+void mj_control_callback(const mjModel* m, mjData* d)
+{
+    if(!xbot2_wrapper)
+    {
+        return;
+    }
 
-void mj_control_callback(const mjModel* m, mjData* d);
+    xbot2_wrapper->run(d);
 
-mjfGeneric mjcb_control = mj_control_callback;
+}
 
 //---------------------------------------- plugin handling -----------------------------------------
 
@@ -232,8 +238,7 @@ mjModel* LoadModel(const char* file, mj::Simulate& sim) {
     if (!mnew) {
       mju::strcpy_arr(loadError, "could not load binary model");
     }
-    xbot2_wrapper.reset();
-    xbot2_wrapper = std::make_unique<XBot::MjWrapper>(mnew, xbot2_cfg_path);
+
   } else {
     mnew = mj_loadXML(filename, nullptr, loadError, kErrorLength);
     // remove trailing newline character from loadError
@@ -258,6 +263,9 @@ mjModel* LoadModel(const char* file, mj::Simulate& sim) {
     std::printf("Model compiled, but simulation warning (paused):\n  %s\n", loadError);
     sim.run = 0;
   }
+
+  xbot2_wrapper.reset();
+  xbot2_wrapper = std::make_unique<XBot::MjWrapper>(mnew, xbot2_cfg_path);
 
   return mnew;
 }
@@ -482,16 +490,7 @@ __attribute__((used, visibility("default"))) extern "C" void _mj_rosettaError(co
 }
 #endif
 
-void mj_control_callback(const mjModel* m, mjData* d)
-{
-    if(!xbot2_wrapper)
-    {
-        return;
-    }
 
-    xbot2_wrapper->run(d);
-
-}
 
 // run event loop
 int main(int argc, char** argv) {
@@ -529,9 +528,16 @@ int main(int argc, char** argv) {
   );
 
   const char* filename = nullptr;
+
   if (argc >  1) {
-    filename = argv[1];
+      filename = argv[1];
   }
+
+  if(argc > 2) {
+      xbot2_cfg_path = argv[2];
+  }
+
+  mjcb_control = mj_control_callback;
 
   // start physics thread
   std::thread physicsthreadhandle(&PhysicsThread, sim.get(), filename);
