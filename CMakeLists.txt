@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.0)
 project(xbot2_mujoco)
 
 find_package(mujoco_cmake REQUIRED)
+find_package(glfw3 REQUIRED)
 find_package(xbot2 REQUIRED)
 find_package(matlogger2 REQUIRED)
 
@@ -22,10 +23,17 @@ target_link_libraries(xbot2_mujoco
 
 add_executable(mujoco_simulator
     src/simulator.cpp
+    src/simulate.cc
+    src/platform_ui_adapter.cc
     src/uitools.cpp
-    src/control.cpp)
+    src/control.cpp
+    src/lodepng.h
+    src/lodepng.cpp
+    src/glfw_adapter.cc
+    src/glfw_dispatch.cc)
 
 target_link_libraries(mujoco_simulator
+    glfw
     xbot2_mujoco)
 
 install(TARGETS mujoco_simulator

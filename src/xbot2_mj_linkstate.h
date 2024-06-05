@@ -4,7 +4,7 @@
 #include <xbot2/hal/dev_imu.h>
 #include <xbot2/client_server/server_manager.h>
 
-#include "mujoco.h"
+#include <mujoco/mujoco.h>
 
 #include <matlogger2/matlogger2.h>
 

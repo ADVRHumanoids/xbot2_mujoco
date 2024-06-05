@@ -68,14 +68,7 @@ void LinkStateMjServer::run(mjData * d)
 
         Eigen::Matrix<double, 6, 1>::Map(lss->rx().twist.data()).noalias() = _J * qvel;
 
-        _ml->add(lss->get_name() + "_t", t);
-        _ml->add(lss->get_name() + "_q", quat.coeffs());
-        _ml->add(lss->get_name() + "_v", Eigen::Matrix<double, 6, 1>::Map(lss->rx().twist.data()));
-
     }
-
-    _ml->add("qvel", qvel);
-    _ml->add("time", d->time);
 
     _srv->send();
     _srv->run();
