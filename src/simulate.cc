@@ -36,6 +36,8 @@
 #include "platform_ui_adapter.h"
 #include "array_safety.h"
 
+#include <rosgraph_msgs/Clock.h>
+
 // When launched via an App Bundle on macOS, the working directory is the path to the App Bundle's
 // resource directory. This causes files to be saved into the bundle, which is not the desired
 // behavior. Instead, we open a save dialog box to ask the user where to put the file.
@@ -1801,7 +1803,8 @@ Simulate::Simulate(std::unique_ptr<PlatformUIAdapter> platform_ui,
       opt(*opt),
       pert(*pert),
       platform_ui(std::move(platform_ui)),
-      uistate(this->platform_ui->state()) {
+      uistate(this->platform_ui->state())
+{
   mjv_defaultScene(&scn);
   mjv_defaultSceneState(&scnstate_);
 }
@@ -2594,7 +2597,7 @@ void Simulate::Render() {
 
 
 
-void Simulate::RenderLoop() {
+void Simulate::RenderLoop(ros::NodeHandle nh) {
   // Set timer callback (milliseconds)
   mjcb_time = Timer;
 
@@ -2665,6 +2668,8 @@ void Simulate::RenderLoop() {
   frames_ = 0;
   last_fps_update_ = mj::Simulate::Clock::now();
 
+  ros::Publisher time_pub = nh.advertise<rosgraph_msgs::Clock>("/clock", 1);
+
   // run event loop
   while (!this->platform_ui->ShouldCloseWindow() && !this->exitrequest.load()) {
     {
@@ -2708,6 +2713,7 @@ void Simulate::RenderLoop() {
         scnstate_.data.warning[mjWARN_VGEOMFULL].number += mjv_updateSceneFromState(
             &scnstate_, &this->opt, &this->pert, &this->cam, mjCAT_ALL, &this->scn);
       }
+
     }  // MutexLock (unblocks simulation thread)
 
     // render while simulation is running
@@ -2721,6 +2727,17 @@ void Simulate::RenderLoop() {
       last_fps_update_ = now;
       fps_ = frames_ / interval;
       frames_ = 0;
+    }
+
+    if (d_)
+    {
+        rosgraph_msgs::Clock time_msg;
+        double mj_time = d_->time;
+        time_msg.clock.sec = std::floor(d_->time);
+        mj_time -= std::floor(d_->time);
+        time_msg.clock.nsec = mj_time * 1e9;
+
+        time_pub.publish(time_msg);
     }
   }
 
