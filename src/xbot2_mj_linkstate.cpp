@@ -58,7 +58,7 @@ void LinkStateMjServer::run(mjData * d)
     {
         auto t = Eigen::Vector3d::Map(&d->site_xpos[lss->site_id*3]);
         auto R = Eigen::Matrix3d::Map(&d->site_xmat[lss->site_id*9]);
-        auto quat = Eigen::Quaterniond(R);
+        auto quat = Eigen::Quaterniond(R.transpose());
 
         Eigen::Vector4d::Map(lss->rx().orientation.data()) = quat.coeffs();
         Eigen::Vector3d::Map(lss->rx().position.data()) = t;
