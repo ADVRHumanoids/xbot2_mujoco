@@ -5,8 +5,15 @@ find_package(mujoco_cmake REQUIRED)
 find_package(xbot2 REQUIRED)
 find_package(matlogger2 REQUIRED)
 
-
 set(CMAKE_CXX_STANDARD 17)
+
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
+endif()
+
+if(DEFINED ENV{CONDA_PREFIX})
+  set(CMAKE_INSTALL_PREFIX $ENV{CONDA_PREFIX}/ CACHE PATH "bindings install prefix" FORCE)
+endif()
 
 add_library(xbot2_mujoco STATIC
     src/xbot2_mj_joint.cpp
