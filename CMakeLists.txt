@@ -1,11 +1,13 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.15)
 project(xbot2_mujoco)
 
 find_package(mujoco_cmake REQUIRED)
 find_package(xbot2 REQUIRED)
-find_package(matlogger2 REQUIRED)
+# find_package(matlogger2 REQUIRED)
 
 set(CMAKE_CXX_STANDARD 17)
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64")
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
@@ -25,7 +27,8 @@ target_link_libraries(xbot2_mujoco
     PUBLIC
     mujoco_cmake::mujoco
     xbot2::xbot2
-    matlogger2::matlogger2)
+    # matlogger2::matlogger2
+    )
 
 add_executable(mujoco_simulator
     src/simulator.cpp

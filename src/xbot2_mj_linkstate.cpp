@@ -10,19 +10,19 @@ LinkStateInstanceMj::LinkStateInstanceMj(Hal::DeviceInfo devinfo):
 LinkStateMjServer::LinkStateMjServer(mjModel *mj_model, std::string cfg_path):
     _m(mj_model)
 {
-    _ml = MatLogger2::MakeLogger("/tmp/mjlogger");
+    // _ml = MatLogger2::MakeLogger("/tmp/mjlogger");
 
-    auto ml = _ml;
+    // auto ml = _ml;
 
-    _ml->set_on_data_available_callback(
-        [this](VariableBuffer::BufferInfo bi)
-        {
-            if(bi.variable_free_space < 0.5)
-            {
-                std::cout << "flushing to mat file \n";
-                _ml->flush_available_data();
-            }
-        });
+    // _ml->set_on_data_available_callback(
+    //     [this](VariableBuffer::BufferInfo bi)
+    //     {
+    //         if(bi.variable_free_space < 0.5)
+    //         {
+    //             std::cout << "flushing to mat file \n";
+    //             _ml->flush_available_data();
+    //         }
+    //     });
 
     for(int siteid = 0; siteid < mj_model->nsite; siteid++)
     {
@@ -68,14 +68,14 @@ void LinkStateMjServer::run(mjData * d)
 
         Eigen::Matrix<double, 6, 1>::Map(lss->rx().twist.data()).noalias() = _J * qvel;
 
-        _ml->add(lss->get_name() + "_t", t);
-        _ml->add(lss->get_name() + "_q", quat.coeffs());
-        _ml->add(lss->get_name() + "_v", Eigen::Matrix<double, 6, 1>::Map(lss->rx().twist.data()));
+        // _ml->add(lss->get_name() + "_t", t);
+        // _ml->add(lss->get_name() + "_q", quat.coeffs());
+        // _ml->add(lss->get_name() + "_v", Eigen::Matrix<double, 6, 1>::Map(lss->rx().twist.data()));
 
     }
 
-    _ml->add("qvel", qvel);
-    _ml->add("time", d->time);
+    // _ml->add("qvel", qvel);
+    // _ml->add("time", d->time);
 
     _srv->send();
     _srv->run();
