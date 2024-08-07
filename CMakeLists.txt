@@ -15,6 +15,11 @@ endif()
 
 if(DEFINED ENV{CONDA_PREFIX})
   set(CMAKE_INSTALL_PREFIX $ENV{CONDA_PREFIX}/ CACHE PATH "bindings install prefix" FORCE)
+#   set(CMAKE_SYSROOT /usr)
+#   include_directories(${CMAKE_SYSROOT}/include)
+#   include_directories(${CMAKE_SYSROOT}/include/x86_64-linux-gnu)
+#   message(STATUS "Using sysroot: $ENV{CONDA_PREFIX}/x86_64-conda-linux-gnu/sysroot")
+#   set(CMAKE_SYSROOT "$ENV{CONDA_PREFIX}/x86_64-conda-linux-gnu/sysroot")
 endif()
 
 add_library(xbot2_mujoco STATIC
