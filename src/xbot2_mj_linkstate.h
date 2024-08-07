@@ -6,7 +6,7 @@
 
 #include "mujoco.h"
 
-// #include <matlogger2/matlogger2.h>
+#include <matlogger2/matlogger2.h>
 
 namespace XBot
 {
@@ -63,7 +63,7 @@ private:
     mjModel * _m;
     Eigen::Matrix<double, 6, -1, Eigen::RowMajor> _J;
 
-    // MatLogger2::Ptr _ml;
+    MatLogger2::Ptr _ml;
 
 };
 
