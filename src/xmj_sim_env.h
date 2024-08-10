@@ -21,12 +21,19 @@ public:
     ~XBotMjSimEnv();
 
     void run();
-    void prepare();
     static void render(GLFWwindow* window);
     void step();
     void reset();
 
 private:
+    
+    static XBotMjSimEnv* instance; // "hack": singleton instance pointer to allow
+    // static members to use object attributes and methods 
+    void xbotmj_control_callback(const mjModel* m, mjData* d);
+    
+    void simulate();
+    void prepare();
+    void init();
     
     static void mj_control_callback(const mjModel* m, mjData* d);
     
@@ -50,10 +57,6 @@ private:
 
     static void drop(GLFWwindow* window, int count, const char** paths);
 
-    static XBotMjSimEnv* instance; // Singleton instance pointer
-
-    void xbotmj_control_callback(const mjModel* m, mjData* d);
-
     void profilerinit();
     void profilerupdate();
     
@@ -63,8 +66,6 @@ private:
     void printfield(char* str, void* ptr);
     void watch();
 
-    void simulate();
-    void init();
     void alignScale();
     void copyKey();
     static mjtNum timer();

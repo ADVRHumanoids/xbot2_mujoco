@@ -58,6 +58,42 @@ XBotMjSimEnv::~XBotMjSimEnv() {
     #endif
 }
 
+void XBotMjSimEnv::run() {
+
+    init();
+    
+    running = true;
+    
+    simThread = std::thread(&XBotMjSimEnv::simulate, this);
+
+    // event loop
+    while( !glfwWindowShouldClose(window) && !settings.exitrequest )
+    {
+        // start exclusive access (block simulation thread)
+        mtx.lock();
+
+        // load model (not on first pass, to show "loading" label)
+        if( settings.loadrequest==1 )
+            loadModel();
+        else if( settings.loadrequest>1 )
+            settings.loadrequest = 1;
+
+        // handle events (calls all callbacks)
+        glfwPollEvents();
+
+        // prepare to render
+        prepare();
+
+        // end exclusive access (allow simulation thread to run)
+        mtx.unlock();
+
+        // render while simulation is running
+        render(window);
+    }
+
+    running = false;
+}
+
 void XBotMjSimEnv::init() {
     // print version, check compatibility
     printf("MuJoCo Pro version %.2lf\n", 0.01*mj_version());
@@ -844,38 +880,6 @@ void XBotMjSimEnv::makesections() {
     makegroup(oldstate0[SECT_GROUP]);
     makejoint(oldstate1[SECT_JOINT]);
     makecontrol(oldstate1[SECT_CONTROL]);
-}
-
-void XBotMjSimEnv::run() {
-    running = true;
-    simThread = std::thread(&XBotMjSimEnv::simulate, this);
-
-    // event loop
-    while( !glfwWindowShouldClose(window) && !settings.exitrequest )
-    {
-        // start exclusive access (block simulation thread)
-        mtx.lock();
-
-        // load model (not on first pass, to show "loading" label)
-        if( settings.loadrequest==1 )
-            loadModel();
-        else if( settings.loadrequest>1 )
-            settings.loadrequest = 1;
-
-        // handle events (calls all callbacks)
-        glfwPollEvents();
-
-        // prepare to render
-        prepare();
-
-        // end exclusive access (allow simulation thread to run)
-        mtx.unlock();
-
-        // render while simulation is running
-        render(window);
-    }
-
-    running = false;
 }
 
 int XBotMjSimEnv::uiPredicate(int category, void* userdata)
