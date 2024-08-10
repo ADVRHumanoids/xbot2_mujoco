@@ -351,13 +351,13 @@ void XBotMjSimEnv::profilershow(mjrRect rect) {
         rect.width/4,
         rect.height/4
     };
-    mjr_figure(viewport, &figtimer, &con);
+    mjr_figure(viewport, &instance->figtimer, &instance->con);
     viewport.bottom += rect.height/4;
-    mjr_figure(viewport, &figsize, &con);
+    mjr_figure(viewport, &instance->figsize, &instance->con);
     viewport.bottom += rect.height/4;
-    mjr_figure(viewport, &figcost, &con);
+    mjr_figure(viewport, &instance->figcost, &instance->con);
     viewport.bottom += rect.height/4;
-    mjr_figure(viewport, &figconstraint, &con);
+    mjr_figure(viewport, &instance->figconstraint, &instance->con);
 }
 
 void XBotMjSimEnv::sensorinit() {
@@ -445,7 +445,7 @@ void XBotMjSimEnv::sensorshow(mjrRect rect) {
         width,
         rect.height/3
     };
-    mjr_figure(viewport, &figsensor, &con);
+    mjr_figure(viewport, &instance->figsensor, &instance->con);
 }
 
 void XBotMjSimEnv::infotext(char* title, char* content, double interval) {
@@ -531,27 +531,27 @@ void XBotMjSimEnv::makephysics(int oldstate) {
     mjuiDef defPhysics[] =
     {
         {mjITEM_SECTION,   "Physics",       oldstate, NULL,                 "AP"},
-        {mjITEM_SELECT,    "Integrator",    2, &(m->opt.integrator),        "Euler\nRK4"},
-        {mjITEM_SELECT,    "Collision",     2, &(m->opt.collision),         "All\nPair\nDynamic"},
-        {mjITEM_SELECT,    "Cone",          2, &(m->opt.cone),              "Pyramidal\nElliptic"},
-        {mjITEM_SELECT,    "Jacobian",      2, &(m->opt.jacobian),          "Dense\nSparse\nAuto"},
-        {mjITEM_SELECT,    "Solver",        2, &(m->opt.solver),            "PGS\nCG\nNewton"},
+        {mjITEM_SELECT,    "Integrator",    2, &(instance->m->opt.integrator),        "Euler\nRK4"},
+        {mjITEM_SELECT,    "Collision",     2, &(instance->m->opt.collision),         "All\nPair\nDynamic"},
+        {mjITEM_SELECT,    "Cone",          2, &(instance->m->opt.cone),              "Pyramidal\nElliptic"},
+        {mjITEM_SELECT,    "Jacobian",      2, &(instance->m->opt.jacobian),          "Dense\nSparse\nAuto"},
+        {mjITEM_SELECT,    "Solver",        2, &(instance->m->opt.solver),            "PGS\nCG\nNewton"},
         {mjITEM_SEPARATOR, "Algorithmic Parameters", 1},
-        {mjITEM_EDITNUM,   "Timestep",      2, &(m->opt.timestep),          "1 0 1"},
-        {mjITEM_EDITINT,   "Iterations",    2, &(m->opt.iterations),        "1 0 1000"},
-        {mjITEM_EDITNUM,   "Tolerance",     2, &(m->opt.tolerance),         "1 0 1"},
-        {mjITEM_EDITINT,   "Noslip Iter",   2, &(m->opt.noslip_iterations), "1 0 1000"},
-        {mjITEM_EDITNUM,   "Noslip Tol",    2, &(m->opt.noslip_tolerance),  "1 0 1"},
-        {mjITEM_EDITINT,   "MRR Iter",      2, &(m->opt.mpr_iterations),    "1 0 1000"},
-        {mjITEM_EDITNUM,   "MPR Tol",       2, &(m->opt.mpr_tolerance),     "1 0 1"},
-        {mjITEM_EDITNUM,   "API Rate",      2, &(m->opt.apirate),           "1 0 1000"},
+        {mjITEM_EDITNUM,   "Timestep",      2, &(instance->m->opt.timestep),          "1 0 1"},
+        {mjITEM_EDITINT,   "Iterations",    2, &(instance->m->opt.iterations),        "1 0 1000"},
+        {mjITEM_EDITNUM,   "Tolerance",     2, &(instance->m->opt.tolerance),         "1 0 1"},
+        {mjITEM_EDITINT,   "Noslip Iter",   2, &(instance->m->opt.noslip_iterations), "1 0 1000"},
+        {mjITEM_EDITNUM,   "Noslip Tol",    2, &(instance->m->opt.noslip_tolerance),  "1 0 1"},
+        {mjITEM_EDITINT,   "MRR Iter",      2, &(instance->m->opt.mpr_iterations),    "1 0 1000"},
+        {mjITEM_EDITNUM,   "MPR Tol",       2, &(instance->m->opt.mpr_tolerance),     "1 0 1"},
+        {mjITEM_EDITNUM,   "API Rate",      2, &(instance->m->opt.apirate),           "1 0 1000"},
         {mjITEM_SEPARATOR, "Physical Parameters", 1},
-        {mjITEM_EDITNUM,   "Gravity",       2, m->opt.gravity,              "3"},
-        {mjITEM_EDITNUM,   "Wind",          2, m->opt.wind,                 "3"},
-        {mjITEM_EDITNUM,   "Magnetic",      2, m->opt.magnetic,             "3"},
-        {mjITEM_EDITNUM,   "Density",       2, &(m->opt.density),           "1"},
-        {mjITEM_EDITNUM,   "Viscosity",     2, &(m->opt.viscosity),         "1"},
-        {mjITEM_EDITNUM,   "Imp Ratio",     2, &(m->opt.impratio),          "1"},
+        {mjITEM_EDITNUM,   "Gravity",       2, instance->m->opt.gravity,              "3"},
+        {mjITEM_EDITNUM,   "Wind",          2, instance->m->opt.wind,                 "3"},
+        {mjITEM_EDITNUM,   "Magnetic",      2, instance->m->opt.magnetic,             "3"},
+        {mjITEM_EDITNUM,   "Density",       2, &(instance->m->opt.density),           "1"},
+        {mjITEM_EDITNUM,   "Viscosity",     2, &(instance->m->opt.viscosity),         "1"},
+        {mjITEM_EDITNUM,   "Imp Ratio",     2, &(instance->m->opt.impratio),          "1"},
         {mjITEM_SEPARATOR, "Disable Flags", 1},
         {mjITEM_END}
     };
@@ -563,14 +563,14 @@ void XBotMjSimEnv::makephysics(int oldstate) {
     mjuiDef defOverride[] =
     {
         {mjITEM_SEPARATOR, "Contact Override", 1},
-        {mjITEM_EDITNUM,   "Margin",        2, &(m->opt.o_margin),          "1"},
-        {mjITEM_EDITNUM,   "Sol Imp",       2, &(m->opt.o_solimp),          "5"},
-        {mjITEM_EDITNUM,   "Sol Ref",       2, &(m->opt.o_solref),          "2"},
+        {mjITEM_EDITNUM,   "Margin",        2, &(instance->m->opt.o_margin),          "1"},
+        {mjITEM_EDITNUM,   "Sol Imp",       2, &(instance->m->opt.o_solimp),          "5"},
+        {mjITEM_EDITNUM,   "Sol Ref",       2, &(instance->m->opt.o_solref),          "2"},
         {mjITEM_END}
     };
 
     // add physics
-    mjui_add(&ui0, defPhysics);
+    mjui_add(&instance->ui0, defPhysics);
 
     // add flags programmatically
     mjuiDef defFlag[] =
@@ -582,18 +582,18 @@ void XBotMjSimEnv::makephysics(int oldstate) {
     {
         strcpy(defFlag[0].name, mjDISABLESTRING[i]);
         defFlag[0].pdata = settings.disable + i;
-        mjui_add(&ui0, defFlag);
+        mjui_add(&instance->ui0, defFlag);
     }
-    mjui_add(&ui0, defEnableFlags);
+    mjui_add(&instance->ui0, defEnableFlags);
     for( i=0; i<mjNENABLE; i++ )
     {
         strcpy(defFlag[0].name, mjENABLESTRING[i]);
         defFlag[0].pdata = settings.enable + i;
-        mjui_add(&ui0, defFlag);
+        mjui_add(&instance->ui0, defFlag);
     }
 
     // add contact override
-    mjui_add(&ui0, defOverride);
+    mjui_add(&instance->ui0, defOverride);
 }
 
 void XBotMjSimEnv::makerendering(int oldstate) {
@@ -603,9 +603,9 @@ void XBotMjSimEnv::makerendering(int oldstate) {
     {
         {mjITEM_SECTION,    "Rendering",        oldstate, NULL,             "AR"},
         {mjITEM_SELECT,     "Camera",           2, &(settings.camera),      "Free\nTracking"},
-        {mjITEM_SELECT,     "Label",            2, &(vopt.label),
+        {mjITEM_SELECT,     "Label",            2, &(instance->instance->vopt.label),
             "None\nBody\nJoint\nGeom\nSite\nCamera\nLight\nTendon\nActuator\nConstraint\nSkin\nSelection\nSel Pnt\nForce"},
-        {mjITEM_SELECT,     "Frame",            2, &(vopt.frame),
+        {mjITEM_SELECT,     "Frame",            2, &(instance->vopt.frame),
             "None\nBody\nGeom\nSite\nCamera\nLight\nWorld"},
         {mjITEM_SEPARATOR,  "Model Elements",   1},
         {mjITEM_END}
@@ -617,12 +617,12 @@ void XBotMjSimEnv::makerendering(int oldstate) {
     };
 
     // add model cameras, up to UI limit
-    for( i=0; i<mjMIN(m->ncam, mjMAXUIMULTI-2); i++ )
+    for( i=0; i<mjMIN(instance->m->ncam, mjMAXUIMULTI-2); i++ )
     {
         // prepare name
         char camname[mjMAXUITEXT] = "\n";
-        if( m->names[m->name_camadr[i]] )
-            strcat(camname, m->names+m->name_camadr[i]);
+        if( instance->m->names[instance->m->name_camadr[i]] )
+            strcat(camname, instance->m->names+instance->m->name_camadr[i]);
         else
             sprintf(camname, "\nCamera %d", i);
 
@@ -635,7 +635,7 @@ void XBotMjSimEnv::makerendering(int oldstate) {
     }
 
     // add rendering standard
-    mjui_add(&ui0, defRendering);
+    mjui_add(&instance->ui0, defRendering);
 
     // add flags programmatically
     mjuiDef defFlag[] =
@@ -656,16 +656,16 @@ void XBotMjSimEnv::makerendering(int oldstate) {
 
         // set shortcut and data
         sprintf(defFlag[0].other, " %s", mjVISSTRING[i][2]);
-        defFlag[0].pdata = vopt.flags + i;
-        mjui_add(&ui0, defFlag);
+        defFlag[0].pdata = instance->vopt.flags + i;
+        mjui_add(&instance->ui0, defFlag);
     }
-    mjui_add(&ui0, defOpenGL);
+    mjui_add(&instance->ui0, defOpenGL);
     for( i=0; i<mjNRNDFLAG; i++ )
     {
         strcpy(defFlag[0].name, mjRNDSTRING[i][0]);
         sprintf(defFlag[0].other, " %s", mjRNDSTRING[i][2]);
-        defFlag[0].pdata = scn.flags + i;
-        mjui_add(&ui0, defFlag);
+        defFlag[0].pdata = instance->scn.flags + i;
+        mjui_add(&instance->ui0, defFlag);
     }
 }
 
@@ -674,45 +674,45 @@ void XBotMjSimEnv::makegroup(int oldstate) {
     {
         {mjITEM_SECTION,    "Group enable",     oldstate, NULL,             "AG"},
         {mjITEM_SEPARATOR,  "Geom groups",  1},
-        {mjITEM_CHECKBYTE,  "Geom 0",           2, vopt.geomgroup,          " 0"},
-        {mjITEM_CHECKBYTE,  "Geom 1",           2, vopt.geomgroup+1,        " 1"},
-        {mjITEM_CHECKBYTE,  "Geom 2",           2, vopt.geomgroup+2,        " 2"},
-        {mjITEM_CHECKBYTE,  "Geom 3",           2, vopt.geomgroup+3,        " 3"},
-        {mjITEM_CHECKBYTE,  "Geom 4",           2, vopt.geomgroup+4,        " 4"},
-        {mjITEM_CHECKBYTE,  "Geom 5",           2, vopt.geomgroup+5,        " 5"},
+        {mjITEM_CHECKBYTE,  "Geom 0",           2, instance->vopt.geomgroup,          " 0"},
+        {mjITEM_CHECKBYTE,  "Geom 1",           2, instance->vopt.geomgroup+1,        " 1"},
+        {mjITEM_CHECKBYTE,  "Geom 2",           2, instance->vopt.geomgroup+2,        " 2"},
+        {mjITEM_CHECKBYTE,  "Geom 3",           2, instance->vopt.geomgroup+3,        " 3"},
+        {mjITEM_CHECKBYTE,  "Geom 4",           2, instance->vopt.geomgroup+4,        " 4"},
+        {mjITEM_CHECKBYTE,  "Geom 5",           2, instance->vopt.geomgroup+5,        " 5"},
         {mjITEM_SEPARATOR,  "Site groups",  1},
-        {mjITEM_CHECKBYTE,  "Site 0",           2, vopt.sitegroup,          "S0"},
-        {mjITEM_CHECKBYTE,  "Site 1",           2, vopt.sitegroup+1,        "S1"},
-        {mjITEM_CHECKBYTE,  "Site 2",           2, vopt.sitegroup+2,        "S2"},
-        {mjITEM_CHECKBYTE,  "Site 3",           2, vopt.sitegroup+3,        "S3"},
-        {mjITEM_CHECKBYTE,  "Site 4",           2, vopt.sitegroup+4,        "S4"},
-        {mjITEM_CHECKBYTE,  "Site 5",           2, vopt.sitegroup+5,        "S5"},
+        {mjITEM_CHECKBYTE,  "Site 0",           2, instance->vopt.sitegroup,          "S0"},
+        {mjITEM_CHECKBYTE,  "Site 1",           2, instance->vopt.sitegroup+1,        "S1"},
+        {mjITEM_CHECKBYTE,  "Site 2",           2, instance->vopt.sitegroup+2,        "S2"},
+        {mjITEM_CHECKBYTE,  "Site 3",           2, instance->vopt.sitegroup+3,        "S3"},
+        {mjITEM_CHECKBYTE,  "Site 4",           2, instance->vopt.sitegroup+4,        "S4"},
+        {mjITEM_CHECKBYTE,  "Site 5",           2, instance->vopt.sitegroup+5,        "S5"},
         {mjITEM_SEPARATOR,  "Joint groups", 1},
-        {mjITEM_CHECKBYTE,  "Joint 0",          2, vopt.jointgroup,         ""},
-        {mjITEM_CHECKBYTE,  "Joint 1",          2, vopt.jointgroup+1,       ""},
-        {mjITEM_CHECKBYTE,  "Joint 2",          2, vopt.jointgroup+2,       ""},
-        {mjITEM_CHECKBYTE,  "Joint 3",          2, vopt.jointgroup+3,       ""},
-        {mjITEM_CHECKBYTE,  "Joint 4",          2, vopt.jointgroup+4,       ""},
-        {mjITEM_CHECKBYTE,  "Joint 5",          2, vopt.jointgroup+5,       ""},
+        {mjITEM_CHECKBYTE,  "Joint 0",          2, instance->vopt.jointgroup,         ""},
+        {mjITEM_CHECKBYTE,  "Joint 1",          2, instance->vopt.jointgroup+1,       ""},
+        {mjITEM_CHECKBYTE,  "Joint 2",          2, instance->vopt.jointgroup+2,       ""},
+        {mjITEM_CHECKBYTE,  "Joint 3",          2, instance->vopt.jointgroup+3,       ""},
+        {mjITEM_CHECKBYTE,  "Joint 4",          2, instance->vopt.jointgroup+4,       ""},
+        {mjITEM_CHECKBYTE,  "Joint 5",          2, instance->vopt.jointgroup+5,       ""},
         {mjITEM_SEPARATOR,  "Tendon groups",    1},
-        {mjITEM_CHECKBYTE,  "Tendon 0",         2, vopt.tendongroup,        ""},
-        {mjITEM_CHECKBYTE,  "Tendon 1",         2, vopt.tendongroup+1,      ""},
-        {mjITEM_CHECKBYTE,  "Tendon 2",         2, vopt.tendongroup+2,      ""},
-        {mjITEM_CHECKBYTE,  "Tendon 3",         2, vopt.tendongroup+3,      ""},
-        {mjITEM_CHECKBYTE,  "Tendon 4",         2, vopt.tendongroup+4,      ""},
-        {mjITEM_CHECKBYTE,  "Tendon 5",         2, vopt.tendongroup+5,      ""},
+        {mjITEM_CHECKBYTE,  "Tendon 0",         2, instance->vopt.tendongroup,        ""},
+        {mjITEM_CHECKBYTE,  "Tendon 1",         2, instance->vopt.tendongroup+1,      ""},
+        {mjITEM_CHECKBYTE,  "Tendon 2",         2, instance->vopt.tendongroup+2,      ""},
+        {mjITEM_CHECKBYTE,  "Tendon 3",         2, instance->vopt.tendongroup+3,      ""},
+        {mjITEM_CHECKBYTE,  "Tendon 4",         2, instance->vopt.tendongroup+4,      ""},
+        {mjITEM_CHECKBYTE,  "Tendon 5",         2, instance->vopt.tendongroup+5,      ""},
         {mjITEM_SEPARATOR,  "Actuator groups", 1},
-        {mjITEM_CHECKBYTE,  "Actuator 0",       2, vopt.actuatorgroup,      ""},
-        {mjITEM_CHECKBYTE,  "Actuator 1",       2, vopt.actuatorgroup+1,    ""},
-        {mjITEM_CHECKBYTE,  "Actuator 2",       2, vopt.actuatorgroup+2,    ""},
-        {mjITEM_CHECKBYTE,  "Actuator 3",       2, vopt.actuatorgroup+3,    ""},
-        {mjITEM_CHECKBYTE,  "Actuator 4",       2, vopt.actuatorgroup+4,    ""},
-        {mjITEM_CHECKBYTE,  "Actuator 5",       2, vopt.actuatorgroup+5,    ""},
+        {mjITEM_CHECKBYTE,  "Actuator 0",       2, instance->vopt.actuatorgroup,      ""},
+        {mjITEM_CHECKBYTE,  "Actuator 1",       2, instance->vopt.actuatorgroup+1,    ""},
+        {mjITEM_CHECKBYTE,  "Actuator 2",       2, instance->vopt.actuatorgroup+2,    ""},
+        {mjITEM_CHECKBYTE,  "Actuator 3",       2, instance->vopt.actuatorgroup+3,    ""},
+        {mjITEM_CHECKBYTE,  "Actuator 4",       2, instance->vopt.actuatorgroup+4,    ""},
+        {mjITEM_CHECKBYTE,  "Actuator 5",       2, instance->vopt.actuatorgroup+5,    ""},
         {mjITEM_END}
     };
 
     // add section
-    mjui_add(&ui0, defGroup);
+    mjui_add(&instance->ui0, defGroup);
 }
 
 void XBotMjSimEnv::makejoint(int oldstate) {
@@ -730,37 +730,37 @@ void XBotMjSimEnv::makejoint(int oldstate) {
     };
 
     // add section
-    mjui_add(&ui1, defJoint);
+    mjui_add(&instance->ui1, defJoint);
     defSlider[0].state = 4;
 
     // add scalar joints, exit if UI limit reached
     int itemcnt = 0;
-    for( i=0; i<m->njnt && itemcnt<mjMAXUIITEM; i++ )
-        if( (m->jnt_type[i]==mjJNT_HINGE || m->jnt_type[i]==mjJNT_SLIDE) )
+    for( i=0; i<instance->m->njnt && itemcnt<mjMAXUIITEM; i++ )
+        if( (instance->m->jnt_type[i]==mjJNT_HINGE || instance->m->jnt_type[i]==mjJNT_SLIDE) )
         {
             // skip if joint group is disabled
-            if( !vopt.jointgroup[mjMAX(0, mjMIN(mjNGROUP-1, m->jnt_group[i]))] )
+            if( !instance->vopt.jointgroup[mjMAX(0, mjMIN(mjNGROUP-1, instance->m->jnt_group[i]))] )
                 continue;
 
             // set data and name
-            defSlider[0].pdata = d->qpos + m->jnt_qposadr[i];
-            if( m->names[m->name_jntadr[i]] )
-                mju_strncpy(defSlider[0].name, m->names+m->name_jntadr[i],
+            defSlider[0].pdata = instance->d->qpos + instance->m->jnt_qposadr[i];
+            if( instance->m->names[instance->m->name_jntadr[i]] )
+                mju_strncpy(defSlider[0].name, instance->m->names+instance->m->name_jntadr[i],
                             mjMAXUINAME);
             else
                 sprintf(defSlider[0].name, "joint %d", i);
 
             // set range
-            if( m->jnt_limited[i] )
+            if( instance->m->jnt_limited[i] )
                 sprintf(defSlider[0].other, "%.4g %.4g",
-                    m->jnt_range[2*i], m->jnt_range[2*i+1]);
-            else if( m->jnt_type[i]==mjJNT_SLIDE )
+                    instance->m->jnt_range[2*i], instance->m->jnt_range[2*i+1]);
+            else if( instance->m->jnt_type[i]==mjJNT_SLIDE )
                 strcpy(defSlider[0].other, "-1 1");
             else
                 strcpy(defSlider[0].other, "-3.1416 3.1416");
 
             // add and count
-            mjui_add(&ui1, defSlider);
+            mjui_add(&instance->ui1, defSlider);
             itemcnt++;
         }
 }
@@ -781,34 +781,34 @@ void XBotMjSimEnv::makecontrol(int oldstate) {
     };
 
     // add section
-    mjui_add(&ui1, defControl);
+    mjui_add(&instance->ui1, defControl);
     defSlider[0].state = 2;
 
     // add controls, exit if UI limit reached (Clear button already added)
     int itemcnt = 1;
-    for( i=0; i<m->nu && itemcnt<mjMAXUIITEM; i++ )
+    for( i=0; i<instance->m->nu && itemcnt<mjMAXUIITEM; i++ )
     {
         // skip if actuator group is disabled
-        if( !vopt.actuatorgroup[mjMAX(0, mjMIN(mjNGROUP-1, m->actuator_group[i]))] )
+        if( !instance->vopt.actuatorgroup[mjMAX(0, mjMIN(mjNGROUP-1, instance->m->actuator_group[i]))] )
             continue;
 
         // set data and name
-        defSlider[0].pdata = d->ctrl + i;
-        if( m->names[m->name_actuatoradr[i]] )
-            mju_strncpy(defSlider[0].name, m->names+m->name_actuatoradr[i],
+        defSlider[0].pdata = instance->d->ctrl + i;
+        if( instance->m->names[instance->m->name_actuatoradr[i]] )
+            mju_strncpy(defSlider[0].name, instance->m->names+instance->m->name_actuatoradr[i],
                         mjMAXUINAME);
         else
             sprintf(defSlider[0].name, "control %d", i);
 
         // set range
-        if( m->actuator_ctrllimited[i] )
+        if( instance->m->actuator_ctrllimited[i] )
             sprintf(defSlider[0].other, "%.4g %.4g",
-                m->actuator_ctrlrange[2*i], m->actuator_ctrlrange[2*i+1]);
+                instance->m->actuator_ctrlrange[2*i], instance->m->actuator_ctrlrange[2*i+1]);
         else
             strcpy(defSlider[0].other, "-1 1");
 
         // add and count
-        mjui_add(&ui1, defSlider);
+        mjui_add(&instance->ui1, defSlider);
         itemcnt++;
     }
 }
@@ -821,8 +821,8 @@ void XBotMjSimEnv::makesections() {
     for( i=0; i<NSECT0; i++ )
     {
         oldstate0[i] = 0;
-        if( ui0.nsect>i )
-            oldstate0[i] = ui0.sect[i].state;
+        if( instance->ui0.nsect>i )
+            oldstate0[i] = instance->ui0.sect[i].state;
     }
 
     // get section open-close state, UI 1
@@ -830,13 +830,13 @@ void XBotMjSimEnv::makesections() {
     for( i=0; i<NSECT1; i++ )
     {
         oldstate1[i] = 0;
-        if( ui1.nsect>i )
-            oldstate1[i] = ui1.sect[i].state;
+        if( instance->ui1.nsect>i )
+            oldstate1[i] = instance->ui1.sect[i].state;
     }
 
     // clear model-dependent sections of UI
-    ui0.nsect = SECT_PHYSICS;
-    ui1.nsect = 0;
+    instance->ui0.nsect = SECT_PHYSICS;
+    instance->ui1.nsect = 0;
 
     // make
     makephysics(oldstate0[SECT_PHYSICS]);
@@ -878,7 +878,7 @@ void XBotMjSimEnv::run() {
     running = false;
 }
 
-static int XBotMjSimEnv::uiPredicate(int category, void* userdata)
+int XBotMjSimEnv::uiPredicate(int category, void* userdata)
 {
     switch( category )
     {
@@ -896,7 +896,7 @@ static int XBotMjSimEnv::uiPredicate(int category, void* userdata)
     }
 }
 
-static void XBotMjSimEnv::uiLayout(mjuiState* state)
+void XBotMjSimEnv::uiLayout(mjuiState* state)
 {
     mjrRect* rect = state->rect;
 
@@ -927,7 +927,7 @@ static void XBotMjSimEnv::uiLayout(mjuiState* state)
     rect[3].height = rect[0].height;
 }
 
-static void XBotMjSimEnv::uiEvent(mjuiState* state)
+void XBotMjSimEnv::uiEvent(mjuiState* state)
 {
     int i;
     char err[200];
@@ -1381,7 +1381,7 @@ static void XBotMjSimEnv::uiEvent(mjuiState* state)
 
         // move perturb or camera
         mjrRect r = state->rect[3];
-        if( pert.active )
+        if( instance->pert.active )
             mjv_movePerturb(instance->m, instance->d, action, state->dx/r.height, -state->dy/r.height,
                             &instance->scn, &instance->pert);
         else
@@ -1390,10 +1390,6 @@ static void XBotMjSimEnv::uiEvent(mjuiState* state)
 
         return;
     }
-}
-
-static void XBotMjSimEnv::handleEvent(const mjuiState* state) {
-    uiEvent(state);
 }
 
 void XBotMjSimEnv::prepare() {
@@ -1437,7 +1433,7 @@ void XBotMjSimEnv::prepare() {
     clearTimers();
 }
 
-static void XBotMjSimEnv::render(GLFWwindow* window) {
+void XBotMjSimEnv::render(GLFWwindow* window) {
     // get 3D rectangle and reduced for profiler
     mjrRect rect = instance->uistate.rect[3];
     mjrRect smallrect = rect;
@@ -1649,7 +1645,7 @@ void XBotMjSimEnv::updateSettings() {
     mjui_update(-1, -1, &ui0, &uistate, &con);
 }
 
-static void XBotMjSimEnv::drop(GLFWwindow* window, int count, const char** paths) {
+void XBotMjSimEnv::drop(GLFWwindow* window, int count, const char** paths) {
     if (count > 0) {
         mju_strncpy(instance->filename, paths[0], 1000);
         settings.loadrequest = 1;

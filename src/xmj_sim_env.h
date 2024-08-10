@@ -26,12 +26,23 @@ public:
     void step();
     void reset();
 
+private:
+    
     static void mj_control_callback(const mjModel* m, mjData* d);
     
     static int uiPredicate(int category, void* userdata);
     static void uiLayout(mjuiState* state);
     static void uiEvent(mjuiState* state);
-    static void handleEvent(const mjuiState* state);
+    
+    static void makejoint(int oldstate);
+    static void makecontrol(int oldstate);
+    static void makesections();
+    static void makephysics(int oldstate);
+    static void makerendering(int oldstate);
+    static void makegroup(int oldstate);
+
+    static void profilershow(mjrRect rect);
+    static void sensorshow(mjrRect rect);
 
     // Static utility functions
     static void dropCallback(GLFWwindow* window, int count, const char** paths);
@@ -39,28 +50,18 @@ public:
 
     static void drop(GLFWwindow* window, int count, const char** paths);
 
-private:
-    
-
     static XBotMjSimEnv* instance; // Singleton instance pointer
 
     void xbotmj_control_callback(const mjModel* m, mjData* d);
 
     void profilerinit();
     void profilerupdate();
-    void profilershow(mjrRect rect);
+    
     void sensorinit();
     void sensorupdate();
-    void sensorshow(mjrRect rect);
     void infotext(char* title, char* content, double interval);
     void printfield(char* str, void* ptr);
     void watch();
-    void makephysics(int oldstate);
-    void makerendering(int oldstate);
-    void makegroup(int oldstate);
-    void makejoint(int oldstate);
-    void makecontrol(int oldstate);
-    void makesections();
 
     void simulate();
     void init();
