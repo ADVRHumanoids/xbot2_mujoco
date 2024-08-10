@@ -1,248 +1,145 @@
-// Copyright 2021 DeepMind Technologies Limited
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+#include "xmj_sim_env.h"
 
-#include "mjxmacro.h"
-#include "uitools.h"
-#include "stdio.h"
-#include "string.h"
+void XBotMjSimEnv::mj_control_callback(const mjModel* m, mjData* d){
+    instance->xbotmj_control_callback(m, d);
+}
 
-#include <thread>
-#include <mutex>
-#include <chrono>
+void XBotMjSimEnv::xbotmj_control_callback(const mjModel* m, mjData* d){
+    if(!xbot2_wrapper)
+    {
+        return;
+    }
 
-#include "xbot2_bridge.h"
+    xbot2_wrapper->run(d);
+}
 
-#include <Eigen/Dense>
+XBotMjSimEnv::XBotMjSimEnv(const char* configPath) : xbot2_cfg_path(configPath) {
+    
+    instance = this; // Set the global instance pointer to this instance
 
-//-------------------------------- global -----------------------------------------------
+    mjcb_control = XBotMjSimEnv::mj_control_callback; // register global
+    // mujoco control callback
 
-// constants
-const int maxgeom = 5000;           // preallocated geom array in mjvScene
-const double syncmisalign = 0.1;    // maximum time mis-alignment before re-sync
-const double refreshfactor = 0.7;   // fraction of refresh available for simulation
+    window = glfwCreateWindow(800, 600, "MuJoCo Simulation", NULL, NULL);
+    if (!window) {
+        std::cerr << "Failed to create GLFW window\n";
+        glfwTerminate();
+        exit(EXIT_FAILURE);
+    }
 
+    glfwSetDropCallback(window, dropCallback);
+    glfwSetKeyCallback(window, keyCallback);
 
-// model and data
-mjModel* m = NULL;
-mjData* d = NULL;
-char filename[1000] = "";
+    // Initialize MuJoCo and other members
+    // ...
 
+    loadModel(); // Load the initial model
+}
 
-// abstract visualization
-mjvScene scn;
-mjvCamera cam;
-mjvOption vopt;
-mjvPerturb pert;
-mjvFigure figconstraint;
-mjvFigure figcost;
-mjvFigure figtimer;
-mjvFigure figsize;
-mjvFigure figsensor;
+XBotMjSimEnv::~XBotMjSimEnv() {
+    if (simThread.joinable()) {
+        settings.exitrequest = 1;
+        simThread.join();
+    }
 
+    fprintf(stderr, "destroying xbot2 wrapper \n");
+    xbot2_wrapper.reset();
 
-// OpenGL rendering and UI
-GLFWvidmode vmode;
-int windowpos[2];
-int windowsize[2];
-mjrContext con;
-GLFWwindow* window = NULL;
-mjuiState uistate;
-mjUI ui0, ui1;
+    // delete everything we allocated
+    uiClearCallback(window);
+    mj_deleteData(d);
+    mj_deleteModel(m);
+    mjv_freeScene(&scn);
+    mjr_freeContext(&con);
 
-// xbot2
-XBot::MjWrapper::UniquePtr xbot2_wrapper;
-std::string xbot2_cfg_path;
+    // terminate GLFW (crashes with Linux NVidia drivers)
+    #if defined(__APPLE__) || defined(_WIN32)
+        glfwTerminate();
+    #endif
+}
 
-void mj_control_callback(const mjModel* m, mjData* d);
+void XBotMjSimEnv::init() {
+    // print version, check compatibility
+    printf("MuJoCo Pro version %.2lf\n", 0.01*mj_version());
+    if( mjVERSION_HEADER!=mj_version() )
+        mju_error("Headers and library have different versions");
+    // init GLFW, set timer callback (milliseconds)
+    if (!glfwInit())
+        mju_error("could not initialize GLFW");
+    mjcb_time = timer;
 
-mjfGeneric mjcb_control = mj_control_callback;
+    // multisampling
+    glfwWindowHint(GLFW_SAMPLES, 4);
+    glfwWindowHint(GLFW_VISIBLE, 1);
 
-// UI settings not contained in MuJoCo structures
-struct
-{
-    // file
-    int exitrequest = 0;
+    // get videomode and save
+    vmode = *glfwGetVideoMode(glfwGetPrimaryMonitor());
 
-    // option
-    int spacing = 0;
-    int color = 0;
-    int font = 0;
-    int ui0 = 1;
-    int ui1 = 1;
-    int help = 0;
-    int info = 0;
-    int profiler = 0;
-    int sensor = 0;
-    int fullscreen = 0;
-    int vsync = 1;
-    int busywait = 0;
+    window = glfwCreateWindow((2*vmode.width)/3, (2*vmode.height)/3,
+                              "Simulate", NULL, NULL);
+    if( !window )
+    {
+        glfwTerminate();
+        mju_error("could not create window");
+    }
 
-    // simulation
-    int run = 1;
-    int key = 0;
-    int loadrequest = 0;
+    // save window position and size
+    glfwGetWindowPos(window, windowpos, windowpos+1);
+    glfwGetWindowSize(window, windowsize, windowsize+1);
 
-    // watch
-    char field[mjMAXUITEXT] = "qpos";
-    int index = 0;
+    // make context current, set v-sync
+    glfwMakeContextCurrent(window);
+    glfwSwapInterval(settings.vsync);
 
-    // physics: need sync
-    int disable[mjNDISABLE];
-    int enable[mjNENABLE];
+    // init abstract visualization
+    mjv_defaultCamera(&cam);
+    mjv_defaultOption(&vopt);
+    profilerinit();
+    sensorinit();
 
-    // rendering: need sync
-    int camera = 0;
-} settings;
+    // make empty scene
+    mjv_defaultScene(&scn);
+    mjv_makeScene(NULL, &scn, maxgeom);
 
+    // select default font
+    int fontscale = uiFontScale(window);
+    settings.font = fontscale/50 - 1;
 
-// section ids
-enum
-{
-    // left ui
-    SECT_FILE   = 0,
-    SECT_OPTION,
-    SECT_SIMULATION,
-    SECT_WATCH,
-    SECT_PHYSICS,
-    SECT_RENDERING,
-    SECT_GROUP,
-    NSECT0,
+    // make empty context
+    mjr_defaultContext(&con);
+    mjr_makeContext(NULL, &con, fontscale);
 
-    // right ui
-    SECT_JOINT = 0,
-    SECT_CONTROL,
-    NSECT1
-};
+    // set GLFW callbacks
+    uiSetCallback(window, &uistate, uiEvent, uiLayout);
+    glfwSetWindowRefreshCallback(window, render);
+    glfwSetDropCallback(window, drop);
 
+    // init state and uis
+    memset(&uistate, 0, sizeof(mjuiState));
+    memset(&ui0, 0, sizeof(mjUI));
+    memset(&ui1, 0, sizeof(mjUI));
+    ui0.spacing = mjui_themeSpacing(settings.spacing);
+    ui0.color = mjui_themeColor(settings.color);
+    ui0.predicate = uiPredicate;
+    ui0.rectid = 1;
+    ui0.auxid = 0;
+    ui1.spacing = mjui_themeSpacing(settings.spacing);
+    ui1.color = mjui_themeColor(settings.color);
+    ui1.predicate = uiPredicate;
+    ui1.rectid = 2;
+    ui1.auxid = 1;
 
-// file section of UI
-const mjuiDef defFile[] =
-{
-    {mjITEM_SECTION,   "File",          1, NULL,                    "AF"},
-    {mjITEM_BUTTON,    "Save xml",      2, NULL,                    ""},
-    {mjITEM_BUTTON,    "Save mjb",      2, NULL,                    ""},
-    {mjITEM_BUTTON,    "Print model",   2, NULL,                    "CM"},
-    {mjITEM_BUTTON,    "Print data",    2, NULL,                    "CD"},
-    {mjITEM_BUTTON,    "Quit",          1, NULL,                    "CQ"},
-    {mjITEM_END}
-};
+    // populate uis with standard sections
+    mjui_add(&ui0, defFile);
+    mjui_add(&ui0, defOption);
+    mjui_add(&ui0, defSimulation);
+    mjui_add(&ui0, defWatch);
+    uiModify(window, &ui0, &uistate, &con);
+    uiModify(window, &ui1, &uistate, &con);
+}
 
+void XBotMjSimEnv::profilerinit() {
 
-// option section of UI
-const mjuiDef defOption[] =
-{
-    {mjITEM_SECTION,   "Option",        1, NULL,                    "AO"},
-    {mjITEM_SELECT,    "Spacing",       1, &settings.spacing,       "Tight\nWide"},
-    {mjITEM_SELECT,    "Color",         1, &settings.color,         "Default\nOrange\nWhite\nBlack"},
-    {mjITEM_SELECT,    "Font",          1, &settings.font,          "50 %\n100 %\n150 %\n200 %\n250 %\n300 %"},
-    {mjITEM_CHECKINT,  "Left UI (Tab)", 1, &settings.ui0,           " #258"},
-    {mjITEM_CHECKINT,  "Right UI",      1, &settings.ui1,           "S#258"},
-    {mjITEM_CHECKINT,  "Help",          2, &settings.help,          " #290"},
-    {mjITEM_CHECKINT,  "Info",          2, &settings.info,          " #291"},
-    {mjITEM_CHECKINT,  "Profiler",      2, &settings.profiler,      " #292"},
-    {mjITEM_CHECKINT,  "Sensor",        2, &settings.sensor,        " #293"},
-#ifdef __APPLE__
-    {mjITEM_CHECKINT,  "Fullscreen",    0, &settings.fullscreen,    " #294"},
-#else
-    {mjITEM_CHECKINT,  "Fullscreen",    1, &settings.fullscreen,    " #294"},
-#endif
-    {mjITEM_CHECKINT,  "Vertical Sync", 1, &settings.vsync,         " #295"},
-    {mjITEM_CHECKINT,  "Busy Wait",     1, &settings.busywait,      " #296"},
-    {mjITEM_END}
-};
-
-
-// simulation section of UI
-const mjuiDef defSimulation[] =
-{
-    {mjITEM_SECTION,   "Simulation",    1, NULL,                    "AS"},
-    {mjITEM_RADIO,     "",              2, &settings.run,           "Pause\nRun"},
-    {mjITEM_BUTTON,    "Reset",         2, NULL,                    " #259"},
-    {mjITEM_BUTTON,    "Reload",        2, NULL,                    "CL"},
-    {mjITEM_BUTTON,    "Align",         2, NULL,                    "CA"},
-    {mjITEM_BUTTON,    "Copy pose",     2, NULL,                    "CC"},
-    {mjITEM_SLIDERINT, "Key",           3, &settings.key,           "0 0"},
-    {mjITEM_BUTTON,    "Reset to key",  3},
-    {mjITEM_BUTTON,    "Set key",       3},
-    {mjITEM_END}
-};
-
-
-// watch section of UI
-const mjuiDef defWatch[] =
-{
-    {mjITEM_SECTION,   "Watch",         0, NULL,                    "AW"},
-    {mjITEM_EDITTXT,   "Field",         2, settings.field,          "qpos"},
-    {mjITEM_EDITINT,   "Index",         2, &settings.index,         "1"},
-    {mjITEM_STATIC,    "Value",         2, NULL,                    " "},
-    {mjITEM_END}
-};
-
-
-// help strings
-const char help_content[] =
-"Alt mouse button\n"
-"UI right hold\n"
-"UI title double-click\n"
-"Space\n"
-"Esc\n"
-"Right arrow\n"
-"Left arrow\n"
-"Down arrow\n"
-"Up arrow\n"
-"Page Up\n"
-"Double-click\n"
-"Right double-click\n"
-"Ctrl Right double-click\n"
-"Scroll, middle drag\n"
-"Left drag\n"
-"[Shift] right drag\n"
-"Ctrl [Shift] drag\n"
-"Ctrl [Shift] right drag";
-
-const char help_title[] =
-"Swap left-right\n"
-"Show UI shortcuts\n"
-"Expand/collapse all  \n"
-"Pause\n"
-"Free camera\n"
-"Step forward\n"
-"Step back\n"
-"Step forward 100\n"
-"Step back 100\n"
-"Select parent\n"
-"Select\n"
-"Center\n"
-"Track camera\n"
-"Zoom\n"
-"View rotate\n"
-"View translate\n"
-"Object rotate\n"
-"Object translate";
-
-
-// info strings
-char info_title[1000];
-char info_content[1000];
-
-
-
-//----------------------- profiler, sensor, info, watch ---------------------------------
-
-// init profiler figures
-void profilerinit(void)
-{
     int i, n;
 
     // set figures to default
@@ -337,11 +234,7 @@ void profilerinit(void)
         }
 }
 
-
-
-// update profiler figures
-void profilerupdate(void)
-{
+void XBotMjSimEnv::profilerupdate() {
     int i, n;
 
     // update constraint figure
@@ -451,11 +344,7 @@ void profilerupdate(void)
     }
 }
 
-
-
-// show profiler figures
-void profilershow(mjrRect rect)
-{
+void XBotMjSimEnv::profilershow(mjrRect rect) {
     mjrRect viewport = {
         rect.left + rect.width - rect.width/4,
         rect.bottom,
@@ -471,11 +360,7 @@ void profilershow(mjrRect rect)
     mjr_figure(viewport, &figconstraint, &con);
 }
 
-
-
-// init sensor figure
-void sensorinit(void)
-{
+void XBotMjSimEnv::sensorinit() {
     // set figure to default
     mjv_defaultFigure(&figsensor);
     figsensor.figurergba[3] = 0.5f;
@@ -502,11 +387,7 @@ void sensorinit(void)
     figsensor.range[1][1] = 1;
 }
 
-
-
-// update sensor figure
-void sensorupdate(void)
-{
+void XBotMjSimEnv::sensorupdate() {
     static const int maxline = 10;
 
     // clear linepnt
@@ -553,11 +434,7 @@ void sensorupdate(void)
     }
 }
 
-
-
-// show sensor figure
-void sensorshow(mjrRect rect)
-{
+void XBotMjSimEnv::sensorshow(mjrRect rect) {
     // constant width with and without profiler
     int width = settings.profiler ? rect.width/3 : rect.width/4;
 
@@ -571,11 +448,7 @@ void sensorshow(mjrRect rect)
     mjr_figure(viewport, &figsensor, &con);
 }
 
-
-
-// prepare info text
-void infotext(char* title, char* content, double interval)
-{
+void XBotMjSimEnv::infotext(char* title, char* content, double interval) {
     char tmp[20];
 
     // compute solver error
@@ -622,19 +495,11 @@ void infotext(char* title, char* content, double interval)
     }
 }
 
-
-
-// sprintf forwarding, to avoid compiler warning in x-macro
-void printfield(char* str, void* ptr)
-{
+void XBotMjSimEnv::printfield(char* str, void* ptr) {
     sprintf(str, "%g", *(mjtNum*)ptr);
 }
 
-
-
-// update watch
-void watch(void)
-{
+void XBotMjSimEnv::watch() {
     // clear
     ui0.sect[SECT_WATCH].item[2].multi.nelem = 1;
     strcpy(ui0.sect[SECT_WATCH].item[2].multi.name[0], "invalid field");
@@ -660,13 +525,7 @@ void watch(void)
     #undef X
 }
 
-
-
-//-------------------------------- UI construction --------------------------------------
-
-// make physics section of UI
-void makephysics(int oldstate)
-{
+void XBotMjSimEnv::makephysics(int oldstate) {
     int i;
 
     mjuiDef defPhysics[] =
@@ -737,11 +596,7 @@ void makephysics(int oldstate)
     mjui_add(&ui0, defOverride);
 }
 
-
-
-// make rendering section of UI
-void makerendering(int oldstate)
-{
+void XBotMjSimEnv::makerendering(int oldstate) {
     int i, j;
 
     mjuiDef defRendering[] =
@@ -814,11 +669,7 @@ void makerendering(int oldstate)
     }
 }
 
-
-
-// make group section of UI
-void makegroup(int oldstate)
-{
+void XBotMjSimEnv::makegroup(int oldstate) {
     mjuiDef defGroup[] =
     {
         {mjITEM_SECTION,    "Group enable",     oldstate, NULL,             "AG"},
@@ -864,11 +715,7 @@ void makegroup(int oldstate)
     mjui_add(&ui0, defGroup);
 }
 
-
-
-// make joint section of UI
-void makejoint(int oldstate)
-{
+void XBotMjSimEnv::makejoint(int oldstate) {
     int i;
 
     mjuiDef defJoint[] =
@@ -918,11 +765,7 @@ void makejoint(int oldstate)
         }
 }
 
-
-
-// make control section of UI
-void makecontrol(int oldstate)
-{
+void XBotMjSimEnv::makecontrol(int oldstate) {
     int i;
 
     mjuiDef defControl[] =
@@ -970,11 +813,7 @@ void makecontrol(int oldstate)
     }
 }
 
-
-
-// make model-dependent UI sections
-void makesections(void)
-{
+void XBotMjSimEnv::makesections() {
     int i;
 
     // get section open-close state, UI 0
@@ -1007,210 +846,57 @@ void makesections(void)
     makecontrol(oldstate1[SECT_CONTROL]);
 }
 
+void XBotMjSimEnv::run() {
+    running = true;
+    simThread = std::thread(&XBotMjSimEnv::simulate, this);
 
-
-//-------------------------------- utility functions ------------------------------------
-
-// align and scale view
-void alignscale(void)
-{
-    // autoscale
-    cam.lookat[0] = m->stat.center[0];
-    cam.lookat[1] = m->stat.center[1];
-    cam.lookat[2] = m->stat.center[2];
-    cam.distance = 1.5 * m->stat.extent;
-
-    // set to free camera
-    cam.type = mjCAMERA_FREE;
-}
-
-
-
-// copy qpos to clipboard as key
-void copykey(void)
-{
-    char clipboard[5000] = "<key qpos='";
-    char buf[200];
-
-    // prepare string
-    for( int i=0; i<m->nq; i++ )
+    // event loop
+    while( !glfwWindowShouldClose(window) && !settings.exitrequest )
     {
-        sprintf(buf, i==m->nq-1 ? "%g" : "%g ", d->qpos[i]);
-        strcat(clipboard, buf);
-    }
-    strcat(clipboard, "'/>");
+        // start exclusive access (block simulation thread)
+        mtx.lock();
 
-    // copy to clipboard
-    glfwSetClipboardString(window, clipboard);
-}
+        // load model (not on first pass, to show "loading" label)
+        if( settings.loadrequest==1 )
+            loadModel();
+        else if( settings.loadrequest>1 )
+            settings.loadrequest = 1;
 
+        // handle events (calls all callbacks)
+        glfwPollEvents();
 
+        // prepare to render
+        prepare();
 
-// millisecond timer, for MuJoCo built-in profiler
-mjtNum timer(void)
-{
-    return (mjtNum)(1000*glfwGetTime());
-}
+        // end exclusive access (allow simulation thread to run)
+        mtx.unlock();
 
-
-
-// clear all times
-void cleartimers(void)
-{
-    for( int i=0; i<mjNTIMER; i++ )
-    {
-        d->timer[i].duration = 0;
-        d->timer[i].number = 0;
-    }
-}
-
-
-
-// update UI 0 when MuJoCo structures change (except for joint sliders)
-void updatesettings(void)
-{
-    int i;
-
-    // physics flags
-    for( i=0; i<mjNDISABLE; i++ )
-        settings.disable[i] = ((m->opt.disableflags & (1<<i)) !=0 );
-    for( i=0; i<mjNENABLE; i++ )
-        settings.enable[i] = ((m->opt.enableflags & (1<<i)) !=0 );
-
-    // camera
-    if( cam.type==mjCAMERA_FIXED )
-        settings.camera = 2 + cam.fixedcamid;
-    else if( cam.type==mjCAMERA_TRACKING )
-        settings.camera = 1;
-    else
-        settings.camera = 0;
-
-    // update UI
-    mjui_update(-1, -1, &ui0, &uistate, &con);
-}
-
-
-
-// drop file callback
-void drop(GLFWwindow* window, int count, const char** paths)
-{
-    // make sure list is non-empty
-    if( count>0 )
-    {
-        mju_strncpy(filename, paths[0], 1000);
-        settings.loadrequest = 1;
-    }
-}
-
-
-
-// load mjb or xml model
-void loadmodel(void)
-{
-    // clear request
-    settings.loadrequest = 0;
-
-    // make sure filename is not empty
-    if( !filename[0]  )
-        return;
-
-    // load and compile
-    char error[500] = "";
-    mjModel* mnew = 0;
-    if( strlen(filename)>4 && !strcmp(filename+strlen(filename)-4, ".mjb") )
-    {
-        mnew = mj_loadModel(filename, NULL);
-        if( !mnew )
-            strcpy(error, "could not load binary model");
-    }
-    else
-        mnew = mj_loadXML(filename, NULL, error, 500);
-    if( !mnew )
-    {
-        printf("%s\n", error);
-        return;
+        // render while simulation is running
+        render(window);
     }
 
-    // compiler warning: print and pause
-    if( error[0] )
-    {
-        // mj_forward() below will print the warning message
-        printf("Model compiled, but simulation warning (paused):\n  %s\n\n",
-                error);
-        settings.run = 0;
-    }
-
-    // delete old model, assign new
-    mj_deleteData(d);
-    mj_deleteModel(m);
-    xbot2_wrapper.reset();
-    m = mnew;
-    d = mj_makeData(m);
-    xbot2_wrapper = std::make_unique<XBot::MjWrapper>(m, xbot2_cfg_path);
-    mj_forward(m, d);
-
-    // re-create scene and context
-    mjv_makeScene(m, &scn, maxgeom);
-    mjr_makeContext(m, &con, 50*(settings.font+1));
-
-    // clear perturbation state
-    pert.active = 0;
-    pert.select = 0;
-    pert.skinselect = -1;
-
-    // align and scale view, update scene
-    alignscale();
-    mjv_updateScene(m, d, &vopt, &pert, &cam, mjCAT_ALL, &scn);
-
-    // set window title to model name
-    if( window && m->names )
-    {
-        char title[200] = "Simulate : ";
-        strcat(title, m->names);
-        glfwSetWindowTitle(window, title);
-    }
-
-    // set keyframe range and divisions
-    ui0.sect[SECT_SIMULATION].item[5].slider.range[0] = 0;
-    ui0.sect[SECT_SIMULATION].item[5].slider.range[1] = mjMAX(0, m->nkey - 1);
-    ui0.sect[SECT_SIMULATION].item[5].slider.divisions = mjMAX(1, m->nkey - 1);
-
-    // rebuild UI sections
-    makesections();
-
-    // full ui update
-    uiModify(window, &ui0, &uistate, &con);
-    uiModify(window, &ui1, &uistate, &con);
-    updatesettings();
+    running = false;
 }
 
-
-
-//--------------------------------- UI hooks (for uitools.c) ----------------------------
-
-// determine enable/disable item state given category
-int uiPredicate(int category, void* userdata)
+static int XBotMjSimEnv::uiPredicate(int category, void* userdata)
 {
     switch( category )
     {
     case 2:                 // require model
-        return (m!=NULL);
+        return (instance->m!=NULL);
 
     case 3:                 // require model and nkey
-        return (m && m->nkey);
+        return (instance->m && instance->m->nkey);
 
     case 4:                 // require model and paused
-        return (m && !settings.run);
+        return (instance->m && !settings.run);
 
     default:
         return 1;
     }
 }
 
-
-
-// set window layout
-void uiLayout(mjuiState* state)
+static void XBotMjSimEnv::uiLayout(mjuiState* state)
 {
     mjrRect* rect = state->rect;
 
@@ -1220,16 +906,16 @@ void uiLayout(mjuiState* state)
     // rect 0: entire framebuffer
     rect[0].left = 0;
     rect[0].bottom = 0;
-    glfwGetFramebufferSize(window, &rect[0].width, &rect[0].height);
+    glfwGetFramebufferSize(instance->window, &rect[0].width, &rect[0].height);
 
     // rect 1: UI 0
     rect[1].left = 0;
-    rect[1].width = settings.ui0 ? ui0.width : 0;
+    rect[1].width = settings.ui0 ? instance->ui0.width : 0;
     rect[1].bottom = 0;
     rect[1].height = rect[0].height;
 
     // rect 2: UI 1
-    rect[2].width = settings.ui1 ? ui1.width : 0;
+    rect[2].width = settings.ui1 ? instance->ui1.width : 0;
     rect[2].left = mjMAX(0, rect[0].width - rect[2].width);
     rect[2].bottom = 0;
     rect[2].height = rect[0].height;
@@ -1241,21 +927,18 @@ void uiLayout(mjuiState* state)
     rect[3].height = rect[0].height;
 }
 
-
-
-// handle UI event
-void uiEvent(mjuiState* state)
+static void XBotMjSimEnv::uiEvent(mjuiState* state)
 {
     int i;
     char err[200];
 
     // call UI 0 if event is directed to it
-    if( (state->dragrect==ui0.rectid) ||
-        (state->dragrect==0 && state->mouserect==ui0.rectid) ||
+    if( (state->dragrect==instance->ui0.rectid) ||
+        (state->dragrect==0 && state->mouserect==instance->ui0.rectid) ||
         state->type==mjEVENT_KEY )
     {
         // process UI event
-        mjuiItem* it = mjui_event(&ui0, state, &con);
+        mjuiItem* it = mjui_event(&instance->ui0, state, &instance->con);
 
         // file section
         if( it && it->sectionid==SECT_FILE )
@@ -1263,20 +946,20 @@ void uiEvent(mjuiState* state)
             switch( it->itemid )
             {
             case 0:             // Save xml
-                if( !mj_saveLastXML("mjmodel.xml", m, err, 200) )
+                if( !mj_saveLastXML("mjmodel.xml", instance->m, err, 200) )
                     printf("Save XML error: %s", err);
                 break;
 
             case 1:             // Save mjb
-                mj_saveModel(m, "mjmodel.mjb", NULL, 0);
+                mj_saveModel(instance->m, "mjmodel.mjb", NULL, 0);
                 break;
 
             case 2:             // Print model
-                mj_printModel(m, "MJMODEL.TXT");
+                mj_printModel(instance->m, "MJMODEL.TXT");
                 break;
 
             case 3:             // Print data
-                mj_printData(m, d, "MJDATA.TXT");
+                mj_printData(instance->m, instance->d, "MJDATA.TXT");
                 break;
 
             case 4:             // Quit
@@ -1291,37 +974,37 @@ void uiEvent(mjuiState* state)
             switch( it->itemid )
             {
             case 0:             // Spacing
-                ui0.spacing = mjui_themeSpacing(settings.spacing);
-                ui1.spacing = mjui_themeSpacing(settings.spacing);
+                instance->ui0.spacing = mjui_themeSpacing(settings.spacing);
+                instance->ui1.spacing = mjui_themeSpacing(settings.spacing);
                 break;
 
             case 1:             // Color
-                ui0.color = mjui_themeColor(settings.color);
-                ui1.color = mjui_themeColor(settings.color);
+                instance->ui0.color = mjui_themeColor(settings.color);
+                instance->ui1.color = mjui_themeColor(settings.color);
                 break;
 
             case 2:             // Font
-                mjr_changeFont(50*(settings.font+1), &con);
+                mjr_changeFont(50*(settings.font+1), &instance->con);
                 break;
 
             case 9:             // Full screen
-                if( glfwGetWindowMonitor(window) )
+                if( glfwGetWindowMonitor(instance->window) )
                 {
                     // restore window from saved data
-                    glfwSetWindowMonitor(window, NULL, windowpos[0], windowpos[1],
-                                         windowsize[0], windowsize[1], 0);
+                    glfwSetWindowMonitor(instance->window, NULL, instance->windowpos[0], instance->windowpos[1],
+                        instance->windowsize[0], instance->windowsize[1], 0);
                 }
 
                 // currently windowed: switch to full screen
                 else
                 {
                     // save window data
-                    glfwGetWindowPos(window, windowpos, windowpos+1);
-                    glfwGetWindowSize(window, windowsize, windowsize+1);
+                    glfwGetWindowPos(instance->window, instance->windowpos, instance->windowpos+1);
+                    glfwGetWindowSize(instance->window, instance->windowsize, instance->windowsize+1);
 
                     // switch
-                    glfwSetWindowMonitor(window, glfwGetPrimaryMonitor(), 0, 0,
-                                         vmode.width, vmode.height, vmode.refreshRate);
+                    glfwSetWindowMonitor(instance->window, glfwGetPrimaryMonitor(), 0, 0,
+                        instance->vmode.width, instance->vmode.height, instance->vmode.refreshRate);
                 }
 
                 // reinstante vsync, just in case
@@ -1334,8 +1017,8 @@ void uiEvent(mjuiState* state)
             }
 
             // modify UI
-            uiModify(window, &ui0, state, &con);
-            uiModify(window, &ui1, state, &con);
+            uiModify(instance->window, &instance->ui0, state, &instance->con);
+            uiModify(instance->window, &instance->ui1, state, &instance->con);
         }
 
         // simulation section
@@ -1344,13 +1027,13 @@ void uiEvent(mjuiState* state)
             switch( it->itemid )
             {
             case 1:             // Reset
-                if( m )
+                if( instance->m )
                 {
-                    mj_resetData(m, d);
-                    mj_forward(m, d);
-                    profilerupdate();
-                    sensorupdate();
-                    updatesettings();
+                    mj_resetData(instance->m, instance->d);
+                    mj_forward(instance->m, instance->d);
+                    instance->profilerupdate();
+                    instance->sensorupdate();
+                    instance->updateSettings();
                 }
                 break;
 
@@ -1359,37 +1042,37 @@ void uiEvent(mjuiState* state)
                 break;
 
             case 3:             // Align
-                alignscale();
-                updatesettings();
+                instance->alignScale();
+                instance->updateSettings();
                 break;
 
             case 4:             // Copy pose
-                copykey();
+                instance->copyKey();
                 break;
 
             case 5:             // Adjust key
             case 6:             // Reset to key
                 i = settings.key;
-                d->time = m->key_time[i];
-                mju_copy(d->qpos, m->key_qpos+i*m->nq, m->nq);
-                mju_copy(d->qvel, m->key_qvel+i*m->nv, m->nv);
-                mju_copy(d->act, m->key_act+i*m->na, m->na);
-                mju_copy(d->mocap_pos, m->key_mpos+i*3*m->nmocap, 3*m->nmocap);
-                mju_copy(d->mocap_quat, m->key_mquat+i*4*m->nmocap, 4*m->nmocap);
-                mj_forward(m, d);
-                profilerupdate();
-                sensorupdate();
-                updatesettings();
+                instance->d->time = instance->m->key_time[i];
+                mju_copy(instance->d->qpos, instance->m->key_qpos+i*instance->m->nq, instance->m->nq);
+                mju_copy(instance->d->qvel, instance->m->key_qvel+i*instance->m->nv, instance->m->nv);
+                mju_copy(instance->d->act, instance->m->key_act+i*instance->m->na, instance->m->na);
+                mju_copy(instance->d->mocap_pos, instance->m->key_mpos+i*3*instance->m->nmocap, 3*instance->m->nmocap);
+                mju_copy(instance->d->mocap_quat, instance->m->key_mquat+i*4*instance->m->nmocap, 4*instance->m->nmocap);
+                mj_forward(instance->m, instance->d);
+                instance->profilerupdate();
+                instance->sensorupdate();
+                instance->updateSettings();
                 break;
 
             case 7:             // Set key
                 i = settings.key;
-                m->key_time[i] = d->time;
-                mju_copy(m->key_qpos+i*m->nq, d->qpos, m->nq);
-                mju_copy(m->key_qvel+i*m->nv, d->qvel, m->nv);
-                mju_copy(m->key_act+i*m->na, d->act, m->na);
-                mju_copy(m->key_mpos+i*3*m->nmocap, d->mocap_pos, 3*m->nmocap);
-                mju_copy(m->key_mquat+i*4*m->nmocap, d->mocap_quat, 4*m->nmocap);
+                instance->m->key_time[i] = instance->d->time;
+                mju_copy(instance->m->key_qpos+i*instance->m->nq, instance->d->qpos, instance->m->nq);
+                mju_copy(instance->m->key_qvel+i*instance->m->nv, instance->d->qvel, instance->m->nv);
+                mju_copy(instance->m->key_act+i*instance->m->na, instance->d->act, instance->m->na);
+                mju_copy(instance->m->key_mpos+i*3*instance->m->nmocap, instance->d->mocap_pos, 3*instance->m->nmocap);
+                mju_copy(instance->m->key_mquat+i*4*instance->m->nmocap, instance->d->mocap_quat, 4*instance->m->nmocap);
                 break;
             }
         }
@@ -1398,16 +1081,16 @@ void uiEvent(mjuiState* state)
         else if( it && it->sectionid==SECT_PHYSICS )
         {
             // update disable flags in mjOption
-            m->opt.disableflags = 0;
+            instance->m->opt.disableflags = 0;
             for( i=0; i<mjNDISABLE; i++ )
                 if( settings.disable[i] )
-                    m->opt.disableflags |= (1<<i);
+                    instance->m->opt.disableflags |= (1<<i);
 
             // update enable flags in mjOption
-            m->opt.enableflags = 0;
+            instance->m->opt.enableflags = 0;
             for( i=0; i<mjNENABLE; i++ )
                 if( settings.enable[i] )
-                    m->opt.enableflags |= (1<<i);
+                    instance->m->opt.enableflags |= (1<<i);
         }
 
         // rendering section
@@ -1415,26 +1098,26 @@ void uiEvent(mjuiState* state)
         {
             // set camera in mjvCamera
             if( settings.camera==0 )
-                cam.type = mjCAMERA_FREE;
+                instance->cam.type = mjCAMERA_FREE;
             else if( settings.camera==1 )
             {
-                if( pert.select>0 )
+                if( instance->pert.select>0 )
                 {
-                    cam.type = mjCAMERA_TRACKING;
-                    cam.trackbodyid = pert.select;
-                    cam.fixedcamid = -1;
+                    instance->cam.type = mjCAMERA_TRACKING;
+                    instance->cam.trackbodyid = instance->pert.select;
+                    instance->cam.fixedcamid = -1;
                 }
                 else
                 {
-                    cam.type = mjCAMERA_FREE;
+                    instance->cam.type = mjCAMERA_FREE;
                     settings.camera = 0;
-                    mjui_update(SECT_RENDERING, -1, &ui0, &uistate, &con);
+                    mjui_update(SECT_RENDERING, -1, &instance->ui0, &instance->uistate, &instance->con);
                 }
             }
             else
             {
-                cam.type = mjCAMERA_FIXED;
-                cam.fixedcamid = settings.camera - 2;
+                instance->cam.type = mjCAMERA_FIXED;
+                instance->cam.fixedcamid = settings.camera - 2;
             }
         }
 
@@ -1444,19 +1127,19 @@ void uiEvent(mjuiState* state)
             // remake joint section if joint group changed
             if( it->name[0]=='J' && it->name[1]=='o' )
             {
-                ui1.nsect = SECT_JOINT;
-                makejoint(ui1.sect[SECT_JOINT].state);
-                ui1.nsect = NSECT1;
-                uiModify(window, &ui1, state, &con);
+                instance->ui1.nsect = SECT_JOINT;
+                makejoint(instance->ui1.sect[SECT_JOINT].state);
+                instance->ui1.nsect = NSECT1;
+                uiModify(instance->window, &instance->ui1, state, &instance->con);
             }
 
             // remake control section if actuator group changed
             if( it->name[0]=='A' && it->name[1]=='c' )
             {
-                ui1.nsect = SECT_CONTROL;
-                makecontrol(ui1.sect[SECT_CONTROL].state);
-                ui1.nsect = NSECT1;
-                uiModify(window, &ui1, state, &con);
+                instance->ui1.nsect = SECT_CONTROL;
+                makecontrol(instance->ui1.sect[SECT_CONTROL].state);
+                instance->ui1.nsect = NSECT1;
+                uiModify(instance->window, &instance->ui1, state, &instance->con);
             }
         }
 
@@ -1466,12 +1149,12 @@ void uiEvent(mjuiState* state)
     }
 
     // call UI 1 if event is directed to it
-    if( (state->dragrect==ui1.rectid) ||
-        (state->dragrect==0 && state->mouserect==ui1.rectid) ||
+    if( (state->dragrect==instance->ui1.rectid) ||
+        (state->dragrect==0 && state->mouserect==instance->ui1.rectid) ||
         state->type==mjEVENT_KEY )
     {
         // process UI event
-        mjuiItem* it = mjui_event(&ui1, state, &con);
+        mjuiItem* it = mjui_event(&instance->ui1, state, &instance->con);
 
         // control section
         if( it && it->sectionid==SECT_CONTROL )
@@ -1479,8 +1162,8 @@ void uiEvent(mjuiState* state)
             // clear controls
             if( it->itemid==0 )
             {
-                mju_zero(d->ctrl, m->nu);
-                mjui_update(SECT_CONTROL, -1, &ui1, &uistate, &con);
+                mju_zero(instance->d->ctrl, instance->m->nu);
+                mjui_update(SECT_CONTROL, -1, &instance->ui1, &instance->uistate, &instance->con);
             }
         }
 
@@ -1495,81 +1178,81 @@ void uiEvent(mjuiState* state)
         switch( state->key )
         {
         case ' ':                   // Mode
-            if( m )
+            if( instance->m )
             {
                 settings.run = 1 - settings.run;
-                pert.active = 0;
-                mjui_update(-1, -1, &ui0, state, &con);
+                instance->pert.active = 0;
+                mjui_update(-1, -1, &instance->ui0, state, &instance->con);
             }
             break;
 
         case mjKEY_RIGHT:           // step forward
-            if( m && !settings.run )
+            if( instance->m && !settings.run )
             {
-                cleartimers();
-                mj_step(m, d);
-                profilerupdate();
-                sensorupdate();
-                updatesettings();
+                instance->clearTimers();
+                mj_step(instance->m, instance->d);
+                instance->profilerupdate();
+                instance->sensorupdate();
+                instance->updateSettings();
             }
             break;
 
         case mjKEY_LEFT:            // step back
-            if( m && !settings.run )
+            if( instance->m && !settings.run )
             {
-                m->opt.timestep = -m->opt.timestep;
-                cleartimers();
-                mj_step(m, d);
-                m->opt.timestep = -m->opt.timestep;
-                profilerupdate();
-                sensorupdate();
-                updatesettings();
+                instance->m->opt.timestep = -instance->m->opt.timestep;
+                instance->clearTimers();
+                mj_step(instance->m, instance->d);
+                instance->m->opt.timestep = -instance->m->opt.timestep;
+                instance->profilerupdate();
+                instance->sensorupdate();
+                instance->updateSettings();
             }
             break;
 
         case mjKEY_DOWN:            // step forward 100
-            if( m && !settings.run )
+            if( instance->m && !settings.run )
             {
-                cleartimers();
+                instance->clearTimers();
                 for( i=0; i<100; i++ )
-                    mj_step(m, d);
-                profilerupdate();
-                sensorupdate();
-                updatesettings();
+                    mj_step(instance->m, instance->d);
+                instance->profilerupdate();
+                instance->sensorupdate();
+                instance->updateSettings();
             }
             break;
 
         case mjKEY_UP:              // step back 100
-            if( m && !settings.run )
+            if( instance->m && !settings.run )
             {
-                m->opt.timestep = -m->opt.timestep;
-                cleartimers();
+                instance->m->opt.timestep = -instance->m->opt.timestep;
+                instance->clearTimers();
                 for( i=0; i<100; i++ )
-                    mj_step(m, d);
-                m->opt.timestep = -m->opt.timestep;
-                profilerupdate();
-                sensorupdate();
-                updatesettings();
+                    mj_step(instance->m, instance->d);
+                instance->m->opt.timestep = -instance->m->opt.timestep;
+                instance->profilerupdate();
+                instance->sensorupdate();
+                instance->updateSettings();
             }
             break;
 
         case mjKEY_PAGE_UP:         // select parent body
-            if( m && pert.select>0 )
+            if( instance->m && instance->pert.select>0 )
             {
-                pert.select = m->body_parentid[pert.select];
-                pert.skinselect = -1;
+                instance->pert.select = instance->m->body_parentid[instance->pert.select];
+                instance->pert.skinselect = -1;
 
                 // stop perturbation if world reached
-                if( pert.select<=0 )
-                    pert.active = 0;
+                if( instance->pert.select<=0 )
+                    instance->pert.active = 0;
             }
 
             break;
 
         case mjKEY_ESCAPE:          // free camera
-            cam.type = mjCAMERA_FREE;
+            instance->cam.type = mjCAMERA_FREE;
             settings.camera = 0;
-            mjui_update(SECT_RENDERING, -1, &ui0, &uistate, &con);
+            mjui_update(SECT_RENDERING, -1, &instance->ui0, &instance->uistate, &instance->con);
             break;
         }
 
@@ -1577,20 +1260,20 @@ void uiEvent(mjuiState* state)
     }
 
     // 3D scroll
-    if( state->type==mjEVENT_SCROLL && state->mouserect==3 && m )
+    if( state->type==mjEVENT_SCROLL && state->mouserect==3 && instance->m )
     {
         // emulate vertical mouse motion = 5% of window height
-        mjv_moveCamera(m, mjMOUSE_ZOOM, 0, -0.05*state->sy, &scn, &cam);
+        mjv_moveCamera(instance->m, mjMOUSE_ZOOM, 0, -0.05*state->sy, &instance->scn, &instance->cam);
 
         return;
     }
 
     // 3D press
-    if( state->type==mjEVENT_PRESS && state->mouserect==3 && m )
+    if( state->type==mjEVENT_PRESS && state->mouserect==3 && instance->m )
     {
         // set perturbation
         int newperturb = 0;
-        if( state->control && pert.select>0 )
+        if( state->control && instance->pert.select>0 )
         {
             // right: translate;  left: rotate
             if( state->right )
@@ -1599,10 +1282,10 @@ void uiEvent(mjuiState* state)
                 newperturb = mjPERT_ROTATE;
 
             // perturbation onset: reset reference
-            if( newperturb && !pert.active )
-                mjv_initPerturb(m, d, &scn, &pert);
+            if( newperturb && !instance->pert.active )
+                mjv_initPerturb(instance->m, instance->d, &instance->scn, &instance->pert);
         }
-        pert.active = newperturb;
+        instance->pert.active = newperturb;
 
         // handle double-click
         if( state->doubleclick )
@@ -1620,30 +1303,30 @@ void uiEvent(mjuiState* state)
             mjrRect r = state->rect[3];
             mjtNum selpnt[3];
             int selgeom, selskin;
-            int selbody = mjv_select(m, d, &vopt,
+            int selbody = mjv_select(instance->m, instance->d, &instance->vopt,
                                      (mjtNum)r.width/(mjtNum)r.height,
                                      (mjtNum)(state->x-r.left)/(mjtNum)r.width,
                                      (mjtNum)(state->y-r.bottom)/(mjtNum)r.height,
-                                     &scn, selpnt, &selgeom, &selskin);
+                                     &instance->scn, selpnt, &selgeom, &selskin);
 
             // set lookat point, start tracking is requested
             if( selmode==2 || selmode==3 )
             {
                 // copy selpnt if anything clicked
                 if( selbody>=0 )
-                    mju_copy3(cam.lookat, selpnt);
+                    mju_copy3(instance->cam.lookat, selpnt);
 
                 // switch to tracking camera if dynamic body clicked
                 if( selmode==3 && selbody>0 )
                 {
                     // mujoco camera
-                    cam.type = mjCAMERA_TRACKING;
-                    cam.trackbodyid = selbody;
-                    cam.fixedcamid = -1;
+                    instance->cam.type = mjCAMERA_TRACKING;
+                    instance->cam.trackbodyid = selbody;
+                    instance->cam.fixedcamid = -1;
 
                     // UI camera
                     settings.camera = 1;
-                    mjui_update(SECT_RENDERING, -1, &ui0, &uistate, &con);
+                    mjui_update(SECT_RENDERING, -1, &instance->ui0, &instance->uistate, &instance->con);
                 }
             }
 
@@ -1653,39 +1336,39 @@ void uiEvent(mjuiState* state)
                 if( selbody>=0 )
                 {
                     // record selection
-                    pert.select = selbody;
-                    pert.skinselect = selskin;
+                    instance->pert.select = selbody;
+                    instance->pert.skinselect = selskin;
 
                     // compute localpos
                     mjtNum tmp[3];
-                    mju_sub3(tmp, selpnt, d->xpos+3*pert.select);
-                    mju_mulMatTVec(pert.localpos, d->xmat+9*pert.select, tmp, 3, 3);
+                    mju_sub3(tmp, selpnt, instance->d->xpos+3*instance->pert.select);
+                    mju_mulMatTVec(instance->pert.localpos, instance->d->xmat+9*instance->pert.select, tmp, 3, 3);
                 }
                 else
                 {
-                    pert.select = 0;
-                    pert.skinselect = -1;
+                    instance->pert.select = 0;
+                    instance->pert.skinselect = -1;
                 }
             }
 
             // stop perturbation on select
-            pert.active = 0;
+            instance->pert.active = 0;
         }
 
         return;
     }
 
     // 3D release
-    if( state->type==mjEVENT_RELEASE && state->dragrect==3 && m )
+    if( state->type==mjEVENT_RELEASE && state->dragrect==3 && instance->m )
     {
         // stop perturbation
-        pert.active = 0;
+        instance->pert.active = 0;
 
         return;
     }
 
     // 3D move
-    if( state->type==mjEVENT_MOVE && state->dragrect==3 && m )
+    if( state->type==mjEVENT_MOVE && state->dragrect==3 && instance->m )
     {
         // determine action based on mouse button
         mjtMouse action;
@@ -1699,35 +1382,26 @@ void uiEvent(mjuiState* state)
         // move perturb or camera
         mjrRect r = state->rect[3];
         if( pert.active )
-            mjv_movePerturb(m, d, action, state->dx/r.height, -state->dy/r.height,
-                            &scn, &pert);
+            mjv_movePerturb(instance->m, instance->d, action, state->dx/r.height, -state->dy/r.height,
+                            &instance->scn, &instance->pert);
         else
-            mjv_moveCamera(m, action, state->dx/r.height, -state->dy/r.height,
-                           &scn, &cam);
+            mjv_moveCamera(instance->m, action, state->dx/r.height, -state->dy/r.height,
+                           &instance->scn, &instance->cam);
 
         return;
     }
 }
 
+static void XBotMjSimEnv::handleEvent(const mjuiState* state) {
+    uiEvent(state);
+}
 
-
-//--------------------------- rendering and simulation ----------------------------------
-
-// sim thread synchronization
-std::mutex mtx;
-
-
-// prepare to render
-void prepare(void)
-{
-    // data for FPS calculation
-    static double lastupdatetm = 0;
-
-    // update interval, save update time
-    double tmnow = glfwGetTime();
-    double interval = tmnow - lastupdatetm;
+void XBotMjSimEnv::prepare() {
+    lastUpdateTime = 0;
+    double currentTime = glfwGetTime();
+    double interval = currentTime - lastUpdateTime;
     interval = mjMIN(1, mjMAX(0.0001, interval));
-    lastupdatetm = tmnow;
+    lastUpdateTime = currentTime;
 
     // no model: nothing to do
     if( !m )
@@ -1760,20 +1434,18 @@ void prepare(void)
         sensorupdate();
 
     // clear timers once profiler info has been copied
-    cleartimers();
+    clearTimers();
 }
 
-// render im main thread (while simulating in background thread)
-void render(GLFWwindow* window)
-{
+static void XBotMjSimEnv::render(GLFWwindow* window) {
     // get 3D rectangle and reduced for profiler
-    mjrRect rect = uistate.rect[3];
+    mjrRect rect = instance->uistate.rect[3];
     mjrRect smallrect = rect;
     if( settings.profiler )
         smallrect.width = rect.width - rect.width/4;
 
     // no model
-    if( !m )
+    if( !instance->m )
     {
         // blank screen
         mjr_rectangle(rect, 0.2f, 0.3f, 0.4f, 1);
@@ -1781,16 +1453,16 @@ void render(GLFWwindow* window)
         // label
         if( settings.loadrequest )
             mjr_overlay(mjFONT_BIG, mjGRID_TOPRIGHT, smallrect,
-                        "loading", NULL, &con);
+                        "loading", NULL, &instance->con);
         else
             mjr_overlay(mjFONT_NORMAL, mjGRID_TOPLEFT, rect,
-                        "Drag-and-drop model file here", 0, &con);
+                        "Drag-and-drop model file here", 0, &instance->con);
 
         // render uis
         if( settings.ui0 )
-            mjui_render(&ui0, &uistate, &con);
+            mjui_render(&instance->ui0, &instance->uistate, &instance->con);
         if( settings.ui1 )
-            mjui_render(&ui1, &uistate, &con);
+            mjui_render(&instance->ui1, &instance->uistate, &instance->con);
 
         // finalize
         glfwSwapBuffers(window);
@@ -1799,29 +1471,29 @@ void render(GLFWwindow* window)
     }
 
     // render scene
-    mjr_render(rect, &scn, &con);
+    mjr_render(rect, &instance->scn, &instance->con);
 
     // show pause/loading label
     if( !settings.run || settings.loadrequest )
         mjr_overlay(mjFONT_BIG, mjGRID_TOPRIGHT, smallrect,
-                    settings.loadrequest ? "loading" : "pause", NULL, &con);
+                    settings.loadrequest ? "loading" : "pause", NULL, &instance->con);
 
     // show ui 0
     if( settings.ui0 )
-        mjui_render(&ui0, &uistate, &con);
+        mjui_render(&instance->ui0, &instance->uistate, &instance->con);
 
     // show ui 1
     if( settings.ui1 )
-        mjui_render(&ui1, &uistate, &con);
+        mjui_render(&instance->ui1, &instance->uistate, &instance->con);
 
     // show help
     if( settings.help )
-        mjr_overlay(mjFONT_NORMAL, mjGRID_TOPLEFT, rect, help_title, help_content, &con);
+        mjr_overlay(mjFONT_NORMAL, mjGRID_TOPLEFT, rect, help_title, help_content, &instance->con);
 
     // show info
     if( settings.info )
         mjr_overlay(mjFONT_NORMAL, mjGRID_BOTTOMLEFT, rect,
-                    info_title, info_content, &con);
+                    info_title, info_content, &instance->con);
 
     // show profiler
     if( settings.profiler )
@@ -1835,22 +1507,17 @@ void render(GLFWwindow* window)
     glfwSwapBuffers(window);
 }
 
-
-
-// simulate in background thread (while rendering in main thread)
-void simulate(void)
-{
+void XBotMjSimEnv::simulate() {
     // cpu-sim syncronization point
     double cpusync = 0;
     mjtNum simsync = 0;
 
-
     // run until asked to exit
-    while( !settings.exitrequest )
+    while(!settings.exitrequest)
     {
         // sleep for 1 ms or yield, to let main thread run
         //  yield results in busy wait - which has better timing but kills battery life
-        if( settings.run && settings.busywait )
+        if(settings.run && settings.busywait)
             std::this_thread::yield();
         else
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -1859,13 +1526,13 @@ void simulate(void)
         mtx.lock();
 
         // run only if model is present
-        if( m )
+        if(m)
         {
             // record start time
             double startwalltm = glfwGetTime();
 
             // running
-            if( settings.run )
+            if(settings.run)
             {
                 // record cpu time at start of iteration
                 double tmstart = glfwGetTime();
@@ -1926,173 +1593,156 @@ void simulate(void)
     }
 }
 
-
-
-//-------------------------------- init and main ----------------------------------------
-
-// initalize everything
-void init(void)
-{
-    // print version, check compatibility
-    printf("MuJoCo Pro version %.2lf\n", 0.01*mj_version());
-    if( mjVERSION_HEADER!=mj_version() )
-        mju_error("Headers and library have different versions");
-
-    // init GLFW, set timer callback (milliseconds)
-    if (!glfwInit())
-        mju_error("could not initialize GLFW");
-    mjcb_time = timer;
-
-    // multisampling
-    glfwWindowHint(GLFW_SAMPLES, 4);
-    glfwWindowHint(GLFW_VISIBLE, 1);
-
-    // get videomode and save
-    vmode = *glfwGetVideoMode(glfwGetPrimaryMonitor());
-
-    // create window
-    window = glfwCreateWindow((2*vmode.width)/3, (2*vmode.height)/3,
-                              "Simulate", NULL, NULL);
-    if( !window )
-    {
-        glfwTerminate();
-        mju_error("could not create window");
-    }
-
-    // save window position and size
-    glfwGetWindowPos(window, windowpos, windowpos+1);
-    glfwGetWindowSize(window, windowsize, windowsize+1);
-
-    // make context current, set v-sync
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(settings.vsync);
-
-    // init abstract visualization
-    mjv_defaultCamera(&cam);
-    mjv_defaultOption(&vopt);
-    profilerinit();
-    sensorinit();
-
-    // make empty scene
-    mjv_defaultScene(&scn);
-    mjv_makeScene(NULL, &scn, maxgeom);
-
-    // select default font
-    int fontscale = uiFontScale(window);
-    settings.font = fontscale/50 - 1;
-
-    // make empty context
-    mjr_defaultContext(&con);
-    mjr_makeContext(NULL, &con, fontscale);
-
-    // set GLFW callbacks
-    uiSetCallback(window, &uistate, uiEvent, uiLayout);
-    glfwSetWindowRefreshCallback(window, render);
-    glfwSetDropCallback(window, drop);
-
-    // init state and uis
-    memset(&uistate, 0, sizeof(mjuiState));
-    memset(&ui0, 0, sizeof(mjUI));
-    memset(&ui1, 0, sizeof(mjUI));
-    ui0.spacing = mjui_themeSpacing(settings.spacing);
-    ui0.color = mjui_themeColor(settings.color);
-    ui0.predicate = uiPredicate;
-    ui0.rectid = 1;
-    ui0.auxid = 0;
-    ui1.spacing = mjui_themeSpacing(settings.spacing);
-    ui1.color = mjui_themeColor(settings.color);
-    ui1.predicate = uiPredicate;
-    ui1.rectid = 2;
-    ui1.auxid = 1;
-
-    // populate uis with standard sections
-    mjui_add(&ui0, defFile);
-    mjui_add(&ui0, defOption);
-    mjui_add(&ui0, defSimulation);
-    mjui_add(&ui0, defWatch);
-    uiModify(window, &ui0, &uistate, &con);
-    uiModify(window, &ui1, &uistate, &con);
+void XBotMjSimEnv::alignScale() {
+    cam.lookat[0] = m->stat.center[0];
+    cam.lookat[1] = m->stat.center[1];
+    cam.lookat[2] = m->stat.center[2];
+    cam.distance = 1.5 * m->stat.extent;
+    cam.type = mjCAMERA_FREE;
 }
 
+void XBotMjSimEnv::copyKey() {
+    char clipboard[5000] = "<key qpos='";
+    char buf[200];
 
-void mj_control_callback(const mjModel* m, mjData* d)
-{
-    if(!xbot2_wrapper)
+    // prepare string
+    for( int i=0; i<m->nq; i++ )
     {
+        sprintf(buf, i==m->nq-1 ? "%g" : "%g ", d->qpos[i]);
+        strcat(clipboard, buf);
+    }
+    strcat(clipboard, "'/>");
+
+    // copy to clipboard
+    glfwSetClipboardString(window, clipboard);
+}
+
+mjtNum XBotMjSimEnv::timer() {
+    return (mjtNum)(1000 * glfwGetTime());
+}
+
+void XBotMjSimEnv::clearTimers() {
+    for (int i = 0; i < mjNTIMER; i++) {
+        d->timer[i].duration = 0;
+        d->timer[i].number = 0;
+    }
+}
+
+void XBotMjSimEnv::updateSettings() {
+    int i;
+
+    // physics flags
+    for( i=0; i<mjNDISABLE; i++ )
+        settings.disable[i] = ((m->opt.disableflags & (1<<i)) !=0 );
+    for( i=0; i<mjNENABLE; i++ )
+        settings.enable[i] = ((m->opt.enableflags & (1<<i)) !=0 );
+
+    // camera
+    if( cam.type==mjCAMERA_FIXED )
+        settings.camera = 2 + cam.fixedcamid;
+    else if( cam.type==mjCAMERA_TRACKING )
+        settings.camera = 1;
+    else
+        settings.camera = 0;
+
+    // update UI
+    mjui_update(-1, -1, &ui0, &uistate, &con);
+}
+
+static void XBotMjSimEnv::drop(GLFWwindow* window, int count, const char** paths) {
+    if (count > 0) {
+        mju_strncpy(instance->filename, paths[0], 1000);
+        settings.loadrequest = 1;
+    }
+}
+
+void XBotMjSimEnv::loadModel() {
+    // clear request
+    settings.loadrequest = 0;
+
+    // make sure filename is not empty
+    if( !filename[0]  )
+        return;
+
+    // load and compile
+    char error[500] = "";
+    mjModel* mnew = 0;
+    if( strlen(filename)>4 && !strcmp(filename+strlen(filename)-4, ".mjb") )
+    {
+        mnew = mj_loadModel(filename, NULL);
+        if( !mnew )
+            strcpy(error, "could not load binary model");
+    }
+    else
+        mnew = mj_loadXML(filename, NULL, error, 500);
+    if( !mnew )
+    {
+        printf("%s\n", error);
         return;
     }
 
-    xbot2_wrapper->run(d);
-
-}
-
-// run event loop
-int main(int argc, const char** argv)
-{
-    // initialize everything
-    init();
-
-    // request loadmodel if file given (otherwise drag-and-drop)
-    if( argc>1 )
+    // compiler warning: print and pause
+    if( error[0] )
     {
-        mju_strncpy(filename, argv[1], 1000);
-        settings.loadrequest = 2;
+        // mj_forward() below will print the warning message
+        printf("Model compiled, but simulation warning (paused):\n  %s\n\n",
+                error);
+        settings.run = 0;
     }
 
-    // xbot2 config
-    if( argc>2 )
-    {
-        xbot2_cfg_path = argv[2];
-    }
-
-
-    // start simulation thread
-    std::thread simthread(simulate);
-
-    // event loop
-    while( !glfwWindowShouldClose(window) && !settings.exitrequest )
-    {
-        // start exclusive access (block simulation thread)
-        mtx.lock();
-
-        // load model (not on first pass, to show "loading" label)
-        if( settings.loadrequest==1 )
-            loadmodel();
-        else if( settings.loadrequest>1 )
-            settings.loadrequest = 1;
-
-        // handle events (calls all callbacks)
-        glfwPollEvents();
-
-        // prepare to render
-        prepare();
-
-        // end exclusive access (allow simulation thread to run)
-        mtx.unlock();
-
-        // render while simulation is running
-        render(window);
-    }
-
-    // stop simulation thread
-    settings.exitrequest = 1;
-    simthread.join();
-
-    fprintf(stderr, "destroying xbot2 wrapper \n");
-    xbot2_wrapper.reset();
-
-    // delete everything we allocated
-    uiClearCallback(window);
+    // delete old model, assign new
     mj_deleteData(d);
     mj_deleteModel(m);
-    mjv_freeScene(&scn);
-    mjr_freeContext(&con);
+    xbot2_wrapper.reset();
+    m = mnew;
+    d = mj_makeData(m);
+    xbot2_wrapper = std::make_unique<XBot::MjWrapper>(m, xbot2_cfg_path);
+    mj_forward(m, d);
 
+    // re-create scene and context
+    mjv_makeScene(m, &scn, maxgeom);
+    mjr_makeContext(m, &con, 50*(settings.font+1));
 
-    // terminate GLFW (crashes with Linux NVidia drivers)
-    #if defined(__APPLE__) || defined(_WIN32)
-        glfwTerminate();
-    #endif
+    // clear perturbation state
+    pert.active = 0;
+    pert.select = 0;
+    pert.skinselect = -1;
 
-    return 0;
+    // align and scale view, update scene
+    alignScale();
+    mjv_updateScene(m, d, &vopt, &pert, &cam, mjCAT_ALL, &scn);
+
+    // set window title to model name
+    if( window && m->names )
+    {
+        char title[200] = "Simulate : ";
+        strcat(title, m->names);
+        glfwSetWindowTitle(window, title);
+    }
+
+    // set keyframe range and divisions
+    ui0.sect[SECT_SIMULATION].item[5].slider.range[0] = 0;
+    ui0.sect[SECT_SIMULATION].item[5].slider.range[1] = mjMAX(0, m->nkey - 1);
+    ui0.sect[SECT_SIMULATION].item[5].slider.divisions = mjMAX(1, m->nkey - 1);
+
+    // rebuild UI sections
+    makesections();
+
+    // full ui update
+    uiModify(window, &ui0, &uistate, &con);
+    uiModify(window, &ui1, &uistate, &con);
+    updateSettings();
+}
+
+void XBotMjSimEnv::dropCallback(GLFWwindow* window, int count, const char** paths) {
+    XBotMjSimEnv* env = static_cast<XBotMjSimEnv*>(glfwGetWindowUserPointer(window));
+    env->drop(window, count, paths);
+}
+
+void XBotMjSimEnv::keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    if (action == GLFW_PRESS) {
+        XBotMjSimEnv* env = static_cast<XBotMjSimEnv*>(glfwGetWindowUserPointer(window));
+        // Handle key events
+        // ...
+    }
 }

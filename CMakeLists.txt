@@ -26,7 +26,7 @@ add_library(xbot2_mujoco STATIC
     src/xbot2_mj_joint.cpp
     src/xbot2_mj_imu.cpp
     src/xbot2_mj_linkstate.cpp
-    src/mj_sim_env.cpp
+    src/xmj_sim_env.cpp
     )
 
 target_link_libraries(xbot2_mujoco
