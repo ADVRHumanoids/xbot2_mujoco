@@ -17,7 +17,7 @@
 
 class XBotMjSimEnv {
 public:
-    XBotMjSimEnv(const char* configPath);
+    XBotMjSimEnv(const std::string configPath);
     ~XBotMjSimEnv();
 
     void run();
@@ -30,7 +30,7 @@ private:
     static XBotMjSimEnv* instance; // "hack": singleton instance pointer to allow
     // static members to use object attributes and methods 
     void xbotmj_control_callback(const mjModel* m, mjData* d);
-    
+
     void simulate();
     void prepare();
     void init();
@@ -94,13 +94,13 @@ private:
     mjvFigure figsensor;
 
     // OpenGL rendering and UI
-    GLFWvidmode vmode;
-    int windowpos[2];
-    int windowsize[2];
-    mjrContext con;
-    GLFWwindow* window = NULL;
-    mjuiState uistate;
-    mjUI ui0, ui1;
+    static GLFWvidmode vmode;
+    static int windowpos[2];
+    static int windowsize[2];
+    static mjrContext con;
+    static GLFWwindow* window = NULL;
+    static mjuiState uistate;
+    static mjUI ui0, ui1;
 
     std::mutex mtx;
     std::thread simThread;

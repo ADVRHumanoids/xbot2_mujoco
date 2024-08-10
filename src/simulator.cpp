@@ -51,15 +51,6 @@ mjvFigure figsize;
 mjvFigure figsensor;
 
 
-// OpenGL rendering and UI
-GLFWvidmode vmode;
-int windowpos[2];
-int windowsize[2];
-mjrContext con;
-GLFWwindow* window = NULL;
-mjuiState uistate;
-mjUI ui0, ui1;
-
 // xbot2
 XBot::MjWrapper::UniquePtr xbot2_wrapper;
 std::string xbot2_cfg_path;

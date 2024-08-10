@@ -22,6 +22,11 @@ if(DEFINED ENV{CONDA_PREFIX})
 #   set(CMAKE_SYSROOT "$ENV{CONDA_PREFIX}/x86_64-conda-linux-gnu/sysroot")
 endif()
 
+option(WITH_TESTS "Compile tests" FALSE)
+if(${WITH_TESTS})
+    message(STATUS "Will compile tests.")
+endif()
+
 add_library(xbot2_mujoco STATIC
     src/xbot2_mj_joint.cpp
     src/xbot2_mj_imu.cpp
@@ -50,4 +55,8 @@ install(TARGETS mujoco_simulator
 install(PROGRAMS src/mujoco_simulator_wrapper.py 
     DESTINATION bin)
 
+if(${WITH_TESTS})
+    enable_testing()
+    add_subdirectory(tests/)
+endif()
 

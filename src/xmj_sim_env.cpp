@@ -1,5 +1,8 @@
 #include "xmj_sim_env.h"
 
+// Define the static instance pointer
+XBotMjSimEnv* XBotMjSimEnv::instance = nullptr;
+
 void XBotMjSimEnv::mj_control_callback(const mjModel* m, mjData* d){
     instance->xbotmj_control_callback(m, d);
 }
@@ -13,7 +16,7 @@ void XBotMjSimEnv::xbotmj_control_callback(const mjModel* m, mjData* d){
     xbot2_wrapper->run(d);
 }
 
-XBotMjSimEnv::XBotMjSimEnv(const char* configPath) : xbot2_cfg_path(configPath) {
+XBotMjSimEnv::XBotMjSimEnv(const std::string configPath) : xbot2_cfg_path(configPath) {
     
     instance = this; // Set the global instance pointer to this instance
 
@@ -61,7 +64,7 @@ XBotMjSimEnv::~XBotMjSimEnv() {
 void XBotMjSimEnv::run() {
 
     init();
-    
+
     running = true;
     
     simThread = std::thread(&XBotMjSimEnv::simulate, this);
