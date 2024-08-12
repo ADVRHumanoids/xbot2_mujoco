@@ -1557,9 +1557,38 @@ void render(GLFWwindow* window)
     glfwSwapBuffers(window);
 }
 
+void rendering_loop(bool headless) {
+
+    while(!settings.exitrequest && (!headless && !glfwWindowShouldClose(window)))
+    {
+        // start exclusive access (block simulation thread)
+        mtx.lock();
+
+        // load model (not on first pass, to show "loading" label)
+        if( settings.loadrequest==1 )
+            loadmodel();
+        else if( settings.loadrequest>1 )
+            settings.loadrequest = 1;
+
+        // handle events (calls all callbacks)
+        glfwPollEvents();
+
+        // prepare to render
+        prepare();
+
+        // end exclusive access (allow simulation thread to run)
+        mtx.unlock();
+
+        // render while simulation is running
+        render(window);
+    }
+}
+
+
+
 // simulate in background thread (while rendering in main thread)
 
-void step(double cpusync, mjtNum simsync)
+void do_step(double cpusync, mjtNum simsync)
 {
     // Start exclusive access
     mtx.lock();
@@ -1633,7 +1662,7 @@ void require_exit(void) {
     settings.exitrequest = 1;
 }
 
-void simulate(void)
+void simulation_loop(void)
 {
     // cpu-sim syncronization point
     double cpusync = 0;
@@ -1649,7 +1678,7 @@ void simulate(void)
         else
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-        step(cpusync,simsync);
+        do_step(cpusync,simsync);
 
     }
 }
@@ -1768,32 +1797,10 @@ void run(const char* fname,
     xbot2_cfg_path=xbot2_config_path;
 
     // start simulation thread
-    std::thread simthread(simulate);
+    std::thread simthread(simulation_loop);
 
     // event loop
-    while(!settings.exitrequest && (!headless && !glfwWindowShouldClose(window)))
-    {
-        // start exclusive access (block simulation thread)
-        mtx.lock();
-
-        // load model (not on first pass, to show "loading" label)
-        if( settings.loadrequest==1 )
-            loadmodel();
-        else if( settings.loadrequest>1 )
-            settings.loadrequest = 1;
-
-        // handle events (calls all callbacks)
-        glfwPollEvents();
-
-        // prepare to render
-        prepare();
-
-        // end exclusive access (allow simulation thread to run)
-        mtx.unlock();
-
-        // render while simulation is running
-        render(window);
-    }
+    rendering_loop(headless);
 
     // stop simulation thread
     require_exit();

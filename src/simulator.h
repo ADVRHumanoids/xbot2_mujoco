@@ -94,6 +94,9 @@ void printfield(char* str, void* ptr);
 // update watch
 void watch(void);
 
+void render(GLFWwindow* window);
+
+void rendering_loop(bool headless=false);
 
 //-------------------------------- UI construction --------------------------------------
 
@@ -157,8 +160,8 @@ void prepare(void);
 // simulate in background thread (while rendering in main thread)
 bool exit_requested(void);
 void require_exit(void);
-void step(double cpusync, mjtNum simsync); // just a single step
-void simulate(void); 
+void do_step(double cpusync, mjtNum simsync); // just a single step
+void simulation_loop(void); 
 
 //-------------------------------- init, control callback and sim loop run ----------------------------------------
 
