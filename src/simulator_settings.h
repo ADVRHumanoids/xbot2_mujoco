@@ -10,8 +10,15 @@
 #include <mutex>
 #include <chrono>
 
+//-------------------------------- global -----------------------------------------------
+
+// constants
+static const int maxgeom = 5000;           // preallocated geom array in mjvScene
+static const double syncmisalign = 0.1;    // maximum time mis-alignment before re-sync
+static const double refreshfactor = 0.7;   // fraction of refresh available for simulation
+
 // UI settings not contained in MuJoCo structures
-struct {
+static struct {
     // file
     int exitrequest = 0;
 
@@ -66,11 +73,11 @@ enum
 };
 
 // info strings
-char info_title[1000];
-char info_content[1000];
+static char info_title[1000];
+static char info_content[1000];
 
 // option section of UI
-const mjuiDef defOption[] =
+static const mjuiDef defOption[] =
 {
     {mjITEM_SECTION,   "Option",        1, NULL,                    "AO"},
     {mjITEM_SELECT,    "Spacing",       1, &settings.spacing,       "Tight\nWide"},
@@ -93,7 +100,7 @@ const mjuiDef defOption[] =
 };
 
 // simulation section of UI
-const mjuiDef defSimulation[] =
+static const mjuiDef defSimulation[] =
 {
     {mjITEM_SECTION,   "Simulation",    1, NULL,                    "AS"},
     {mjITEM_RADIO,     "",              2, &settings.run,           "Pause\nRun"},
@@ -108,7 +115,7 @@ const mjuiDef defSimulation[] =
 };
 
 // watch section of UI
-const mjuiDef defWatch[] =
+static const mjuiDef defWatch[] =
 {
     {mjITEM_SECTION,   "Watch",         0, NULL,                    "AW"},
     {mjITEM_EDITTXT,   "Field",         2, settings.field,          "qpos"},
@@ -118,7 +125,7 @@ const mjuiDef defWatch[] =
 };
 
 // help strings
-const char help_content[] =
+static const char help_content[] =
 "Alt mouse button\n"
 "UI right hold\n"
 "UI title double-click\n"
@@ -138,7 +145,7 @@ const char help_content[] =
 "Ctrl [Shift] drag\n"
 "Ctrl [Shift] right drag";
 
-const char help_title[] =
+static const char help_title[] =
 "Swap left-right\n"
 "Show UI shortcuts\n"
 "Expand/collapse all  \n"
@@ -158,7 +165,7 @@ const char help_title[] =
 "Object rotate\n"
 "Object translate";
 
-const mjuiDef defFile[] =
+static const mjuiDef defFile[] =
 {
     {mjITEM_SECTION,   "File",          1, NULL,                    "AF"},
     {mjITEM_BUTTON,    "Save xml",      2, NULL,                    ""},

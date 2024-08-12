@@ -12,222 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "mjxmacro.h"
-#include "uitools.h"
-#include "stdio.h"
-#include "string.h"
-
-#include <thread>
-#include <mutex>
-#include <chrono>
-
-#include "xbot2_bridge.h"
-
-#include <Eigen/Dense>
-
-//-------------------------------- global -----------------------------------------------
-
-// constants
-const int maxgeom = 5000;           // preallocated geom array in mjvScene
-const double syncmisalign = 0.1;    // maximum time mis-alignment before re-sync
-const double refreshfactor = 0.7;   // fraction of refresh available for simulation
-
-
-// model and data
-mjModel* m = NULL;
-mjData* d = NULL;
-char filename[1000] = "";
-
-
-// abstract visualization
-mjvScene scn;
-mjvCamera cam;
-mjvOption vopt;
-mjvPerturb pert;
-mjvFigure figconstraint;
-mjvFigure figcost;
-mjvFigure figtimer;
-mjvFigure figsize;
-mjvFigure figsensor;
-
-
-// xbot2
-XBot::MjWrapper::UniquePtr xbot2_wrapper;
-std::string xbot2_cfg_path;
-
-void mj_control_callback(const mjModel* m, mjData* d);
-
-mjfGeneric mjcb_control = mj_control_callback;
-
-// UI settings not contained in MuJoCo structures
-struct
-{
-    // file
-    int exitrequest = 0;
-
-    // option
-    int spacing = 0;
-    int color = 0;
-    int font = 0;
-    int ui0 = 1;
-    int ui1 = 1;
-    int help = 0;
-    int info = 0;
-    int profiler = 0;
-    int sensor = 0;
-    int fullscreen = 0;
-    int vsync = 1;
-    int busywait = 0;
-
-    // simulation
-    int run = 1;
-    int key = 0;
-    int loadrequest = 0;
-
-    // watch
-    char field[mjMAXUITEXT] = "qpos";
-    int index = 0;
-
-    // physics: need sync
-    int disable[mjNDISABLE];
-    int enable[mjNENABLE];
-
-    // rendering: need sync
-    int camera = 0;
-} settings;
-
-
-// section ids
-enum
-{
-    // left ui
-    SECT_FILE   = 0,
-    SECT_OPTION,
-    SECT_SIMULATION,
-    SECT_WATCH,
-    SECT_PHYSICS,
-    SECT_RENDERING,
-    SECT_GROUP,
-    NSECT0,
-
-    // right ui
-    SECT_JOINT = 0,
-    SECT_CONTROL,
-    NSECT1
-};
-
-
-// file section of UI
-const mjuiDef defFile[] =
-{
-    {mjITEM_SECTION,   "File",          1, NULL,                    "AF"},
-    {mjITEM_BUTTON,    "Save xml",      2, NULL,                    ""},
-    {mjITEM_BUTTON,    "Save mjb",      2, NULL,                    ""},
-    {mjITEM_BUTTON,    "Print model",   2, NULL,                    "CM"},
-    {mjITEM_BUTTON,    "Print data",    2, NULL,                    "CD"},
-    {mjITEM_BUTTON,    "Quit",          1, NULL,                    "CQ"},
-    {mjITEM_END}
-};
-
-
-// option section of UI
-const mjuiDef defOption[] =
-{
-    {mjITEM_SECTION,   "Option",        1, NULL,                    "AO"},
-    {mjITEM_SELECT,    "Spacing",       1, &settings.spacing,       "Tight\nWide"},
-    {mjITEM_SELECT,    "Color",         1, &settings.color,         "Default\nOrange\nWhite\nBlack"},
-    {mjITEM_SELECT,    "Font",          1, &settings.font,          "50 %\n100 %\n150 %\n200 %\n250 %\n300 %"},
-    {mjITEM_CHECKINT,  "Left UI (Tab)", 1, &settings.ui0,           " #258"},
-    {mjITEM_CHECKINT,  "Right UI",      1, &settings.ui1,           "S#258"},
-    {mjITEM_CHECKINT,  "Help",          2, &settings.help,          " #290"},
-    {mjITEM_CHECKINT,  "Info",          2, &settings.info,          " #291"},
-    {mjITEM_CHECKINT,  "Profiler",      2, &settings.profiler,      " #292"},
-    {mjITEM_CHECKINT,  "Sensor",        2, &settings.sensor,        " #293"},
-#ifdef __APPLE__
-    {mjITEM_CHECKINT,  "Fullscreen",    0, &settings.fullscreen,    " #294"},
-#else
-    {mjITEM_CHECKINT,  "Fullscreen",    1, &settings.fullscreen,    " #294"},
-#endif
-    {mjITEM_CHECKINT,  "Vertical Sync", 1, &settings.vsync,         " #295"},
-    {mjITEM_CHECKINT,  "Busy Wait",     1, &settings.busywait,      " #296"},
-    {mjITEM_END}
-};
-
-
-// simulation section of UI
-const mjuiDef defSimulation[] =
-{
-    {mjITEM_SECTION,   "Simulation",    1, NULL,                    "AS"},
-    {mjITEM_RADIO,     "",              2, &settings.run,           "Pause\nRun"},
-    {mjITEM_BUTTON,    "Reset",         2, NULL,                    " #259"},
-    {mjITEM_BUTTON,    "Reload",        2, NULL,                    "CL"},
-    {mjITEM_BUTTON,    "Align",         2, NULL,                    "CA"},
-    {mjITEM_BUTTON,    "Copy pose",     2, NULL,                    "CC"},
-    {mjITEM_SLIDERINT, "Key",           3, &settings.key,           "0 0"},
-    {mjITEM_BUTTON,    "Reset to key",  3},
-    {mjITEM_BUTTON,    "Set key",       3},
-    {mjITEM_END}
-};
-
-
-// watch section of UI
-const mjuiDef defWatch[] =
-{
-    {mjITEM_SECTION,   "Watch",         0, NULL,                    "AW"},
-    {mjITEM_EDITTXT,   "Field",         2, settings.field,          "qpos"},
-    {mjITEM_EDITINT,   "Index",         2, &settings.index,         "1"},
-    {mjITEM_STATIC,    "Value",         2, NULL,                    " "},
-    {mjITEM_END}
-};
-
-
-// help strings
-const char help_content[] =
-"Alt mouse button\n"
-"UI right hold\n"
-"UI title double-click\n"
-"Space\n"
-"Esc\n"
-"Right arrow\n"
-"Left arrow\n"
-"Down arrow\n"
-"Up arrow\n"
-"Page Up\n"
-"Double-click\n"
-"Right double-click\n"
-"Ctrl Right double-click\n"
-"Scroll, middle drag\n"
-"Left drag\n"
-"[Shift] right drag\n"
-"Ctrl [Shift] drag\n"
-"Ctrl [Shift] right drag";
-
-const char help_title[] =
-"Swap left-right\n"
-"Show UI shortcuts\n"
-"Expand/collapse all  \n"
-"Pause\n"
-"Free camera\n"
-"Step forward\n"
-"Step back\n"
-"Step forward 100\n"
-"Step back 100\n"
-"Select parent\n"
-"Select\n"
-"Center\n"
-"Track camera\n"
-"Zoom\n"
-"View rotate\n"
-"View translate\n"
-"Object rotate\n"
-"Object translate";
-
-
-// info strings
-char info_title[1000];
-char info_content[1000];
-
-
+#include "simulator.h"
 
 //----------------------- profiler, sensor, info, watch ---------------------------------
 
@@ -327,8 +112,6 @@ void profilerinit(void)
             figsize.linedata[n][2*i] = (float)-i;
         }
 }
-
-
 
 // update profiler figures
 void profilerupdate(void)
@@ -442,8 +225,6 @@ void profilerupdate(void)
     }
 }
 
-
-
 // show profiler figures
 void profilershow(mjrRect rect)
 {
@@ -461,8 +242,6 @@ void profilershow(mjrRect rect)
     viewport.bottom += rect.height/4;
     mjr_figure(viewport, &figconstraint, &con);
 }
-
-
 
 // init sensor figure
 void sensorinit(void)
@@ -492,8 +271,6 @@ void sensorinit(void)
     figsensor.range[1][0] = -1;
     figsensor.range[1][1] = 1;
 }
-
-
 
 // update sensor figure
 void sensorupdate(void)
@@ -544,8 +321,6 @@ void sensorupdate(void)
     }
 }
 
-
-
 // show sensor figure
 void sensorshow(mjrRect rect)
 {
@@ -561,8 +336,6 @@ void sensorshow(mjrRect rect)
     };
     mjr_figure(viewport, &figsensor, &con);
 }
-
-
 
 // prepare info text
 void infotext(char* title, char* content, double interval)
@@ -613,15 +386,11 @@ void infotext(char* title, char* content, double interval)
     }
 }
 
-
-
 // sprintf forwarding, to avoid compiler warning in x-macro
 void printfield(char* str, void* ptr)
 {
     sprintf(str, "%g", *(mjtNum*)ptr);
 }
-
-
 
 // update watch
 void watch(void)
@@ -650,8 +419,6 @@ void watch(void)
         MJDATA_POINTERS
     #undef X
 }
-
-
 
 //-------------------------------- UI construction --------------------------------------
 
@@ -728,8 +495,6 @@ void makephysics(int oldstate)
     mjui_add(&ui0, defOverride);
 }
 
-
-
 // make rendering section of UI
 void makerendering(int oldstate)
 {
@@ -805,8 +570,6 @@ void makerendering(int oldstate)
     }
 }
 
-
-
 // make group section of UI
 void makegroup(int oldstate)
 {
@@ -854,8 +617,6 @@ void makegroup(int oldstate)
     // add section
     mjui_add(&ui0, defGroup);
 }
-
-
 
 // make joint section of UI
 void makejoint(int oldstate)
@@ -909,8 +670,6 @@ void makejoint(int oldstate)
         }
 }
 
-
-
 // make control section of UI
 void makecontrol(int oldstate)
 {
@@ -961,8 +720,6 @@ void makecontrol(int oldstate)
     }
 }
 
-
-
 // make model-dependent UI sections
 void makesections(void)
 {
@@ -998,8 +755,6 @@ void makesections(void)
     makecontrol(oldstate1[SECT_CONTROL]);
 }
 
-
-
 //-------------------------------- utility functions ------------------------------------
 
 // align and scale view
@@ -1014,8 +769,6 @@ void alignscale(void)
     // set to free camera
     cam.type = mjCAMERA_FREE;
 }
-
-
 
 // copy qpos to clipboard as key
 void copykey(void)
@@ -1035,15 +788,11 @@ void copykey(void)
     glfwSetClipboardString(window, clipboard);
 }
 
-
-
 // millisecond timer, for MuJoCo built-in profiler
 mjtNum timer(void)
 {
     return (mjtNum)(1000*glfwGetTime());
 }
-
-
 
 // clear all times
 void cleartimers(void)
@@ -1054,8 +803,6 @@ void cleartimers(void)
         d->timer[i].number = 0;
     }
 }
-
-
 
 // update UI 0 when MuJoCo structures change (except for joint sliders)
 void updatesettings(void)
@@ -1080,8 +827,6 @@ void updatesettings(void)
     mjui_update(-1, -1, &ui0, &uistate, &con);
 }
 
-
-
 // drop file callback
 void drop(GLFWwindow* window, int count, const char** paths)
 {
@@ -1092,8 +837,6 @@ void drop(GLFWwindow* window, int count, const char** paths)
         settings.loadrequest = 1;
     }
 }
-
-
 
 // load mjb or xml model
 void loadmodel(void)
@@ -1175,8 +918,6 @@ void loadmodel(void)
     updatesettings();
 }
 
-
-
 //--------------------------------- UI hooks (for uitools.c) ----------------------------
 
 // determine enable/disable item state given category
@@ -1197,8 +938,6 @@ int uiPredicate(int category, void* userdata)
         return 1;
     }
 }
-
-
 
 // set window layout
 void uiLayout(mjuiState* state)
@@ -1231,8 +970,6 @@ void uiLayout(mjuiState* state)
     rect[3].bottom = 0;
     rect[3].height = rect[0].height;
 }
-
-
 
 // handle UI event
 void uiEvent(mjuiState* state)
@@ -1700,13 +1437,7 @@ void uiEvent(mjuiState* state)
     }
 }
 
-
-
 //--------------------------- rendering and simulation ----------------------------------
-
-// sim thread synchronization
-std::mutex mtx;
-
 
 // prepare to render
 void prepare(void)
@@ -1826,8 +1557,6 @@ void render(GLFWwindow* window)
     glfwSwapBuffers(window);
 }
 
-
-
 // simulate in background thread (while rendering in main thread)
 void simulate(void)
 {
@@ -1917,9 +1646,22 @@ void simulate(void)
     }
 }
 
+//-------------------------------- control callback ----------------------------------------
 
+void xbotmj_control_callback(const mjModel* m, mjData* d)
+{
+    if(!xbot2_wrapper)
+    {
+        return;
+    }
 
-//-------------------------------- init and main ----------------------------------------
+    xbot2_wrapper->run(d);
+
+}
+
+mjfGeneric mjcb_control = xbotmj_control_callback; // register control callback to mujoco
+
+//-------------------------------- init, control callback and sim loop run ----------------------------------------
 
 // initalize everything
 void init(void)
@@ -2005,37 +1747,13 @@ void init(void)
     uiModify(window, &ui1, &uistate, &con);
 }
 
-
-void mj_control_callback(const mjModel* m, mjData* d)
-{
-    if(!xbot2_wrapper)
-    {
-        return;
-    }
-
-    xbot2_wrapper->run(d);
-
-}
-
-// run event loop
-int main(int argc, const char** argv)
+void run(const char* fname, const std::string xbot2_config_path)
 {
     // initialize everything
     init();
 
-    // request loadmodel if file given (otherwise drag-and-drop)
-    if( argc>1 )
-    {
-        mju_strncpy(filename, argv[1], 1000);
-        settings.loadrequest = 2;
-    }
-
-    // xbot2 config
-    if( argc>2 )
-    {
-        xbot2_cfg_path = argv[2];
-    }
-
+    mju_strncpy(filename, fname, 1000);
+    xbot2_cfg_path=xbot2_config_path;
 
     // start simulation thread
     std::thread simthread(simulate);
@@ -2085,5 +1803,4 @@ int main(int argc, const char** argv)
         glfwTerminate();
     #endif
 
-    return 0;
 }

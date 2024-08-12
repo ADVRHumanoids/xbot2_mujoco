@@ -22,6 +22,11 @@ if(DEFINED ENV{CONDA_PREFIX})
 #   set(CMAKE_SYSROOT "$ENV{CONDA_PREFIX}/x86_64-conda-linux-gnu/sysroot")
 endif()
 
+option(WITH_XMJ_SIM_ENV "Compile XBotMjSimEnv" TRUE)
+if(${WITH_XMJ_SIM_ENV})
+    message(STATUS "Will compile XBotMjSimEnv.")
+endif()
+
 option(WITH_TESTS "Compile tests" FALSE)
 if(${WITH_TESTS})
     message(STATUS "Will compile tests.")
@@ -31,7 +36,6 @@ add_library(xbot2_mujoco STATIC
     src/xbot2_mj_joint.cpp
     src/xbot2_mj_imu.cpp
     src/xbot2_mj_linkstate.cpp
-    src/xmj_sim_env.cpp
     )
 
 target_link_libraries(xbot2_mujoco
@@ -41,15 +45,26 @@ target_link_libraries(xbot2_mujoco
     matlogger2::matlogger2
     )
 
-add_executable(mujoco_simulator
+add_library(mujoco_simulator STATIC
     src/simulator.cpp
     src/uitools.cpp
     src/control.cpp)
 
 target_link_libraries(mujoco_simulator
     xbot2_mujoco)
+    
+add_library(xbot_mujoco_env STATIC
+    src/xmj_sim_env.cpp)
 
-install(TARGETS mujoco_simulator
+target_link_libraries(xbot_mujoco_env
+    mujoco_simulator)
+
+add_executable(launch_simulator src/launch_simulator.cpp)
+
+target_link_libraries(launch_simulator
+    mujoco_simulator)
+
+install(TARGETS launch_simulator
     DESTINATION bin)
 
 install(PROGRAMS src/mujoco_simulator_wrapper.py 
