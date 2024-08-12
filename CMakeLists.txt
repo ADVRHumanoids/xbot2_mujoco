@@ -32,6 +32,15 @@ if(${WITH_TESTS})
     message(STATUS "Will compile tests.")
 endif()
 
+find_package(pybind11 QUIET)
+if(pybind11_FOUND)
+    option(WITH_PYTHON "Compile and install python bindings" FALSE)
+    if(${WITH_PYTHON})
+        message(STATUS "Python bindings for will be built and installed.")
+        add_definitions(-DWITH_PYTHON) # can be used by preprocessor macros
+    endif()
+endif()
+
 add_library(xbot2_mujoco STATIC
     src/xbot2_mj_joint.cpp
     src/xbot2_mj_imu.cpp
@@ -73,5 +82,10 @@ install(PROGRAMS src/mujoco_simulator_wrapper.py
 if(${WITH_TESTS})
     enable_testing()
     add_subdirectory(tests/)
+endif()
+
+# Compile python bindings
+if(${WITH_PYTHON})
+    add_subdirectory(bindings/python/)
 endif()
 
