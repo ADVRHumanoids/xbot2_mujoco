@@ -1558,15 +1558,89 @@ void render(GLFWwindow* window)
 }
 
 // simulate in background thread (while rendering in main thread)
+
+void step(double cpusync, mjtNum simsync)
+{
+    // Start exclusive access
+    mtx.lock();
+
+    // Run only if model is present
+    if (m)
+    {
+        // Record start time
+        double startwalltm = glfwGetTime();
+
+        // Running
+        if (settings.run)
+        {
+            // Record CPU time at start of iteration
+            double tmstart = glfwGetTime();
+
+            // Out-of-sync (for any reason)
+            if (d->time < simsync || tmstart < cpusync || cpusync == 0 ||
+                mju_abs((d->time - simsync) - (tmstart - cpusync)) > syncmisalign)
+            {
+                // Re-sync
+                cpusync = tmstart;
+                simsync = d->time;
+
+                // Clear old perturbations, apply new
+                mju_zero(d->xfrc_applied, 6 * m->nbody);
+                mjv_applyPerturbPose(m, d, &pert, 0);  // Move mocap bodies only
+                mjv_applyPerturbForce(m, d, &pert);
+
+                // Run single step
+                mj_step(m, d);
+            }
+            else
+            {
+                // In-sync
+                while ((d->time - simsync) < (glfwGetTime() - cpusync) &&
+                       (glfwGetTime() - tmstart) < refreshfactor / vmode.refreshRate)
+                {
+                    // Clear old perturbations, apply new
+                    mju_zero(d->xfrc_applied, 6 * m->nbody);
+                    mjv_applyPerturbPose(m, d, &pert, 0);  // Move mocap bodies only
+                    mjv_applyPerturbForce(m, d, &pert);
+
+                    // Run mj_step
+                    mjtNum prevtm = d->time;
+                    mj_step(m, d);
+
+                    // Break on reset
+                    if (d->time < prevtm)
+                        break;
+                }
+            }
+        }
+        else
+        {
+            // Paused
+            mjv_applyPerturbPose(m, d, &pert, 1);      // Move mocap and dynamic bodies
+            mj_forward(m, d);                    // Update rendering and joint sliders
+        }
+    }
+
+    // End exclusive access
+    mtx.unlock();
+}
+
+bool exit_requested(void) {
+    return settings.exitrequest != 0;
+}
+
+void require_exit(void) {
+    settings.exitrequest = 1;
+}
+
 void simulate(void)
 {
     // cpu-sim syncronization point
     double cpusync = 0;
     mjtNum simsync = 0;
 
-
     // run until asked to exit
-    while( !settings.exitrequest )
+    while( !exit_requested() )
     {
         // sleep for 1 ms or yield, to let main thread run
         //  yield results in busy wait - which has better timing but kills battery life
@@ -1575,74 +1649,8 @@ void simulate(void)
         else
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-        // start exclusive access
-        mtx.lock();
+        step(cpusync,simsync);
 
-        // run only if model is present
-        if( m )
-        {
-            // record start time
-            double startwalltm = glfwGetTime();
-
-            // running
-            if( settings.run )
-            {
-                // record cpu time at start of iteration
-                double tmstart = glfwGetTime();
-
-                // out-of-sync (for any reason)
-                if( d->time<simsync || tmstart<cpusync || cpusync==0 ||
-                    mju_abs((d->time-simsync)-(tmstart-cpusync))>syncmisalign )
-                {
-                    // re-sync
-                    cpusync = tmstart;
-                    simsync = d->time;
-
-                    // clear old perturbations, apply new
-                    mju_zero(d->xfrc_applied, 6*m->nbody);
-                    mjv_applyPerturbPose(m, d, &pert, 0);  // move mocap bodies only
-                    mjv_applyPerturbForce(m, d, &pert);
-
-                    // run single step, let next iteration deal with timing
-                    mj_step(m, d);
-                }
-
-                // in-sync
-                else
-                {
-                    // step while simtime lags behind cputime, and within safefactor
-                    while( (d->time-simsync)<(glfwGetTime()-cpusync) &&
-                           (glfwGetTime()-tmstart)<refreshfactor/vmode.refreshRate )
-                    {
-                        // clear old perturbations, apply new
-                        mju_zero(d->xfrc_applied, 6*m->nbody);
-                        mjv_applyPerturbPose(m, d, &pert, 0);  // move mocap bodies only
-                        mjv_applyPerturbForce(m, d, &pert);
-
-                        // run mj_step
-                        mjtNum prevtm = d->time;
-                        mj_step(m, d);
-
-                        // break on reset
-                        if( d->time<prevtm )
-                            break;
-                    }
-                }
-            }
-
-            // paused
-            else
-            {
-                // apply pose perturbation
-                mjv_applyPerturbPose(m, d, &pert, 1);      // move mocap and dynamic bodies
-
-                // run mj_forward, to update rendering and joint sliders
-                mj_forward(m, d);
-            }
-        }
-
-        // end exclusive access
-        mtx.unlock();
     }
 }
 
@@ -1664,93 +1672,97 @@ mjfGeneric mjcb_control = xbotmj_control_callback; // register control callback 
 //-------------------------------- init, control callback and sim loop run ----------------------------------------
 
 // initalize everything
-void init(void)
+void init(bool headless)
 {
     // print version, check compatibility
     printf("MuJoCo Pro version %.2lf\n", 0.01*mj_version());
     if( mjVERSION_HEADER!=mj_version() )
         mju_error("Headers and library have different versions");
+    
+    if (!headless) { // create a rendering window and everything
+        // init GLFW, set timer callback (milliseconds)
+        if (!glfwInit())
+            mju_error("could not initialize GLFW");
+        mjcb_time = timer;
 
-    // init GLFW, set timer callback (milliseconds)
-    if (!glfwInit())
-        mju_error("could not initialize GLFW");
-    mjcb_time = timer;
+        // multisampling
+        glfwWindowHint(GLFW_SAMPLES, 4);
+        glfwWindowHint(GLFW_VISIBLE, 1);
 
-    // multisampling
-    glfwWindowHint(GLFW_SAMPLES, 4);
-    glfwWindowHint(GLFW_VISIBLE, 1);
+        // get videomode and save
+        vmode = *glfwGetVideoMode(glfwGetPrimaryMonitor());
 
-    // get videomode and save
-    vmode = *glfwGetVideoMode(glfwGetPrimaryMonitor());
+        // create window
+        window = glfwCreateWindow((2*vmode.width)/3, (2*vmode.height)/3,
+                                "Simulate", NULL, NULL);
+        if(!window)
+        {
+            glfwTerminate();
+            mju_error("could not create window");
+        }
 
-    // create window
-    window = glfwCreateWindow((2*vmode.width)/3, (2*vmode.height)/3,
-                              "Simulate", NULL, NULL);
-    if( !window )
-    {
-        glfwTerminate();
-        mju_error("could not create window");
+        // save window position and size
+        glfwGetWindowPos(window, windowpos, windowpos+1);
+        glfwGetWindowSize(window, windowsize, windowsize+1);
+
+        // make context current, set v-sync
+        glfwMakeContextCurrent(window);
+        glfwSwapInterval(settings.vsync);
+
+        // init abstract visualization
+        mjv_defaultCamera(&cam);
+        mjv_defaultOption(&vopt);
+        profilerinit();
+        sensorinit();
+
+        // make empty scene
+        mjv_defaultScene(&scn);
+        mjv_makeScene(NULL, &scn, maxgeom);
+        
+        // select default font
+        int fontscale = uiFontScale(window);
+        settings.font = fontscale/50 - 1;
+
+        // make empty context
+        mjr_defaultContext(&con);
+        mjr_makeContext(NULL, &con, fontscale);
+        
+        // set GLFW callbacks
+        uiSetCallback(window, &uistate, uiEvent, uiLayout);
+        glfwSetWindowRefreshCallback(window, render);
+        glfwSetDropCallback(window, drop);
+
+        // init state and uis
+        memset(&uistate, 0, sizeof(mjuiState));
+        memset(&ui0, 0, sizeof(mjUI));
+        memset(&ui1, 0, sizeof(mjUI));
+        ui0.spacing = mjui_themeSpacing(settings.spacing);
+        ui0.color = mjui_themeColor(settings.color);
+        ui0.predicate = uiPredicate;
+        ui0.rectid = 1;
+        ui0.auxid = 0;
+        ui1.spacing = mjui_themeSpacing(settings.spacing);
+        ui1.color = mjui_themeColor(settings.color);
+        ui1.predicate = uiPredicate;
+        ui1.rectid = 2;
+        ui1.auxid = 1;
+
+        // populate uis with standard sections
+        mjui_add(&ui0, defFile);
+        mjui_add(&ui0, defOption);
+        mjui_add(&ui0, defSimulation);
+        mjui_add(&ui0, defWatch);
+        uiModify(window, &ui0, &uistate, &con);
+        uiModify(window, &ui1, &uistate, &con);
     }
-
-    // save window position and size
-    glfwGetWindowPos(window, windowpos, windowpos+1);
-    glfwGetWindowSize(window, windowsize, windowsize+1);
-
-    // make context current, set v-sync
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(settings.vsync);
-
-    // init abstract visualization
-    mjv_defaultCamera(&cam);
-    mjv_defaultOption(&vopt);
-    profilerinit();
-    sensorinit();
-
-    // make empty scene
-    mjv_defaultScene(&scn);
-    mjv_makeScene(NULL, &scn, maxgeom);
-
-    // select default font
-    int fontscale = uiFontScale(window);
-    settings.font = fontscale/50 - 1;
-
-    // make empty context
-    mjr_defaultContext(&con);
-    mjr_makeContext(NULL, &con, fontscale);
-
-    // set GLFW callbacks
-    uiSetCallback(window, &uistate, uiEvent, uiLayout);
-    glfwSetWindowRefreshCallback(window, render);
-    glfwSetDropCallback(window, drop);
-
-    // init state and uis
-    memset(&uistate, 0, sizeof(mjuiState));
-    memset(&ui0, 0, sizeof(mjUI));
-    memset(&ui1, 0, sizeof(mjUI));
-    ui0.spacing = mjui_themeSpacing(settings.spacing);
-    ui0.color = mjui_themeColor(settings.color);
-    ui0.predicate = uiPredicate;
-    ui0.rectid = 1;
-    ui0.auxid = 0;
-    ui1.spacing = mjui_themeSpacing(settings.spacing);
-    ui1.color = mjui_themeColor(settings.color);
-    ui1.predicate = uiPredicate;
-    ui1.rectid = 2;
-    ui1.auxid = 1;
-
-    // populate uis with standard sections
-    mjui_add(&ui0, defFile);
-    mjui_add(&ui0, defOption);
-    mjui_add(&ui0, defSimulation);
-    mjui_add(&ui0, defWatch);
-    uiModify(window, &ui0, &uistate, &con);
-    uiModify(window, &ui1, &uistate, &con);
 }
 
-void run(const char* fname, const std::string xbot2_config_path)
+void run(const char* fname, 
+    const std::string xbot2_config_path,
+    bool headless)
 {
     // initialize everything
-    init();
+    init(headless);
 
     mju_strncpy(filename, fname, 1000);
     xbot2_cfg_path=xbot2_config_path;
@@ -1759,7 +1771,7 @@ void run(const char* fname, const std::string xbot2_config_path)
     std::thread simthread(simulate);
 
     // event loop
-    while( !glfwWindowShouldClose(window) && !settings.exitrequest )
+    while(!settings.exitrequest && (!headless && !glfwWindowShouldClose(window)))
     {
         // start exclusive access (block simulation thread)
         mtx.lock();
@@ -1784,23 +1796,22 @@ void run(const char* fname, const std::string xbot2_config_path)
     }
 
     // stop simulation thread
-    settings.exitrequest = 1;
+    require_exit();
     simthread.join();
 
     fprintf(stderr, "destroying xbot2 wrapper \n");
     xbot2_wrapper.reset();
 
     // delete everything we allocated
-    uiClearCallback(window);
     mj_deleteData(d);
     mj_deleteModel(m);
     mjv_freeScene(&scn);
     mjr_freeContext(&con);
-
-
-    // terminate GLFW (crashes with Linux NVidia drivers)
-    #if defined(__APPLE__) || defined(_WIN32)
-        glfwTerminate();
-    #endif
-
+    if (!headless) {
+        uiClearCallback(window);
+        // terminate GLFW (crashes with Linux NVidia drivers)
+        #if defined(__APPLE__) || defined(_WIN32)
+            glfwTerminate();
+        #endif
+    }
 }

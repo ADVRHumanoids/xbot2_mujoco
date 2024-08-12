@@ -155,14 +155,18 @@ void uiEvent(mjuiState* state);
 void prepare(void);
 
 // simulate in background thread (while rendering in main thread)
-void simulate(void);
+bool exit_requested(void);
+void require_exit(void);
+void step(double cpusync, mjtNum simsync); // just a single step
+void simulate(void); 
 
 //-------------------------------- init, control callback and sim loop run ----------------------------------------
 
 // initalize everything
-void init(void);
+void init(bool headless = false);
 
 // run event loop
-void run(const char* fname, const std::string xbot2_config_path);
+void run(const char* fname, const std::string xbot2_config_path,
+    bool headless = false);
 
 #endif // SIMULATOR_H
