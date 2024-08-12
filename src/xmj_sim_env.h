@@ -31,7 +31,8 @@ private:
 
     bool headless;
     bool multithread;
-
+    bool closed=false;
+    
     int sim_init_steps = 0;
 
     // cpu-sim syncronization points
