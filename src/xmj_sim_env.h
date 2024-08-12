@@ -7,11 +7,15 @@
 #include <thread>
 #include <mutex>
 #include <chrono>
+#include <memory>
 
 #include "simulator.h"
 
 class XBotMjSimEnv {
 public:
+
+    typedef std::unique_ptr<XBotMjSimEnv> UniquePtr;
+
     XBotMjSimEnv(const std::string xbot2_cfg_path,
         const char* model_fname = "",
         bool headless = false,

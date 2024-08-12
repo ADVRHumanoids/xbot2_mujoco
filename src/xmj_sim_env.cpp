@@ -16,7 +16,7 @@ XBotMjSimEnv::XBotMjSimEnv(const std::string configPath,
 XBotMjSimEnv::~XBotMjSimEnv() {
 
     close();
-    
+
 }
 
 void XBotMjSimEnv::close() {
@@ -27,8 +27,9 @@ void XBotMjSimEnv::close() {
             rendering_thread.join();
         }
 
-        fprintf(stderr, "destroying xbot2 wrapper \n");
         xbot2_wrapper.reset();
+
+        fprintf(stderr, "[XBotMjSimEnv][close]: destroyed xbot2 wrapper. \n");
 
         // delete everything we allocated
         mj_deleteData(d);
@@ -42,6 +43,8 @@ void XBotMjSimEnv::close() {
                 glfwTerminate();
             #endif
         }
+
+        fprintf(stderr, "[XBotMjSimEnv][close]: finished simulation cleanup. \n");
 
         closed=true;
     }

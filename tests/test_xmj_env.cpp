@@ -1,32 +1,59 @@
 #include "../src/xmj_sim_env.h"
 #include "string.h"
+#include <gtest/gtest.h>
 
-int main(int argc, const char** argv)
-{
-    std::string xbot2_cfg_path = "";
-    char modelfname[1000] = "";
+class SteppingTest : public ::testing::Test {
+protected:
 
-    if( argc>1 )
-    {
-        mju_strncpy(modelfname, argv[1], 1000);
+    SteppingTest(std::string xbot2_cfg_path="", 
+        const char* modelfilename = "",
+        bool headless = true,
+        bool multithreaded = true) : 
+        xbot2_cfg_path(xbot2_cfg_path),
+        headless(headless),
+        multithreaded(multithreaded){
+        
+        mju_strncpy(modelfname, modelfilename, 1000);
+
+        xbot_mujoco_env_ptr = std::make_unique<XBotMjSimEnv>(xbot2_cfg_path,modelfname,
+            headless,multithreaded);
     }
-    if( argc>2 )
-    {
-        xbot2_cfg_path = argv[2];
+
+    void SetUp() override {
+        
     }
 
-    bool headless = true;
-    bool multithreaded = true;
+    void TearDown() override {
+
+        xbot_mujoco_env_ptr->close();
+
+    }
+
+    std::string xbot2_cfg_path;
+    char modelfname[1000];
+    bool headless;
+    bool multithreaded;
+
+    XBotMjSimEnv::UniquePtr xbot_mujoco_env_ptr;
+
+};
+
+TEST_F(SteppingTest, JustSomeSteps) {
     
     int n_steps = 10000;
-
-    printf("[test_xmj_env]: Will try to load XBot2 config file at %s",xbot2_cfg_path.c_str());
-    printf("[test_xmj_env]: Will try to load xml model file %s",modelfname);
-
-    XBotMjSimEnv xbot_mujoco_env = XBotMjSimEnv(xbot2_cfg_path,modelfname,headless,multithreaded);
-
+    int n_steps_done=0;
     for (int i = 0; i < n_steps; i++) {
-        xbot_mujoco_env.step();
+        xbot_mujoco_env_ptr->step();
         printf("[test_xmj_env]: step idx: %i\n",i);
+        n_steps_done++;
     }
+
+    EXPECT_EQ(n_steps_done, n_steps);
+}
+
+int main(int argc, char** argv)
+{
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+
 }
