@@ -6,6 +6,8 @@ find_package(xbot2 REQUIRED)
 find_package(matlogger2 REQUIRED)
 
 set(CMAKE_CXX_STANDARD 17)
+# Ensure position-independent code is generated for all targets
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64")
 
@@ -53,24 +55,25 @@ target_link_libraries(xbot2_mujoco
     xbot2::xbot2
     matlogger2::matlogger2
     )
+target_compile_options(xbot2_mujoco PRIVATE -fPIC)
 
 add_library(mujoco_simulator STATIC
     src/simulator.cpp
     src/uitools.cpp
     src/control.cpp)
 
-target_link_libraries(mujoco_simulator
+target_link_libraries(mujoco_simulator PUBLIC
     xbot2_mujoco)
-    
+
 add_library(xbot_mujoco_env STATIC
     src/xmj_sim_env.cpp)
 
-target_link_libraries(xbot_mujoco_env
+target_link_libraries(xbot_mujoco_env PUBLIC
     mujoco_simulator)
 
 add_executable(launch_simulator src/launch_simulator.cpp)
 
-target_link_libraries(launch_simulator
+target_link_libraries(launch_simulator PRIVATE
     mujoco_simulator)
 
 install(TARGETS launch_simulator

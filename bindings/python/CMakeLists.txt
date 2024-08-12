@@ -26,8 +26,7 @@ execute_process(
       OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 pybind11_add_module("PyXbotMjSimEnv" PyXbotMjSimEnv.cpp)
-target_link_libraries("PyXbotMjSimEnv" PUBLIC pybind11::module)
-
+target_link_libraries("PyXbotMjSimEnv" PUBLIC xbot_mujoco_env pybind11::module)
 # install python bindings
 install(TARGETS "PyXbotMjSimEnv"
     DESTINATION ${CMAKE_INSTALL_PREFIX}/${PYTHON_SITE}/${PROJECT_NAME})
