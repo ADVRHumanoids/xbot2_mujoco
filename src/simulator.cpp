@@ -840,34 +840,40 @@ void drop(GLFWwindow* window, int count, const char** paths)
 }
 
 // load mjb or xml model
-void loadmodel(void)
+void loadmodel(const char* fname)
 {
+    // Determine which filename to use
+    const char* model_filename = fname ? fname : filename;
+
     // clear request
     settings.loadrequest = 0;
 
     // make sure filename is not empty
-    if( !filename[0]  ) {
-        fprintf(stderr, "[loadmodel]: found empty filename %s! \n", filename);
+    if( !model_filename || !model_filename[0]  ) {
+        fprintf(stderr, "[loadmodel]: found empty filename %s! \n", model_filename);
         return;
     }
 
     // load and compile
     char error[500] = "";
-    mjModel* mnew = 0;
+    mjModel* mnew = nullptr;
 
-    if( strlen(filename)>4 && !strcmp(filename+strlen(filename)-4, ".mjb") )
+    if( strlen(model_filename) > 4 && !strcmp(model_filename + strlen(model_filename) - 4, ".mjb") )
     {
-        fprintf(stderr, "[loadmodel]: loading binary model at %s \n", filename);
-        mnew = mj_loadModel(filename, NULL);
+        fprintf(stderr, "[loadmodel]: loading binary model at %s \n", model_filename);
+        mnew = mj_loadModel(model_filename, NULL);
         if( !mnew )
             strcpy(error, "could not load binary model");
     }
     else
-        fprintf(stderr, "[loadmodel]: loading xml at %s \n", filename);
-        mnew = mj_loadXML(filename, NULL, error, 500);
+    {
+        fprintf(stderr, "[loadmodel]: loading xml at %s \n", model_filename);
+        mnew = mj_loadXML(model_filename, NULL, error, sizeof(error));
+    }
+
     if( !mnew )
     {
-        printf("%s\n", error);
+        printf("Got error %s\n", error);
         return;
     }
 
@@ -875,8 +881,7 @@ void loadmodel(void)
     if( error[0] )
     {
         // mj_forward() below will print the warning message
-        printf("Model compiled, but simulation warning (paused):\n  %s\n\n",
-                error);
+        printf("Model compiled, but simulation warning (paused):\n  %s\n\n", error);
         settings.run = 0;
     }
 
@@ -884,6 +889,7 @@ void loadmodel(void)
     mj_deleteData(d);
     mj_deleteModel(m);
     xbot2_wrapper.reset();
+
     m = mnew;
     d = mj_makeData(m);
     xbot2_wrapper = std::make_unique<XBot::MjWrapper>(m, xbot2_cfg_path);
@@ -891,7 +897,7 @@ void loadmodel(void)
 
     // re-create scene and context
     mjv_makeScene(m, &scn, maxgeom);
-    mjr_makeContext(m, &con, 50*(settings.font+1));
+    mjr_makeContext(m, &con, 50 * (settings.font + 1));
 
     // clear perturbation state
     pert.active = 0;
@@ -919,9 +925,13 @@ void loadmodel(void)
     makesections();
 
     // full ui update
-    uiModify(window, &ui0, &uistate, &con);
-    uiModify(window, &ui1, &uistate, &con);
+    if( window) {
+        uiModify(window, &ui0, &uistate, &con);
+        uiModify(window, &ui1, &uistate, &con);
+    }
+    
     updatesettings();
+
 }
 
 //--------------------------------- UI hooks (for uitools.c) ----------------------------

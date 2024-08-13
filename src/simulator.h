@@ -139,7 +139,7 @@ void updatesettings(void);
 void drop(GLFWwindow* window, int count, const char** paths);
 
 // load mjb or xml model
-void loadmodel(void);
+void loadmodel(const char* fname = nullptr);
 
 //--------------------------------- UI hooks (for uitools.c) ----------------------------
 

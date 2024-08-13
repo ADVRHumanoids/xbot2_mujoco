@@ -7,8 +7,4 @@
 
     </worldbody>
 
-    <!-- Lighting -->
-    <default>
-        <light name="light1" pos="0 0 10" dir="0 0 -1" diffuse="0.8 0.8 0.8" specular="0.4 0.4 0.4"/>
-    </default>
 </mujoco>

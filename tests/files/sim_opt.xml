@@ -5,7 +5,8 @@
     <option timestep="0.001" />
 
     <!-- Simulation settings -->
-    <size nstack="300000" ndata="100000"/>
+    <size nstack="300000" nconmax="100000"/>
+
     <visual>
         <quality shadowsize="2048" />
     </visual>

@@ -9,6 +9,8 @@ XBotMjSimEnv::XBotMjSimEnv(const std::string configPath,
 
     mju_strncpy(xml_fname, model_fname, 1000);
 
+    fprintf(stderr, "[XBotMjSimEnv]: will use xml file at %s\n", xml_fname);
+
     initialize();
 
 }
@@ -72,11 +74,7 @@ void XBotMjSimEnv::initialize() {
 
     }
 
-    mju_strncpy(filename, xml_fname, 1000);
-    fprintf(stderr, "[XBotMjSimEnv]: will use xml file at %s\n", filename);
-
-    loadmodel();
-    
+    loadmodel(xml_fname);
 
 }
 
@@ -105,7 +103,7 @@ void XBotMjSimEnv::render_window() {
 
         // load model (not on first pass, to show "loading" label)
         if( settings.loadrequest==1 )
-            loadmodel();
+            loadmodel(xml_fname);
         else if( settings.loadrequest>1 )
             settings.loadrequest = 1;
         
