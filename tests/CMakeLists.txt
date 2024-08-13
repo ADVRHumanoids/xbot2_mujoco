@@ -6,9 +6,8 @@ include_directories(${GTEST_INCLUDE_DIRS}
 
 if(${WITH_XMJ_SIM_ENV})
     add_executable(xmj_env_test "test_xmj_env.cpp")
-    target_link_libraries(xmj_env_test PRIVATE xbot_mujoco_env ${GTEST_BOTH_LIBRARIES})
+    target_link_libraries(xmj_env_test PRIVATE xbot_mujoco_env xmj_loading_utils ${GTEST_BOTH_LIBRARIES})
 endif()
-
 
 add_executable(parsing_test "test_loading_utils.cpp")
     target_link_libraries(parsing_test PRIVATE xbot_mujoco_env xmj_loading_utils ${GTEST_BOTH_LIBRARIES})

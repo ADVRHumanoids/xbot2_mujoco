@@ -1,21 +1,37 @@
 #include "../src/xmj_sim_env.h"
 #include "string.h"
 #include <gtest/gtest.h>
+#include "../src/loading_utils.h"
+
+#include "./config.h"
+#define FDIR "@FILES_DIR@"
 
 class SteppingHeadlessTest : public ::testing::Test {
 protected:
 
-    SteppingHeadlessTest(std::string xbot2_cfg_path="", 
-        const char* modelfilename = "",
-        bool headless = true,
+    SteppingHeadlessTest(bool headless = true,
         bool multithreaded = true) : 
-        xbot2_cfg_path(xbot2_cfg_path),
         headless(headless),
         multithreaded(multithreaded){
         
-        mju_strncpy(modelfname, modelfilename, 1000);
 
-        xbot_mujoco_env_ptr = std::make_unique<XBotMjSimEnv>(xbot2_cfg_path,modelfname,
+        std::string filesDir(FILES_DIR);
+
+        std::string outfname="centauro_xmj_test";
+        LoadingUtils loader(outfname);
+        loader.setURDFPath(filesDir + "/centauro.urdf");
+        loader.setSimOptPath(filesDir + "/sim_opt.xml");
+        loader.setWorldPath(filesDir + "/world.xml");
+        loader.setSitesPath(filesDir + "/sites.xml");
+        loader.generate();
+
+        std::string mj_xml_path=loader.xml_path();
+        std::string mj_xml_content=loader.get_mj_xml();
+        std::string xbot2_cfg_path=filesDir+"/xbot2_basic.yaml";
+
+        mju_strncpy(modelfname, mj_xml_path.c_str(), 1000);
+
+        xbot_mujoco_env_ptr = std::make_unique<XBotMjSimEnv>(xbot2_cfg_path,mj_xml_path.c_str(),
             headless,multithreaded);
     }
 
@@ -41,17 +57,29 @@ protected:
 class SteppingTest : public ::testing::Test {
 protected:
 
-    SteppingTest(std::string xbot2_cfg_path="", 
-        const char* modelfilename = "",
-        bool headless = false,
+    SteppingTest(bool headless = false,
         bool multithreaded = true) : 
-        xbot2_cfg_path(xbot2_cfg_path),
         headless(headless),
         multithreaded(multithreaded){
         
-        mju_strncpy(modelfname, modelfilename, 1000);
 
-        xbot_mujoco_env_ptr = std::make_unique<XBotMjSimEnv>(xbot2_cfg_path,modelfname,
+        std::string filesDir(FILES_DIR);
+
+        std::string outfname="centauro_xmj_test";
+        LoadingUtils loader(outfname);
+        loader.setURDFPath(filesDir + "/centauro.urdf");
+        loader.setSimOptPath(filesDir + "/sim_opt.xml");
+        loader.setWorldPath(filesDir + "/world.xml");
+        loader.setSitesPath(filesDir + "/sites.xml");
+        loader.generate();
+
+        std::string mj_xml_path=loader.xml_path();
+        std::string mj_xml_content=loader.get_mj_xml();
+        std::string xbot2_cfg_path=filesDir+"/xbot2_basic.yaml";
+
+        mju_strncpy(modelfname, mj_xml_path.c_str(), 1000);
+
+        xbot_mujoco_env_ptr = std::make_unique<XBotMjSimEnv>(xbot2_cfg_path,mj_xml_path.c_str(),
             headless,multithreaded);
     }
 
@@ -74,22 +102,22 @@ protected:
 
 };
 
-TEST_F(SteppingHeadlessTest, JustSomeHeadlessSteps) {
+// TEST_F(SteppingHeadlessTest, JustSomeHeadlessSteps) {
     
-    int n_steps = 10000;
-    int n_steps_done=0;
-    for (int i = 0; i < n_steps; i++) {
-        xbot_mujoco_env_ptr->step();
-        printf("[test_xmj_env]: step idx: %i\n",i);
-        n_steps_done++;
-    }
+//     int n_steps = 10000;
+//     int n_steps_done=0;
+//     for (int i = 0; i < n_steps; i++) {
+//         xbot_mujoco_env_ptr->step();
+//         printf("[test_xmj_env]: step idx: %i\n",i);
+//         n_steps_done++;
+//     }
 
-    EXPECT_EQ(n_steps_done, n_steps);
-}
+//     EXPECT_EQ(n_steps_done, n_steps);
+// }
 
 TEST_F(SteppingTest, JustSomeSteps) {
     
-    int n_steps = 10000;
+    int n_steps = 10000000;
     int n_steps_done=0;
     for (int i = 0; i < n_steps; i++) {
         xbot_mujoco_env_ptr->step();

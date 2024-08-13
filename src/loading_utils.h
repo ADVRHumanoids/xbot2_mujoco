@@ -16,8 +16,12 @@ public:
     void setSitesPath(const std::string& sitesPath);
 
     std::string get_mj_xml(); // Public method to get the final MuJoCo XML
+    void generate();
+    std::string xml_path();
 
 private:
+
+    bool generated = false;
     std::string name_;
     std::string urdfPath_;
     std::string urdfCommand_;

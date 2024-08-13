@@ -215,14 +215,25 @@ void LoadingUtils::addSites() {
     mjXmlDoc.save_file(mjXmlPath_.c_str());
 }
 
-std::string LoadingUtils::get_mj_xml() {
+void LoadingUtils::generate() {
     processURDF();
     compileMuJoCoXML();
     mergeXML();
     addSites();
+    generated=true;
+}
 
-    std::ifstream finalXmlFile(mjXmlPath_);
-    std::stringstream finalXmlBuffer;
-    finalXmlBuffer << finalXmlFile.rdbuf();
-    return finalXmlBuffer.str();
+std::string LoadingUtils::xml_path() {
+    return mjXmlPath_;
+}
+
+std::string LoadingUtils::get_mj_xml() {
+    if (generated) {
+        std::ifstream finalXmlFile(mjXmlPath_);
+        std::stringstream finalXmlBuffer;
+        finalXmlBuffer << finalXmlFile.rdbuf();
+        return finalXmlBuffer.str();
+    } else {
+        return "";
+    }
 }
