@@ -36,7 +36,7 @@ endif()
 
 find_package(pybind11 QUIET)
 if(pybind11_FOUND)
-    option(WITH_PYTHON "Compile and install python bindings" FALSE)
+    option(WITH_PYTHON "Compile and install python bindings" TRUE)
     if(${WITH_PYTHON})
         message(STATUS "Python bindings for will be built and installed.")
         add_definitions(-DWITH_PYTHON) # can be used by preprocessor macros
