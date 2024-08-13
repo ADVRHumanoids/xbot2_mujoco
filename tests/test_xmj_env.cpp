@@ -15,19 +15,19 @@ protected:
         multithreaded(multithreaded){
         
 
-        std::string filesDir(FILES_DIR);
+        std::string files_dir(FILES_DIR);
 
         std::string outfname="centauro_xmj_test";
         LoadingUtils loader(outfname);
-        loader.setURDFPath(filesDir + "/centauro.urdf");
-        loader.setSimOptPath(filesDir + "/sim_opt.xml");
-        loader.setWorldPath(filesDir + "/world.xml");
-        loader.setSitesPath(filesDir + "/sites.xml");
+        loader.set_urdf_path(files_dir + "/centauro.urdf");
+        loader.set_simopt_path(files_dir + "/sim_opt.xml");
+        loader.set_world_path(files_dir + "/world.xml");
+        loader.set_sites_path(files_dir + "/sites.xml");
         loader.generate();
 
         std::string mj_xml_path=loader.xml_path();
         std::string mj_xml_content=loader.get_mj_xml();
-        std::string xbot2_cfg_path=filesDir+"/xbot2_basic.yaml";
+        std::string xbot2_cfg_path=files_dir+"/xbot2_basic.yaml";
 
         mju_strncpy(modelfname, mj_xml_path.c_str(), 1000);
 
@@ -62,20 +62,19 @@ protected:
         headless(headless),
         multithreaded(multithreaded){
         
-
-        std::string filesDir(FILES_DIR);
+        std::string files_dir(FILES_DIR);
 
         std::string outfname="centauro_xmj_test";
         LoadingUtils loader(outfname);
-        loader.setURDFPath(filesDir + "/centauro.urdf");
-        loader.setSimOptPath(filesDir + "/sim_opt.xml");
-        loader.setWorldPath(filesDir + "/world.xml");
-        loader.setSitesPath(filesDir + "/sites.xml");
+        loader.set_urdf_path(files_dir + "/centauro.urdf");
+        loader.set_simopt_path(files_dir + "/sim_opt.xml");
+        loader.set_world_path(files_dir + "/world.xml");
+        loader.set_sites_path(files_dir + "/sites.xml");
         loader.generate();
 
         std::string mj_xml_path=loader.xml_path();
         std::string mj_xml_content=loader.get_mj_xml();
-        std::string xbot2_cfg_path=filesDir+"/xbot2_basic.yaml";
+        std::string xbot2_cfg_path=files_dir+"/xbot2_basic.yaml";
 
         mju_strncpy(modelfname, mj_xml_path.c_str(), 1000);
 
