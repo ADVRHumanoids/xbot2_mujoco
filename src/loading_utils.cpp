@@ -11,7 +11,7 @@ LoadingUtils::LoadingUtils(const std::string& name)
     : name_(name) {
     mjxml_dir = "/tmp/" + name + "_mujoco";
     mjurdf_path = mjxml_dir + "/" + name + ".urdf";
-    mjxml_path = mjxml_dir + "/" + name + ".xml";
+    mjxml_path = mjxml_dir + "/" + name + ".mjcf";
     mjxml_path_orig = mjxml_dir + "/" + name + ".orig.xml";
 
     // Create directory

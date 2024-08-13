@@ -16,7 +16,9 @@ int main() {
     loader.set_simopt_path(files_dir + "/sim_opt.xml");
     loader.set_world_path(files_dir + "/world.xml");
     loader.set_sites_path(files_dir + "/sites.xml");
-
+    
+    loader.generate();
+    
     std::string finalMuJoCoXML = loader.get_mj_xml();
     std::cout << finalMuJoCoXML << std::endl;
 

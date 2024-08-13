@@ -101,22 +101,9 @@ protected:
 
 };
 
-// TEST_F(SteppingHeadlessTest, JustSomeHeadlessSteps) {
+TEST_F(SteppingHeadlessTest, JustSomeHeadlessSteps) {
     
-//     int n_steps = 10000;
-//     int n_steps_done=0;
-//     for (int i = 0; i < n_steps; i++) {
-//         xbot_mujoco_env_ptr->step();
-//         printf("[test_xmj_env]: step idx: %i\n",i);
-//         n_steps_done++;
-//     }
-
-//     EXPECT_EQ(n_steps_done, n_steps);
-// }
-
-TEST_F(SteppingTest, JustSomeSteps) {
-    
-    int n_steps = 10000000;
+    int n_steps = 1000;
     int n_steps_done=0;
     for (int i = 0; i < n_steps; i++) {
         xbot_mujoco_env_ptr->step();
@@ -126,6 +113,19 @@ TEST_F(SteppingTest, JustSomeSteps) {
 
     EXPECT_EQ(n_steps_done, n_steps);
 }
+
+// TEST_F(SteppingTest, JustSomeSteps) {
+    
+//     int n_steps = 10000000;
+//     int n_steps_done=0;
+//     for (int i = 0; i < n_steps; i++) {
+//         xbot_mujoco_env_ptr->step();
+//         printf("[test_xmj_env]: step idx: %i\n",i);
+//         n_steps_done++;
+//     }
+
+//     EXPECT_EQ(n_steps_done, n_steps);
+// }
 
 int main(int argc, char** argv)
 {

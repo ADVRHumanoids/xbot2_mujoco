@@ -43,7 +43,7 @@ private:
     double cpusync = 0;
     mjtNum simsync = 0;
 
-    char model_fname[1000];
+    char xml_fname[1000];
     std::string xbot2_cfg_path;
 
     std::thread rendering_thread;

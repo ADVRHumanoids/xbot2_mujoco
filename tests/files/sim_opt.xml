@@ -1,1 +1,23 @@
 <?xml version="1.0" ?>
+<mujoco>
+    <compiler discardvisual="false" strippath="false"/>
+
+    <option timestep="0.001" />
+
+    <!-- Simulation settings -->
+    <size nstack="300000" ndata="100000"/>
+    <visual>
+        <quality shadowsize="2048" />
+    </visual>
+
+    <!-- Sensor settings -->
+    <!-- <sensor>
+        <accelerometer name="accel" body="example_body"/>
+        <gyroscope name="gyro" body="example_body"/>
+    </sensor> -->
+
+    <!-- Contact parameters -->
+    <!-- <contact>
+        <pair body1="example_body" body2="ground" friction="0.5"/>
+    </contact> -->
+</mujoco>

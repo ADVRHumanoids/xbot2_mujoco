@@ -6,8 +6,8 @@ XBotMjSimEnv::XBotMjSimEnv(const std::string configPath,
     bool headless,
     bool multithread)
     :xbot2_cfg_path(configPath),headless(headless),multithread(multithread) {
-    
-    mju_strncpy(filename, model_fname, 1000);
+
+    mju_strncpy(xml_fname, model_fname, 1000);
 
     initialize();
 
@@ -71,7 +71,13 @@ void XBotMjSimEnv::initialize() {
         fprintf(stderr, "[XBotMjSimEnv][initialize]: launched rendering loop in separate thread. \n");
 
     }
+
+    mju_strncpy(filename, xml_fname, 1000);
+    fprintf(stderr, "[XBotMjSimEnv]: will use xml file at %s\n", filename);
+
+    loadmodel();
     
+
 }
 
 void XBotMjSimEnv::reset() {

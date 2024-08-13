@@ -17,7 +17,6 @@
 // run the full simulation loop
 int main(int argc, const char** argv)
 {
-    char filename[1000] = "";
     std::string xbot2_cfg_path;
 
     // initialize everything

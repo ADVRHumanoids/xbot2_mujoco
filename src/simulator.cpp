@@ -834,6 +834,7 @@ void drop(GLFWwindow* window, int count, const char** paths)
     if( count>0 )
     {
         mju_strncpy(filename, paths[0], 1000);
+        fprintf(stderr, "[test_loading_utils]: dropping xml at %s \n", filename);
         settings.loadrequest = 1;
     }
 }
@@ -845,19 +846,24 @@ void loadmodel(void)
     settings.loadrequest = 0;
 
     // make sure filename is not empty
-    if( !filename[0]  )
+    if( !filename[0]  ) {
+        fprintf(stderr, "[loadmodel]: found empty filename %s! \n", filename);
         return;
+    }
 
     // load and compile
     char error[500] = "";
     mjModel* mnew = 0;
+
     if( strlen(filename)>4 && !strcmp(filename+strlen(filename)-4, ".mjb") )
     {
+        fprintf(stderr, "[loadmodel]: loading binary model at %s \n", filename);
         mnew = mj_loadModel(filename, NULL);
         if( !mnew )
             strcpy(error, "could not load binary model");
     }
     else
+        fprintf(stderr, "[loadmodel]: loading xml at %s \n", filename);
         mnew = mj_loadXML(filename, NULL, error, 500);
     if( !mnew )
     {
@@ -1583,7 +1589,6 @@ void rendering_loop(bool headless) {
         render(window);
     }
 }
-
 
 
 // simulate in background thread (while rendering in main thread)

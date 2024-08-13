@@ -1,1 +1,14 @@
-<?xml version="1.0" ?>
+<?xml version="1.0"?>
+<mujoco>
+    <!-- The simulation world -->
+    <worldbody>
+        <!-- Ground Plane -->
+        <geom name="ground" type="plane" size="10 10 0.1" rgba="0.9 0.9 0.9 1"/>
+
+    </worldbody>
+
+    <!-- Lighting -->
+    <default>
+        <light name="light1" pos="0 0 10" dir="0 0 -1" diffuse="0.8 0.8 0.8" specular="0.4 0.4 0.4"/>
+    </default>
+</mujoco>
