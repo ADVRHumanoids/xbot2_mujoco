@@ -4,6 +4,7 @@ project(xbot2_mujoco)
 find_package(mujoco_cmake REQUIRED)
 find_package(xbot2 REQUIRED)
 find_package(matlogger2 REQUIRED)
+find_package(pugixml REQUIRED)
 
 set(CMAKE_CXX_STANDARD 17)
 # Ensure position-independent code is generated for all targets
@@ -70,6 +71,12 @@ add_library(xbot_mujoco_env STATIC
 
 target_link_libraries(xbot_mujoco_env PUBLIC
     mujoco_simulator)
+
+add_library(xmj_loading_utils STATIC
+    src/loading_utils.cpp)
+
+target_link_libraries(xmj_loading_utils PUBLIC
+    pugixml::pugixml)
 
 add_executable(launch_simulator src/launch_simulator.cpp)
 
