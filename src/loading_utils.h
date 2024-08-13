@@ -2,6 +2,7 @@
 #define LOADING_UTILS_H
 
 #include <string>
+#include <pugixml.hpp>
 
 class LoadingUtils {
 public:
@@ -31,9 +32,10 @@ private:
     std::string mjXmlPathOrig_;
 
     std::string removeComments(const std::string& xml);
-    void createSymlink(const std::string& src, const std::string& dst);
+    std::string addMeshSimLinkBugFix(const std::string& urdf);
     void processURDF();
     void compileMuJoCoXML();
+    void mergeXMLTrees(pugi::xml_node& parent, pugi::xml_node child);
     void mergeXML();
     void addSites();
 };

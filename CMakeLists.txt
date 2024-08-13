@@ -76,7 +76,7 @@ add_library(xmj_loading_utils STATIC
     src/loading_utils.cpp)
 
 target_link_libraries(xmj_loading_utils PUBLIC
-    pugixml::pugixml)
+    pugixml)
 
 add_executable(launch_simulator src/launch_simulator.cpp)
 

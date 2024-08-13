@@ -1,0 +1,6 @@
+#ifndef TEST_CONFIG_H
+#define TEST_CONFIG_H
+
+#define FILES_DIR "@FILES_DIR@"
+
+#endif // TEST_CONFIG_H
