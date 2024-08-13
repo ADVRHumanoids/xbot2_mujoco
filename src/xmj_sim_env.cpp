@@ -23,12 +23,12 @@ void XBotMjSimEnv::close() {
 
     if (!closed) {
         require_exit();
-        if (rendering_thread.joinable()) {
+        if (!headless && window && rendering_thread.joinable()) {
             rendering_thread.join();
+            fprintf(stderr, "[XBotMjSimEnv][close]: joined rendering thread. \n");
         }
 
         xbot2_wrapper.reset();
-
         fprintf(stderr, "[XBotMjSimEnv][close]: destroyed xbot2 wrapper. \n");
 
         // delete everything we allocated
@@ -36,7 +36,7 @@ void XBotMjSimEnv::close() {
         mj_deleteModel(m);
         mjv_freeScene(&scn);
         mjr_freeContext(&con);
-        if (!headless) {
+        if (!headless && window) {
             uiClearCallback(window);
             // terminate GLFW (crashes with Linux NVidia drivers)
             #if defined(__APPLE__) || defined(_WIN32)
@@ -68,6 +68,7 @@ void XBotMjSimEnv::initialize() {
 
         // spawn rendering in separate thread
         rendering_thread = std::thread(&XBotMjSimEnv::launch_rendering_loop, this);
+        fprintf(stderr, "[XBotMjSimEnv][initialize]: launched rendering loop in separate thread. \n");
 
     }
     
