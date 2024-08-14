@@ -132,55 +132,6 @@ std::string LoadingUtils::apply_mesh_root(const std::string& urdf, const std::st
     return processedUrdf;
 }
 
-// std::string LoadingUtils::apply_mesh_root(const std::string& urdf, const std::string& mesh_rootdir) {
-//     std::string processedUrdf;
-//     std::string::size_type lastPos = 0;
-//     std::string search_pattern="<mesh filename=\"";
-//     int pattern_length=16;
-//     std::string::size_type pos = urdf.find(search_pattern, lastPos);
-
-//     while (pos != std::string::npos) {
-//         std::string::size_type uriStart = pos + pattern_length; // Length of "<mesh filename=\""
-//         std::string::size_type uriEnd = urdf.find("\"", uriStart);
-//         if (uriEnd == std::string::npos) {
-//             // If there's no closing quote, append the rest of the string and exit
-//             processedUrdf += urdf.substr(lastPos);
-            
-//             break;
-//         }
-
-//         // Extract the original filename from the URDF
-//         std::string originalPath = urdf.substr(uriStart, uriEnd - uriStart);
-
-//         // Check if there's a '/' in the original path
-//         std::string filename;
-//         std::string::size_type slashPos = originalPath.find_last_of('/');
-//         if (slashPos != std::string::npos) {
-//             // If there is a '/', extract the filename after the last '/'
-//             filename = originalPath.substr(slashPos + 1);
-//         } else {
-//             // If no '/' is found, the entire string is the filename
-//             filename = originalPath;
-//         }
-
-//         // Create the new path by prepending the mesh_rootdir
-//         std::string newPath = mesh_rootdir + "/" + filename;
-
-//         // Replace the original path with the new path
-//         processedUrdf += urdf.substr(lastPos, uriStart - lastPos) + newPath + "\"";
-
-//         lastPos = uriEnd + 1; // Move past the closing quote
-//         pos = urdf.find(search_pattern, lastPos);
-//     }
-
-//     // Add the remaining part of the URDF string
-//     if (lastPos < urdf.length()) {
-//         processedUrdf += urdf.substr(lastPos);
-//     }
-
-//     return processedUrdf;
-// }
-
 std::string LoadingUtils::add_mesh_simlink_bfix(const std::string& urdf) {
     std::string processedUrdf;
     std::string::size_type lastPos = 0;

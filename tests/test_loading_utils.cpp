@@ -31,7 +31,7 @@ TEST_F(ParsingTest, GenerateURDFWithRootDir) {
     std::vector<std::string> subdirs = {"v2", "realsense", "simple"}; // to preserver mesh subdir 
     // when adding root to URDF
 
-    std::string outfname="parsing_test2";
+    std::string outfname="XMjParsingTest";
     LoadingUtils loader(outfname);
     std::string files_dir(FILES_DIR);
 
