@@ -2,6 +2,7 @@
 <mujoco>
     <compiler discardvisual="false" strippath="false"/>
 
+    <option cone="elliptic" impratio="100"/>
     <option timestep="0.001" />
 
     <!-- Simulation settings -->

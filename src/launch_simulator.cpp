@@ -13,14 +13,15 @@
 // limitations under the License.
 
 #include "simulator.h"
+#include <csignal>
 
 // run the full simulation loop
 int main(int argc, const char** argv)
 {
+    signal(SIGINT, [](int num){
+        require_exit();
+        });
     std::string xbot2_cfg_path;
-
-    // initialize everything
-    init();
 
     // request loadmodel if file given (otherwise drag-and-drop)
     if( argc>1 )
@@ -34,7 +35,8 @@ int main(int argc, const char** argv)
         xbot2_cfg_path = argv[2];
     }
 
-    run(filename,xbot2_cfg_path); // run everything
+    bool headless=true;
+    run(filename,xbot2_cfg_path,headless); // run everything
     
     return 0;
 }

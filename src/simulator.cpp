@@ -1723,11 +1723,12 @@ void init(bool headless)
     if( mjVERSION_HEADER!=mj_version() )
         mju_error("Headers and library have different versions");
     
+    mjcb_time = timer;
+    
     if (!headless) { // create a rendering window and everything
         // init GLFW, set timer callback (milliseconds)
         if (!glfwInit())
             mju_error("could not initialize GLFW");
-        mjcb_time = timer;
 
         // multisampling
         glfwWindowHint(GLFW_SAMPLES, 4);
@@ -1812,15 +1813,19 @@ void run(const char* fname,
     xbot2_cfg_path=xbot2_config_path;
 
     // start simulation thread
-    std::thread simthread(simulation_loop);
+    if (!headless) {
+        std::thread simthread(simulation_loop);
 
-    // event loop
-    rendering_loop(headless);
+        // event loop
+        rendering_loop(headless);
 
-    // stop simulation thread
-    require_exit();
-    simthread.join();
-
+        // stop simulation thread
+        require_exit();
+        simthread.join();
+    } else {
+        simulation_loop();
+    }
+    
     fprintf(stderr, "destroying xbot2 wrapper \n");
     xbot2_wrapper.reset();
 
