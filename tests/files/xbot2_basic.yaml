@@ -1,6 +1,6 @@
 XBotInterface:
-  urdf_path: $(rospack find centauro_urdf)/centauro.urdf
-  srdf_path: $(rospack find centauro_srdf)/centauro.srdf
+  urdf_path: /root/ibrido_ws/src/xbot2_mujoco/tests/files/centauro.urdf
+  srdf_path: /root/ibrido_ws/src/xbot2_mujoco/tests/files/centauro.srdf
 
 ModelInterface:
   model_type: RBDL

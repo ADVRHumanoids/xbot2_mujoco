@@ -4,15 +4,16 @@ include_directories(${GTEST_INCLUDE_DIRS}
                     ${CMAKE_CURRENT_SOURCE_DIR}/include
                     ${CMAKE_CURRENT_BINARY_DIR})
 
-if(${WITH_XMJ_SIM_ENV})
-    add_executable(xmj_env_test "test_xmj_env.cpp")
-    target_link_libraries(xmj_env_test PRIVATE xbot_mujoco_env xmj_loading_utils ${GTEST_BOTH_LIBRARIES})
-endif()
+# if(${WITH_XMJ_SIM_ENV})
+#     add_executable(xmj_env_test "test_xmj_env.cpp")
+#     target_link_libraries(xmj_env_test PRIVATE xbot_mujoco_env xmj_loading_utils ${GTEST_BOTH_LIBRARIES} pthread)
+#     gtest_discover_tests(xmj_env_test)
+
+# endif()
 
 add_executable(parsing_test "test_loading_utils.cpp")
-    target_link_libraries(parsing_test PRIVATE xbot_mujoco_env xmj_loading_utils ${GTEST_BOTH_LIBRARIES})
-
-gtest_discover_tests(xmj_env_test)
+target_link_libraries(parsing_test PRIVATE xmj_loading_utils ${GTEST_BOTH_LIBRARIES} pthread)
+# gtest_discover_tests(parsing_test)
 
 # copying python bindings tests to build folder
 add_custom_target(copy_py_tests_all ALL

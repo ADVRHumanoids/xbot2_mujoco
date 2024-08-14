@@ -8,7 +8,7 @@
 #include <unordered_map>
 
 LoadingUtils::LoadingUtils(const std::string& name)
-    : name_(name) {
+    : name(name) {
     mjxml_dir = "/tmp/" + name + "_mujoco";
     mjurdf_path = mjxml_dir + "/" + name + ".urdf";
     mjxml_path = mjxml_dir + "/" + name + ".mjcf";
@@ -17,6 +17,19 @@ LoadingUtils::LoadingUtils(const std::string& name)
     // Create directory
     std::filesystem::remove_all(mjxml_dir);
     std::filesystem::create_directories(mjxml_dir);
+}
+
+void LoadingUtils::set_mesh_rootdir(const std::string& mesh_root_dir) {
+    mesh_rootdir=mesh_root_dir;
+    if (mesh_rootdir=="None") {
+        use_custom_mesh_rootdir=false;
+    } else {
+        use_custom_mesh_rootdir=true;
+    }
+}
+
+void LoadingUtils::set_mesh_rootdir_subdirs(const std::vector<std::string>& mesh_rootsubdirs) {
+    mesh_root_subdirs= mesh_rootsubdirs;
 }
 
 void LoadingUtils::set_urdf_path(const std::string& urdfpath) {
@@ -33,10 +46,6 @@ void LoadingUtils::set_simopt_path(const std::string& simoptpath) {
 
 void LoadingUtils::set_world_path(const std::string& worldpath) {
     world_path = worldpath;
-}
-
-void LoadingUtils::set_ctrlcfg_path(const std::string& ctrlcfgpath) {
-    ctrlcfg_path = ctrlcfgpath;
 }
 
 void LoadingUtils::set_sites_path(const std::string& sitespath) {
@@ -64,10 +73,120 @@ std::string LoadingUtils::remove_comments(const std::string& xml) {
     return oss.str();
 }
 
+std::string LoadingUtils::apply_mesh_root(const std::string& urdf, const std::string& mesh_rootdir, const std::vector<std::string>& subdir_names) {
+    std::string processedUrdf;
+    std::string::size_type lastPos = 0;
+    std::string search_pattern = "<mesh filename=\"";
+    int pattern_length = search_pattern.length();
+    std::string::size_type pos = urdf.find(search_pattern, lastPos);
+
+    while (pos != std::string::npos) {
+        std::string::size_type uriStart = pos + pattern_length;
+        std::string::size_type uriEnd = urdf.find("\"", uriStart);
+        if (uriEnd == std::string::npos) {
+            processedUrdf += urdf.substr(lastPos);
+            break;
+        }
+
+        std::string originalPath = urdf.substr(uriStart, uriEnd - uriStart);
+
+        // Extract the filename and the subdirectory part
+        std::string filename;
+        std::string subdirPart;
+        std::string::size_type slashPos = originalPath.find_last_of('/');
+
+        if (slashPos != std::string::npos) {
+            filename = originalPath.substr(slashPos + 1);
+            subdirPart = originalPath.substr(0, slashPos);
+        } else {
+            filename = originalPath;
+            subdirPart = ""; // No subdir part
+        }
+
+        // Determine the new path
+        std::string newPath = mesh_rootdir + "/" + filename;
+
+        // Check if the original path contains any of the specified subdir_names
+        for (const auto& subdir : subdir_names) {
+            std::string::size_type subdirPos = subdirPart.find(subdir);
+            if (subdirPos != std::string::npos) {
+                // Calculate the portion of the path from the subdirectory to the filename
+                std::string newSubdirPart = subdirPart.substr(subdirPos);
+                newPath = mesh_rootdir +  "/" + newSubdirPart + "/" + filename;
+                break;
+            }
+        }
+
+        // Replace the filename in the URDF with the new path
+        processedUrdf += urdf.substr(lastPos, uriStart - lastPos) + newPath + "\"";
+
+        lastPos = uriEnd + 1;
+        pos = urdf.find(search_pattern, lastPos);
+    }
+
+    // Add the remaining part of the URDF string
+    if (lastPos < urdf.length()) {
+        processedUrdf += urdf.substr(lastPos);
+    }
+
+    return processedUrdf;
+}
+
+// std::string LoadingUtils::apply_mesh_root(const std::string& urdf, const std::string& mesh_rootdir) {
+//     std::string processedUrdf;
+//     std::string::size_type lastPos = 0;
+//     std::string search_pattern="<mesh filename=\"";
+//     int pattern_length=16;
+//     std::string::size_type pos = urdf.find(search_pattern, lastPos);
+
+//     while (pos != std::string::npos) {
+//         std::string::size_type uriStart = pos + pattern_length; // Length of "<mesh filename=\""
+//         std::string::size_type uriEnd = urdf.find("\"", uriStart);
+//         if (uriEnd == std::string::npos) {
+//             // If there's no closing quote, append the rest of the string and exit
+//             processedUrdf += urdf.substr(lastPos);
+            
+//             break;
+//         }
+
+//         // Extract the original filename from the URDF
+//         std::string originalPath = urdf.substr(uriStart, uriEnd - uriStart);
+
+//         // Check if there's a '/' in the original path
+//         std::string filename;
+//         std::string::size_type slashPos = originalPath.find_last_of('/');
+//         if (slashPos != std::string::npos) {
+//             // If there is a '/', extract the filename after the last '/'
+//             filename = originalPath.substr(slashPos + 1);
+//         } else {
+//             // If no '/' is found, the entire string is the filename
+//             filename = originalPath;
+//         }
+
+//         // Create the new path by prepending the mesh_rootdir
+//         std::string newPath = mesh_rootdir + "/" + filename;
+
+//         // Replace the original path with the new path
+//         processedUrdf += urdf.substr(lastPos, uriStart - lastPos) + newPath + "\"";
+
+//         lastPos = uriEnd + 1; // Move past the closing quote
+//         pos = urdf.find(search_pattern, lastPos);
+//     }
+
+//     // Add the remaining part of the URDF string
+//     if (lastPos < urdf.length()) {
+//         processedUrdf += urdf.substr(lastPos);
+//     }
+
+//     return processedUrdf;
+// }
+
 std::string LoadingUtils::add_mesh_simlink_bfix(const std::string& urdf) {
     std::string processedUrdf;
     std::string::size_type lastPos = 0;
-    std::string::size_type pos = urdf.find("filename=\"", lastPos);
+    std::string search_pattern="<mesh filename=\"";
+    int pattern_length=16;
+    std::string::size_type pos = urdf.find(search_pattern, lastPos);
 
     std::unordered_map<std::string, int> meshCounter; // For generating unique filenames
     std::string tempDir = mjxml_dir; // Using temporary directory for symbolic links
@@ -76,7 +195,7 @@ std::string LoadingUtils::add_mesh_simlink_bfix(const std::string& urdf) {
     std::filesystem::create_directories(tempDir);
 
     while (pos != std::string::npos) {
-        std::string::size_type uriStart = pos + 10; // Length of "filename=\""
+        std::string::size_type uriStart = pos + pattern_length; // Length of "filename=\""
         std::string::size_type uriEnd = urdf.find("\"", uriStart);
         if (uriEnd == std::string::npos) {
             // If there's no closing quote, append the rest of the string and exit
@@ -100,7 +219,7 @@ std::string LoadingUtils::add_mesh_simlink_bfix(const std::string& urdf) {
         processedUrdf += urdf.substr(lastPos, uriStart - lastPos) + dstFile + "\"";
 
         lastPos = uriEnd + 1; // Move past the closing quote
-        pos = urdf.find("filename=\"", lastPos);
+        pos = urdf.find(search_pattern, lastPos);
     }
 
     // Add the remaining part of the URDF string
@@ -133,6 +252,12 @@ void LoadingUtils::process_urdf() {
 
     urdf = remove_comments(urdf);
     fprintf(stderr, "[LoadingUtils][mergeXML]: removed comments from URDF \n");
+
+    if (use_custom_mesh_rootdir) {
+        urdf = apply_mesh_root(urdf,mesh_rootdir,mesh_root_subdirs);
+        fprintf(stderr, "[LoadingUtils][mergeXML]: applying new mesh root dir %s to URDF \n", mesh_rootdir.c_str());
+    }
+
     urdf = add_mesh_simlink_bfix(urdf); // bug fix for mujoco not allowing identical mesh paths on multiple bodies
     fprintf(stderr, "[LoadingUtils][mergeXML]: created mesh simlink to circumvent mujoco_compile BUG.\n");
 
