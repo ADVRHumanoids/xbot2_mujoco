@@ -13,15 +13,31 @@
 // limitations under the License.
 
 #include "simulator.h"
-#include <csignal>
+
+// machinery for replacing command line error by a macOS dialog box when running under Rosetta
+#if defined(__APPLE__) && defined(__AVX__)
+extern void DisplayErrorDialogBox(const char* title, const char* msg);
+static const char* rosetta_error_msg = nullptr;
+__attribute__((used, visibility("default"))) extern "C" void _mj_rosettaError(const char* msg) {
+  rosetta_error_msg = msg;
+}
+#endif
+
+using namespace xbot_mujoco;
 
 // run the full simulation loop
-int main(int argc, const char** argv)
+int main(int argc, char** argv)
 {
-    signal(SIGINT, [](int num){
-        require_exit();
-        });
+    // display an error if running on macOS under Rosetta 2
+    #if defined(__APPLE__) && defined(__AVX__)
+    if (rosetta_error_msg) {
+        DisplayErrorDialogBox("Rosetta 2 is not supported", rosetta_error_msg);
+        std::exit(1);
+    }
+    #endif
+
     std::string xbot2_cfg_path;
+    char filename[mj::Simulate::kMaxFilenameLength];
 
     // request loadmodel if file given (otherwise drag-and-drop)
     if( argc>1 )
@@ -36,7 +52,9 @@ int main(int argc, const char** argv)
     }
 
     bool headless=true;
-    run(filename,xbot2_cfg_path,headless); // run everything
+    ros::init(argc, argv, "mujoco_ros");
+    ros::NodeHandle nh("");
+    run(filename,xbot2_cfg_path,nh,headless); // run everything
     
     return 0;
 }

@@ -3,7 +3,7 @@
 
 #include <xbot2/hal/dev_joint.h>
 #include <xbot2/client_server/server_manager.h>
-#include "mujoco.h"
+#include <mujoco/mujoco.h>
 
 namespace XBot
 {

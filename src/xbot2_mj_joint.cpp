@@ -25,11 +25,22 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
 
         std::string jname = &_m->names[mj_model->name_jntadr[i]];
 
+        // dummy fix to skip soft foot joints: check if the initial letter is lower case
+        if (jname.substr(0, 2) == "L/" || jname.substr(0, 2)== "R/")
+            continue;
+
+        std::cout << "Constructing XBot Joint: " << jname << std::endl;
+
         auto j = std::make_shared<JointInstanceMj>(
                      Hal::DeviceInfo{jname, "joint_mj", i}
                      );
 
-        j->rx().pos_ref = j->rx().link_pos;
+        if (jname == "RShLat")
+            j->rx().pos_ref = -0.7;
+        else if (jname == "LShLat")
+            j->rx().pos_ref = 0.7;
+        else
+            j->rx().pos_ref = j->rx().link_pos;
         j->rx().gain_kp = 100;
         j->rx().gain_kd = 5;
 
@@ -114,3 +125,4 @@ double JointInstanceMj::pid_torque()
 
     return _tx.gain_kp*qerr + _tx.gain_kd*dqerr + _tx.tor_ref;
 }
+

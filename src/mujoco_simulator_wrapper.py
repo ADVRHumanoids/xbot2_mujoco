@@ -155,8 +155,16 @@ with open(args.sites, 'r') as file:
     etree.strip_tags(mj_sites_tree, etree.Comment)
 
 
-mj_xml_tree.remove(mj_xml_tree.xpath('./compiler')[0])
-mj_xml_tree.remove(mj_xml_tree.xpath('./size')[0])
+try:
+    mj_xml_tree.remove(mj_xml_tree.xpath('./compiler')[0])
+except IndexError:
+    pass
+
+try:
+    mj_xml_tree.remove(mj_xml_tree.xpath('./size')[0])
+except IndexError:
+    pass
+
 
 xml_merged = treeMerge(mj_xml_tree, mj_opt_tree)
 xml_merged = treeMerge(xml_merged, mj_world_tree)

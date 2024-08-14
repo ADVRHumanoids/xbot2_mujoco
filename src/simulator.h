@@ -15,161 +15,85 @@
 #ifndef SIMULATOR_H
 #define SIMULATOR_H
 
-#include "mjxmacro.h"
-#include "uitools.h"
-#include "stdio.h"
-#include "string.h"
-
-#include <thread>
-#include <mutex>
 #include <chrono>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <thread>
 
-#include "simulator_settings.h"
+#include <mujoco/mujoco.h>
+#include "glfw_adapter.h"
+#include "simulate.h"
+#include "array_safety.h"
 #include "xbot2_bridge.h"
 
-#include <Eigen/Dense>
+#include <ros/ros.h> // used for publishing sim time on ros clock
 
-//-------------------------------- global -----------------------------------------------
+#define MUJOCO_PLUGIN_DIR "mujoco_plugin"
 
-// OpenGL rendering and UI
-static GLFWvidmode vmode;
-static int windowpos[2];
-static int windowsize[2];
-static mjrContext con;
-static GLFWwindow* window = NULL;
-static mjuiState uistate;
-static mjUI ui0, ui1;
+extern "C" {
+#if defined(_WIN32) || defined(__CYGWIN__)
+  #include <windows.h>
+#else
+  #if defined(__APPLE__)
+    #include <mach-o/dyld.h>
+  #endif
+  #include <sys/errno.h>
+  #include <unistd.h>
+#endif
+}
+
+namespace xbot_mujoco{
+namespace mj = ::mujoco;
+namespace mju = ::mujoco::sample_util;
 
 // model and data
 static mjModel* m = NULL;
 static mjData* d = NULL;
-static char filename[1000] = "";
+// control noise variables
+static mjtNum* ctrlnoise = nullptr;
 
-// sim thread synchronization
-static std::mutex mtx;
+using Seconds = std::chrono::duration<double>;
 
-// abstract visualization
-static mjvScene scn;
-static mjvCamera cam;
-static mjvOption vopt;
-static mjvPerturb pert;
-static mjvFigure figconstraint;
-static mjvFigure figcost;
-static mjvFigure figtimer;
-static mjvFigure figsize;
-static mjvFigure figsensor;
+// constants
+const double syncMisalign = 0.1;        // maximum mis-alignment before re-sync (simulation seconds)
+const double simRefreshFraction = 0.7;  // fraction of refresh available for simulation
+const int kErrorLength = 1024;          // load error string length
 
 // xbot2
 static XBot::MjWrapper::UniquePtr xbot2_wrapper;
 static std::string xbot2_cfg_path;
 
+
 void xbotmj_control_callback(const mjModel* m, mjData* d);
 
-//----------------------- profiler, sensor, info, watch ---------------------------------
+//---------------------------------------- plugin handling -----------------------------------------
 
-// init profiler figures
-void profilerinit(void);
-
-// update profiler figures
-void profilerupdate(void);
-
-// show profiler figures
-void profilershow(mjrRect rect);
-
-// init sensor figure
-void sensorinit(void);
-
-// update sensor figure
-void sensorupdate(void);
-
-// show sensor figure
-void sensorshow(mjrRect rect);
-
-// prepare info text
-void infotext(char* title, char* content, double interval);
-
-// sprintf forwarding, to avoid compiler warning in x-macro
-void printfield(char* str, void* ptr);
-
-// update watch
-void watch(void);
-
-void render(GLFWwindow* window);
-
-void rendering_loop(bool headless=false);
-
-//-------------------------------- UI construction --------------------------------------
-
-// make physics section of UI
-void makephysics(int oldstate);
-
-// make rendering section of UI
-void makerendering(int oldstate);
-
-// make group section of UI
-void makegroup(int oldstate);
-
-// make joint section of UI
-void makejoint(int oldstate);
- 
-// make control section of UI
-void makecontrol(int oldstate);
- 
-// make model-dependent UI sections
-void makesections(void);
-
-//-------------------------------- utility functions ------------------------------------
-
-// align and scale view
-void alignscale(void);
-
-// copy qpos to clipboard as key
-void copykey(void);
-
-// millisecond timer, for MuJoCo built-in profiler
-mjtNum timer(void);
-
-// clear all times
-void cleartimers(void);
-
-// update UI 0 when MuJoCo structures change (except for joint sliders)
-void updatesettings(void);
-
-// drop file callback
-void drop(GLFWwindow* window, int count, const char** paths);
-
-// load mjb or xml model
-void loadmodel(const char* fname = nullptr);
-
-//--------------------------------- UI hooks (for uitools.c) ----------------------------
-
-// determine enable/disable item state given category
-int uiPredicate(int category, void* userdata);
-
-// set window layout
-void uiLayout(mjuiState* state);
-
-// handle UI event
-void uiEvent(mjuiState* state);
+std::string getExecutableDir();
+void scanPluginLibraries();
 
 //--------------------------- rendering and simulation ----------------------------------
 
-// prepare to render
-void prepare(void);
-
-// simulate in background thread (while rendering in main thread)
-bool exit_requested(void);
-void require_exit(void);
-void do_step(double cpusync, mjtNum simsync); // just a single step
-void simulation_loop(void); 
-
-//-------------------------------- init, control callback and sim loop run ----------------------------------------
+mjModel* LoadModel(const char* file, mj::Simulate& sim);
+void DoStep(mj::Simulate& sim, 
+    std::chrono::time_point<mj::Simulate::Clock> syncCPU,
+    mjtNum syncSim); // single sim step
+void PhysicsLoop(mj::Simulate& sim);
+void PhysicsThread(mj::Simulate* sim, const char* filename);
 
 // initalize everything
 void init(bool headless = false);
 
 // run event loop
 void run(const char* fname, const std::string xbot2_config_path,
+    ros::NodeHandle nh,
     bool headless = false);
+}
 
 #endif // SIMULATOR_H

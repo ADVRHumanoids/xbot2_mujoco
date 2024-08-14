@@ -2,9 +2,11 @@ cmake_minimum_required(VERSION 3.15)
 project(xbot2_mujoco)
 
 find_package(mujoco_cmake REQUIRED)
+find_package(glfw3 REQUIRED)
 find_package(xbot2 REQUIRED)
 find_package(matlogger2 REQUIRED)
 find_package(pugixml REQUIRED)
+find_package(catkin COMPONENTS roscpp) # necessary for publishing ros clock from sim
 
 set(CMAKE_CXX_STANDARD 17)
 # Ensure position-independent code is generated for all targets
@@ -60,17 +62,25 @@ target_compile_options(xbot2_mujoco PRIVATE -fPIC)
 
 add_library(mujoco_simulator STATIC
     src/simulator.cpp
+    src/simulate.cc
+    src/platform_ui_adapter.cc
     src/uitools.cpp
-    src/control.cpp)
+    src/control.cpp
+    src/lodepng.h
+    src/lodepng.cpp
+    src/glfw_adapter.cc
+    src/glfw_dispatch.cc)
 
 target_link_libraries(mujoco_simulator PUBLIC
-    xbot2_mujoco)
+    xbot2_mujoco
+    glfw
+    ${catkin_LIBRARIES})
 
-add_library(xbot_mujoco_env STATIC
-    src/xmj_sim_env.cpp)
+# add_library(xbot_mujoco_env STATIC
+#     src/xmj_sim_env.cpp)
 
-target_link_libraries(xbot_mujoco_env PUBLIC
-    mujoco_simulator)
+# target_link_libraries(xbot_mujoco_env PUBLIC
+#     mujoco_simulator)
 
 add_library(xmj_loading_utils STATIC
     src/loading_utils.cpp)

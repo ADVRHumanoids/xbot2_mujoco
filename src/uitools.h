@@ -16,8 +16,8 @@
 #define MUJOCO_UITOOLS_H_
 
 
-#include "mujoco.h"
-#include "glfw3.h"
+#include "mujoco/mujoco.h"
+#include <GLFW/glfw3.h>
 
 
 // this is a C-API
