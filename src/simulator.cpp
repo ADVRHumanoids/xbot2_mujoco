@@ -383,7 +383,7 @@ void xbot_mujoco::PhysicsThread(mj::Simulate* sim, const char* filename) {
   // request loadmodel if file given (otherwise drag-and-drop)
   if (filename != nullptr) {
     sim->LoadMessage(filename);
-    m = xbot_mujoco::LoadModel(filename, *sim);
+    m = xbot_mujoco::LoadModel(filename, *sim);    
     if (m) {
       // lock the sim mutex
       const std::unique_lock<std::recursive_mutex> lock(sim->mtx);
@@ -392,7 +392,7 @@ void xbot_mujoco::PhysicsThread(mj::Simulate* sim, const char* filename) {
     }
     if (d) {
       sim->Load(m, d, filename);
-
+      xbot2_wrapper->move_to_homing_now(d);
       // lock the sim mutex
       const std::unique_lock<std::recursive_mutex> lock(sim->mtx);
 
@@ -457,7 +457,7 @@ void xbot_mujoco::run(const char* fname,
         std::make_unique<mj::GlfwAdapter>(),
         &cam, &opt, &pert, /* is_passive = */ false
     );
-
+    
     mjcb_control = xbot_mujoco::xbotmj_control_callback; // register control callback to mujoco
 
     xbot2_cfg_path=xbot2_config_path;
@@ -473,12 +473,14 @@ void xbot_mujoco::run(const char* fname,
 
 void xbot_mujoco::xbotmj_control_callback(const mjModel* m, mjData* d)
 {
+
     if(!xbot2_wrapper)
     {
         return;
     }
 
-    xbot2_wrapper->run(d);
+    xbot2_wrapper->move_to_homing_now(d);
+    // xbot2_wrapper->run(d);
 
 }
 

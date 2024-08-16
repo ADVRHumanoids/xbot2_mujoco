@@ -7,6 +7,10 @@ using namespace XBot;
 JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
     _m(mj_model)
 {
+
+    _loader_ptr = std::make_unique<LoadingUtils>("xbot2_bridge_loading_utils");
+    _loader_ptr->set_xbot_config_path(cfg_path);
+
     YAML::Node cfg;
     if(!cfg_path.empty())
     {
@@ -25,22 +29,13 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
 
         std::string jname = &_m->names[mj_model->name_jntadr[i]];
 
-        // dummy fix to skip soft foot joints: check if the initial letter is lower case
-        if (jname.substr(0, 2) == "L/" || jname.substr(0, 2)== "R/")
-            continue;
-
-        std::cout << "Constructing XBot Joint: " << jname << std::endl;
+        fprintf(stderr, "[XBot][JointMjServer]: constructing xbot joint %s \n",jname.c_str());
 
         auto j = std::make_shared<JointInstanceMj>(
                      Hal::DeviceInfo{jname, "joint_mj", i}
                      );
-
-        if (jname == "RShLat")
-            j->rx().pos_ref = -0.7;
-        else if (jname == "LShLat")
-            j->rx().pos_ref = 0.7;
-        else
-            j->rx().pos_ref = j->rx().link_pos;
+                     
+        j->rx().pos_ref = j->rx().link_pos;
         j->rx().gain_kp = 100;
         j->rx().gain_kd = 5;
 
@@ -60,11 +55,44 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
         j->tx().reset(j->rx());
 
         _joints.push_back(j);
+        _mj_jnt_names.push_back(jname);
     }
+
+    _homing_map = _loader_ptr->generate_homing_map_from_other(_mj_jnt_names); // retrieved from SRDF
+    _set_model_homing(); // writes default homing for joint contained in both SRDF and mujoco's model
+    // (defaults to 0 if mj joint is not in the SRDF homing group)
 
     std::vector<Hal::DeviceRt::Ptr> devs(_joints.begin(), _joints.end());
 
     _srv = std::make_unique<ServerManager>(devs, "sock", "joint_gz");
+}
+
+void JointMjServer::move_to_homing_now(mjData * d) {
+
+    for (const auto& homing_data : _homing_map) {
+        std::string xbot_jnt = homing_data.first;
+
+        int joint_id = mj_name2id(_m, mjOBJ_JOINT, xbot_jnt.c_str());
+        if (joint_id != -1) {// joint found -> set default joint pos
+            int qpos_adr = _m->jnt_qposadr[joint_id];
+            d->qpos[qpos_adr] = homing_data.second;
+            d->qvel[qpos_adr] = 0.0;
+            d->ctrl[qpos_adr] = 0.0;
+        }
+    }
+}
+
+void JointMjServer::_set_model_homing() {
+
+    for (const auto& homing_data : _homing_map) {
+        std::string xbot_jnt = homing_data.first;
+
+        int joint_id = mj_name2id(_m, mjOBJ_JOINT, xbot_jnt.c_str());
+        if (joint_id != -1) {// joint found -> set default joint pos
+            int qpos_adr = _m->jnt_qposadr[joint_id];
+            _m->qpos0[qpos_adr] = homing_data.second;
+        }
+    }
 }
 
 void JointMjServer::run(mjData * d)
@@ -84,13 +112,14 @@ void JointMjServer::run(mjData * d)
     _srv->send();
 
     _srv->run();
-
+        
     for(auto& j : _joints)
     {
         int vi = _m->jnt_dofadr[j->get_id()];
         d->ctrl[vi] = j->rx().torque;
         j->move();
     }
+
 }
 
 JointInstanceMj::JointInstanceMj(Hal::DeviceInfo devinfo):

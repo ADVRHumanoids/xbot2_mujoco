@@ -4,10 +4,15 @@
 #include <string>
 #include <pugixml.hpp>
 #include <vector>
+#include <yaml-cpp/yaml.h>  // Include the yaml-cpp header
+#include <map>
 
 class LoadingUtils {
 public:
-    LoadingUtils(const std::string& name);
+    typedef std::unique_ptr<LoadingUtils> UniquePtr;
+    typedef std::shared_ptr<LoadingUtils> Ptr;
+
+    LoadingUtils(const std::string& name = "XBot2Mujoco_LoadingUtils");
 
     void set_mesh_rootdir(const std::string& mesh_root_dir="None");
     void set_mesh_rootdir_subdirs(const std::vector<std::string>& mesh_rootsubdirs);
@@ -17,6 +22,15 @@ public:
     void set_simopt_path(const std::string& simoptpath);
     void set_world_path(const std::string& worldpath);
     void set_sites_path(const std::string& sitespath);
+    void set_xbot_config_path(const std::string& configpath);
+
+    std::string get_srdf_path_fromxbotconfig();
+    std::string get_urdf_path_fromxbotconfig();
+    std::map<std::string, double> get_homing_from_srdf(const std::string& srdf_path);
+    std::map<std::string, double> generate_homing_map_from_other(const std::vector<std::string>& jnt_name_list,
+        double fallback_val = 0.0);
+    std::vector<double> generate_homing_from_other(const std::vector<std::string>& jnt_name_list,
+        double fallback_val = 0.0);
 
     std::string get_mj_xml(); // Public method to get the final MuJoCo XML
     void generate();
@@ -35,8 +49,9 @@ private:
     std::string urdf_command;
     std::string simopt_path;
     std::string world_path;
-    std::string ctrlcfg_path;
     std::string sites_path;
+
+    std::string xbot_config_path;
 
     std::string mjxml_dir;
     std::string mjurdf_path;

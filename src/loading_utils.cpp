@@ -52,6 +52,123 @@ void LoadingUtils::set_sites_path(const std::string& sitespath) {
     sites_path = sitespath;
 }
 
+void LoadingUtils::set_xbot_config_path(const std::string& configpath) {
+    xbot_config_path = configpath;
+}
+
+std::string LoadingUtils::get_srdf_path_fromxbotconfig() {
+    // Load the YAML file
+    YAML::Node config = YAML::LoadFile(xbot_config_path);
+    
+    // Extract the srdf_path from the YAML structure
+    std::string srdf_path = config["XBotInterface"]["srdf_path"].as<std::string>();
+
+    // Replace occurrences of $PWD with the directory of xbot_config_path
+    std::string xbot_dir = std::filesystem::path(xbot_config_path).parent_path().string();
+    std::string::size_type pos = 0;
+    while ((pos = srdf_path.find("$PWD", pos)) != std::string::npos) {
+        srdf_path.replace(pos, 4, xbot_dir);
+        pos += xbot_dir.length();
+    }
+
+    return srdf_path;
+}
+
+std::string LoadingUtils::get_urdf_path_fromxbotconfig() {
+    // Load the YAML file
+    YAML::Node config = YAML::LoadFile(xbot_config_path);
+    
+    std::string urdf_path = config["XBotInterface"]["urdf_path"].as<std::string>();
+
+    // Replace occurrences of $PWD with the directory of xbot_config_path
+    std::string xbot_dir = std::filesystem::path(xbot_config_path).parent_path().string();
+    std::string::size_type pos = 0;
+    while ((pos = urdf_path.find("$PWD", pos)) != std::string::npos) {
+        urdf_path.replace(pos, 4, xbot_dir);
+        pos += xbot_dir.length();
+    }
+
+    return urdf_path;
+}
+
+std::map<std::string, double> LoadingUtils::get_homing_from_srdf(const std::string& srdf_path) {
+    std::map<std::string, double> homing_map;
+
+    // Load the SRDF file
+    pugi::xml_document doc;
+    pugi::xml_parse_result result = doc.load_file(srdf_path.c_str());
+
+    if (!result) {
+        std::cerr << "Failed to load SRDF file: " << srdf_path << std::endl;
+        std::cerr << "Error description: " << result.description() << std::endl;
+        return homing_map;
+    }
+
+    // Find the <group_state> tag with group="chains" and name="home"
+    pugi::xml_node robot = doc.child("robot");
+    if (!robot) {
+        std::cerr << "No <robot> element found in SRDF file: " << srdf_path << std::endl;
+        return homing_map;
+    }
+
+    for (pugi::xml_node group_state : robot.children("group_state")) {
+        std::string group_attr = group_state.attribute("group").as_string();
+        std::string name_attr = group_state.attribute("name").as_string();
+
+        if (group_attr == "chains" && name_attr == "home") {
+            // Found the correct group_state, now extract joints
+            for (pugi::xml_node joint : group_state.children("joint")) {
+                std::string joint_name = joint.attribute("name").as_string();
+                double joint_value = joint.attribute("value").as_double();
+                homing_map[joint_name] = joint_value;
+            }
+            break;  // Exit the loop after finding the correct group_state
+        }
+    }
+
+    return homing_map;
+}
+
+std::map<std::string, double> LoadingUtils::generate_homing_map_from_other(const std::vector<std::string>& jnt_name_list,
+        double fallback_val) {
+
+    std::string srdf_path = get_srdf_path_fromxbotconfig();
+    std::map<std::string, double> homing_map = get_homing_from_srdf(srdf_path);
+    std::map<std::string, double> result;
+
+    for (const std::string& jnt_name : jnt_name_list) {
+        // Check if the joint name exists in the homing map
+        if (homing_map.find(jnt_name) != homing_map.end()) {
+            result[jnt_name] = homing_map[jnt_name];
+        } else {
+            // Default if the joint name is not found in the homing map
+            result[jnt_name] = fallback_val;
+        }
+    }
+
+    return result;
+}
+
+std::vector<double> LoadingUtils::generate_homing_from_other(const std::vector<std::string>& jnt_name_list,
+        double fallback_val) {
+    
+    std::string srdf_path = get_srdf_path_fromxbotconfig();
+    std::map<std::string, double> homing_map = get_homing_from_srdf(srdf_path);
+    std::vector<double> result;
+
+    for (const std::string& jnt_name : jnt_name_list) {
+        // Check if the joint name exists in the homing map
+        if (homing_map.find(jnt_name) != homing_map.end()) {
+            result.push_back(homing_map[jnt_name]);
+        } else {
+            // Default to 0 if the joint name is not found in the homing map
+            result.push_back(0.0);
+        }
+    }
+
+    return result;
+}
+
 std::string LoadingUtils::remove_comments(const std::string& xml) {
     pugi::xml_document doc;
     doc.load_string(xml.c_str());
@@ -271,24 +388,61 @@ void LoadingUtils::merge_xml() {
     mjXmlDoc.save_file(mjxml_path.c_str());
 }
 
+// Function to find a <body> node with a specific name attribute using XPath
+pugi::xml_node find_body_by_name_with_xpath(const pugi::xml_node& parent, const std::string& body_name) {
+    // Construct XPath query to find <body> nodes with the specific name attribute value
+    std::string xpath_query = "//body[@name='" + body_name + "']";
+    // Perform the XPath query on the parent node
+    pugi::xml_node result = parent.select_node(xpath_query.c_str()).node();
+    return result;
+}
+
 void LoadingUtils::add_sites() {
     pugi::xml_document mjXmlDoc;
     pugi::xml_document sitesDoc;
 
-    mjXmlDoc.load_file(mjxml_path.c_str());
-    sitesDoc.load_file(sites_path.c_str());
-    fprintf(stderr, "[LoadingUtils][mergeXML]: loaded sites at %s \n", sites_path.c_str());
+    std::cout << "Loading sites and MuJoCo XML..." << std::endl;
+    // Load the MuJoCo XML and sites XML documents
+    if (!mjXmlDoc.load_file(mjxml_path.c_str())) {
+        std::cerr << "[LoadingUtils][add_sites]: Error loading MuJoCo XML file at " << mjxml_path << std::endl;
+        return;
+    }
+    if (!sitesDoc.load_file(sites_path.c_str())) {
+        std::cerr << "[LoadingUtils][add_sites]: Error loading sites XML file at " << sites_path << std::endl;
+        return;
+    }
+    fprintf(stderr, "[LoadingUtils][add_sites]: Loaded sites from %s\n", sites_path.c_str());
 
-    for (pugi::xml_node siteBody : sitesDoc.children("body")) {
+    // Find the root node of the sites XML document
+    pugi::xml_node sitesRoot = sitesDoc.child("sites");
+    if (!sitesRoot) {
+        std::cerr << "[LoadingUtils][add_sites]: No <sites> root element found in " << sites_path << std::endl;
+        return;
+    }
+
+    // Iterate over all <body> elements in the sites XML
+    for (pugi::xml_node siteBody : sitesRoot.children("body")) {
         std::string siteName = siteBody.attribute("name").value();
-        pugi::xml_node bodyNode = mjXmlDoc.child("mujoco").find_child_by_attribute("body", "name", siteName.c_str());
+        // Find the corresponding <body> element in the MuJoCo XML using XPath
+        pugi::xml_node bodyNode = find_body_by_name_with_xpath(mjXmlDoc.child("mujoco"), siteName);
+        
         if (bodyNode) {
-            pugi::xml_node siteNode = siteBody.child("site");
-            bodyNode.append_copy(siteNode);
+            // Iterate over all <site> elements under the <body> in the sites XML
+            for (pugi::xml_node siteNode : siteBody.children("site")) {
+                // Add each <site> to the corresponding <body> node in the MuJoCo XML
+                bodyNode.append_copy(siteNode);
+            }
+        } else {
+            std::cerr << "[LoadingUtils][add_sites]: Body with name " << siteName << " not found in MuJoCo XML" << std::endl;
         }
     }
 
-    mjXmlDoc.save_file(mjxml_path.c_str());
+    // Save the modified MuJoCo XML document
+    if (!mjXmlDoc.save_file(mjxml_path.c_str())) {
+        std::cerr << "[LoadingUtils][add_sites]: Error saving modified MuJoCo XML file to " << mjxml_path << std::endl;
+    } else {
+        std::cout << "Successfully added sites and saved MuJoCo XML." << std::endl;
+    }
 }
 
 void LoadingUtils::generate() {

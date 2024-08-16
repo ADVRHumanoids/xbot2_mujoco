@@ -1,13 +1,21 @@
 <?xml version="1.0" ?>
 <mujoco>
-    <compiler discardvisual="false" strippath="false"/>
+    <compiler discardvisual="false" strippath="false" angle="radian" autolimits="true" balanceinertia="true"/>
 
-    <option cone="elliptic" impratio="100"/>
-    <option timestep="0.001" />
-
+    <option cone="elliptic" impratio="100" timestep="0.0005"/>
     <!-- Simulation settings -->
-    <size nstack="300000" nconmax="100000"/>
-
+    <size njmax="1000" nconmax="200"/>
+    <contact>
+        <exclude name="hip_1_exclude" body1="pelvis" body2="hip2_1"/>
+        <exclude name="hip_2_exclude" body1="pelvis" body2="hip2_2"/>
+        <exclude name="hip_3_exclude" body1="pelvis" body2="hip2_3"/>
+        <exclude name="hip_4_exclude" body1="pelvis" body2="hip2_4"/>
+    </contact>
+    <sensor>
+        <accelerometer name="imu_link_acc" site="imu_link"/>
+        <gyro name="imu_link_gyro" site="imu_link"/>
+    </sensor>
+    
     <visual>
         <quality shadowsize="2048" />
     </visual>

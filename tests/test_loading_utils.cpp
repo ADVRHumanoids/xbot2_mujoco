@@ -4,6 +4,7 @@
 #include "./config.h"
 #define FDIR "@FILES_DIR@"
 
+#include <vector>
 std::string IIT_CENTAURO_ROS_PKG_ROOT="";
 
 class ParsingTest : public ::testing::Test {
@@ -31,7 +32,7 @@ TEST_F(ParsingTest, GenerateURDFWithRootDir) {
     std::vector<std::string> subdirs = {"v2", "realsense", "simple"}; // to preserver mesh subdir 
     // when adding root to URDF
 
-    std::string outfname="XMjParsingTest";
+    std::string outfname="GenerateURDFWithRootDir";
     LoadingUtils loader(outfname);
     std::string files_dir(FILES_DIR);
 
@@ -45,7 +46,53 @@ TEST_F(ParsingTest, GenerateURDFWithRootDir) {
     loader.set_world_path(files_dir + "/world.xml");
     loader.set_sites_path(files_dir + "/sites.xml");
     
+    loader.set_xbot_config_path(files_dir+ "/xbot2_basic.yaml");
+
+    std::string srdf_xbot_path = loader.get_srdf_path_fromxbotconfig();
+    std::vector<std::string> other_jnt_list = {"knee_pitch_2", "ankle_pitch_3", "j_arm1_4",
+        "other_joint"};
+    
+    std::map<std::string, double> retrieved_homing = loader.generate_homing_map_from_other(other_jnt_list);
+    for (const auto& pair : retrieved_homing) {
+        std::cout << "Joint: " << pair.first << ", Value: " << pair.second << std::endl;
+    }
+
+    std::vector<double> ordered_homing = loader.generate_homing_from_other(other_jnt_list);
+    for (size_t i = 0; i < other_jnt_list.size(); ++i) {
+        std::cout << "Joint: " << other_jnt_list[i] << ", Homing Value: " << ordered_homing[i] << std::endl;
+    }
+
     loader.generate();
+    
+    std::string finalMuJoCoXML = loader.get_mj_xml();
+    std::cout << finalMuJoCoXML << std::endl;
+}
+
+TEST_F(ParsingTest, TestHomingParsing) {
+
+    std::string outfname="TestHomingParsing";
+    LoadingUtils loader(outfname);
+    std::string files_dir(FILES_DIR);
+
+    fprintf(stderr, "[ParsingTest][GenerateURDF]: loading test files from base dir at %s \n", files_dir.c_str());
+    
+    loader.set_xbot_config_path(files_dir+ "/xbot2_basic.yaml");
+
+    std::string srdf_xbot_path = loader.get_srdf_path_fromxbotconfig();
+    std::vector<std::string> other_jnt_list = {"knee_pitch_2", "ankle_pitch_3", "j_arm1_4",
+        "other_joint"};
+    
+    std::cout << "\nhoming map:" << std::endl;
+    std::map<std::string, double> retrieved_homing = loader.generate_homing_map_from_other(other_jnt_list);
+    for (const auto& pair : retrieved_homing) {
+        std::cout << "Joint: " << pair.first << ", Value: " << pair.second << std::endl;
+    }
+
+    std::cout << "\nordered homing list:" << std::endl;
+    std::vector<double> ordered_homing = loader.generate_homing_from_other(other_jnt_list);
+    for (size_t i = 0; i < other_jnt_list.size(); ++i) {
+        std::cout << "Joint: " << other_jnt_list[i] << ", Homing Value: " << ordered_homing[i] << std::endl;
+    }
     
     std::string finalMuJoCoXML = loader.get_mj_xml();
     std::cout << finalMuJoCoXML << std::endl;
