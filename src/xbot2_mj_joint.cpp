@@ -48,7 +48,7 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
             {
                 j->rx().gain_kp = gains.first;
                 j->rx().gain_kd = gains.second;
-                printf("joint %s setting gains %f, %f\n", jname.c_str(), gains.first, gains.second);
+                printf("with impedance gains %f, %f\n", gains.first, gains.second);
             }
         }
 

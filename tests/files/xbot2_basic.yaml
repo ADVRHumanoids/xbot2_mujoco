@@ -6,7 +6,28 @@ ModelInterface:
   model_type: RBDL
   is_model_floating_base: true
 
+motor_pd:
+  j_arm*_1: [500, 10]
+  j_arm*_2: [500, 10]
+  j_arm*_3: [500, 10]
+  j_arm*_4: [500, 10]
+  j_arm*_5: [100, 5]
+  j_arm*_6: [100, 5]
+  j_arm*_7: [100, 5]
+  hip_yaw_*: [3000, 30]
+  hip_pitch_*: [3000, 30]
+  knee_pitch_*: [3000, 30]
+  ankle_pitch_*: [1000, 10]
+  ankle_yaw_*: [300, 10]
+  neck_pitch: [10, 1]
+  neck_yaw: [10, 1]
+  torso_yaw: [1000, 30]
+  j_wheel_*: [0, 30]
 
+motor_vel:
+  j_wheel_*: [1]
+  neck_velodyne: [1]
+  
 # hal
 xbotcore_device_configs:
     sim: $PWD/hal/centauro_gz.yaml
@@ -29,8 +50,6 @@ xbotcore_plugins:
     ros_io: {thread: nrt_main, type: ros_io}
 
     ros_control: {thread: nrt_main, type: ros_control, params: {autostart: {type: bool, value: true}}}
-    
-
 
 # global parameters
 xbotcore_param:
