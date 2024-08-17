@@ -351,13 +351,17 @@ void LoadingUtils::compile_mujoco_xml() {
 void LoadingUtils::merg_xml_trees(pugi::xml_node& parent, pugi::xml_node child) {
     // Iterate over each child node in the 'child' XML document
     for (pugi::xml_node childNode : child.children()) {
-        // Check if the parent has a corresponding child node
-        pugi::xml_node found = parent.child(childNode.name());
+        // Check if the parent has a corresponding child node with the same name
+        pugi::xml_node found = parent.find_child_by_attribute(childNode.name(), "name", childNode.attribute("name").value());
+
         if (found) {
-            // If a matching node is found, recursively merge their children
-            merg_xml_trees(found, childNode);
+            // If a matching node is found, check if it's a complex node that needs merging
+            if (childNode.first_child()) {
+                // If the child node has children, recursively merge their contents
+                merg_xml_trees(found, childNode);
+            }
         } else {
-            // If no matching node is found, append a copy of the child node
+            // If no matching node is found, append a copy of the child node as a sibling
             parent.append_copy(childNode);
         }
     }
