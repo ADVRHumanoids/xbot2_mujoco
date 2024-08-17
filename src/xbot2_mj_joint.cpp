@@ -29,7 +29,7 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
 
         std::string jname = &_m->names[mj_model->name_jntadr[i]];
 
-        fprintf(stderr, "[XBot][JointMjServer]: constructing xbot joint %s \n",jname.c_str());
+        fprintf(stdout, "[XBot][JointMjServer]: constructing xbot joint %s \n",jname.c_str());
 
         auto j = std::make_shared<JointInstanceMj>(
                      Hal::DeviceInfo{jname, "joint_mj", i}
@@ -48,7 +48,7 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
             {
                 j->rx().gain_kp = gains.first;
                 j->rx().gain_kd = gains.second;
-                printf("with impedance gains %f, %f\n", gains.first, gains.second);
+                printf("with impedance gains kp: %f, kd: %f\n", gains.first, gains.second);
             }
         }
 
@@ -59,7 +59,7 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
     }
 
     _homing_map = _loader_ptr->generate_homing_map_from_other(_mj_jnt_names); // retrieved from SRDF
-    _set_model_homing(); // writes default homing for joint contained in both SRDF and mujoco's model
+    // _set_model_homing(); // writes default homing for joint contained in both SRDF and mujoco's model
     // (defaults to 0 if mj joint is not in the SRDF homing group)
     _print_homing_config(); // db print
 
@@ -73,6 +73,7 @@ void JointMjServer::_print_homing_config() {
     std::vector<double> ordered_homing = _loader_ptr->generate_homing_from_other(_mj_jnt_names);
 
     // jnt names
+    fprintf(stdout, "[XBot][JointMjServer]: joint names ->\n");
     fprintf(stdout, "[");
     for (std::size_t i = 0; i < _mj_jnt_names.size(); ++i) {
         fprintf(stdout, "%s", _mj_jnt_names[i].c_str());
@@ -83,6 +84,7 @@ void JointMjServer::_print_homing_config() {
     fprintf(stdout, "]:\n");
 
     // jnt vals
+    fprintf(stdout, "[XBot][JointMjServer]: homing values ->\n");
     fprintf(stdout, "[");
     for (std::size_t i = 0; i < ordered_homing.size(); ++i) {
         fprintf(stdout, "%.2f", ordered_homing[i]);

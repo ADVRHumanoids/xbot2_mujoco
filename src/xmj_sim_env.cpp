@@ -9,7 +9,7 @@ XBotMjSimEnv::XBotMjSimEnv(const std::string configPath,
 
     mju_strncpy(xml_fname, model_fname, 1000);
 
-    fprintf(stderr, "[XBotMjSimEnv]: will use xml file at %s\n", xml_fname);
+    fprintf(stdout, "[XBotMjSimEnv]: will use xml file at %s\n", xml_fname);
 
     initialize();
 
@@ -27,11 +27,11 @@ void XBotMjSimEnv::close() {
         require_exit();
         if (!headless && window && rendering_thread.joinable()) {
             rendering_thread.join();
-            fprintf(stderr, "[XBotMjSimEnv][close]: joined rendering thread. \n");
+            fprintf(stdout, "[XBotMjSimEnv][close]: joined rendering thread. \n");
         }
 
         xbot2_wrapper.reset();
-        fprintf(stderr, "[XBotMjSimEnv][close]: destroyed xbot2 wrapper. \n");
+        fprintf(stdout, "[XBotMjSimEnv][close]: destroyed xbot2 wrapper. \n");
 
         // delete everything we allocated
         mj_deleteData(d);
@@ -46,7 +46,7 @@ void XBotMjSimEnv::close() {
             #endif
         }
 
-        fprintf(stderr, "[XBotMjSimEnv][close]: finished simulation cleanup. \n");
+        fprintf(stdout, "[XBotMjSimEnv][close]: finished simulation cleanup. \n");
 
         closed=true;
     }
@@ -70,7 +70,7 @@ void XBotMjSimEnv::initialize() {
 
         // spawn rendering in separate thread
         rendering_thread = std::thread(&XBotMjSimEnv::launch_rendering_loop, this);
-        fprintf(stderr, "[XBotMjSimEnv][initialize]: launched rendering loop in separate thread. \n");
+        fprintf(stdout, "[XBotMjSimEnv][initialize]: launched rendering loop in separate thread. \n");
 
     }
 

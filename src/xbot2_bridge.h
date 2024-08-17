@@ -19,8 +19,7 @@ public:
         _imu(mj_model, cfg_path),
         _ls(mj_model, cfg_path)
     {
-        std::cout << "************ xbot2 bridge constructed with file: " << cfg_path << "\n";
-
+        fprintf(stderr, "[XBot][MjWrapper]: xbot2 bridge constructed with file  %s \n",cfg_path.c_str());
     }
 
     void run(mjData * d)

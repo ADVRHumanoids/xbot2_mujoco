@@ -36,8 +36,8 @@ TEST_F(ParsingTest, GenerateURDFWithRootDir) {
     LoadingUtils loader(outfname);
     std::string files_dir(FILES_DIR);
 
-    fprintf(stderr, "[ParsingTest][GenerateURDF]: loading test files from base dir at %s \n", files_dir.c_str());
-    fprintf(stderr, "[ParsingTest][GenerateURDF]: mesh root dir %s \n", mesh_root_directory.c_str());
+    fprintf(stdout, "[ParsingTest][GenerateURDF]: loading test files from base dir at %s \n", files_dir.c_str());
+    fprintf(stdout, "[ParsingTest][GenerateURDF]: mesh root dir %s \n", mesh_root_directory.c_str());
 
     loader.set_mesh_rootdir(mesh_root_directory);
     loader.set_mesh_rootdir_subdirs(subdirs);
@@ -74,7 +74,7 @@ TEST_F(ParsingTest, TestHomingParsing) {
     LoadingUtils loader(outfname);
     std::string files_dir(FILES_DIR);
 
-    fprintf(stderr, "[ParsingTest][GenerateURDF]: loading test files from base dir at %s \n", files_dir.c_str());
+    fprintf(stdout, "[ParsingTest][GenerateURDF]: loading test files from base dir at %s \n", files_dir.c_str());
     
     loader.set_xbot_config_path(files_dir+ "/xbot2_basic.yaml");
 

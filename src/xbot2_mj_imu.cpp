@@ -34,14 +34,14 @@ ImuMjServer::ImuMjServer(mjModel *mj_model, std::string cfg_path):
 
         if(_m->sensor_type[i] == mjtSensor::mjSENS_GYRO)
         {
-            std::cout << "gyro found: " << sensorname << ", site " << sitename << "\n";
+            fprintf(stdout, "[XBot][ImuMjServer]: found gyro %s at site %s \n",sensorname.c_str(),sitename.c_str());
             site_imu_map[sitename].gyro_id = i;
             site_imu_map[sitename].site_id = siteid;
         }
 
         if(_m->sensor_type[i] == mjtSensor::mjSENS_ACCELEROMETER)
         {
-            std::cout << "accelerometer found: " << sensorname << ", site " << sitename << "\n";
+            fprintf(stdout, "[XBot][ImuMjServer]: found accelerometer %s at site %s \n",sensorname.c_str(),sitename.c_str());
             site_imu_map[sitename].acc_id = i;
             site_imu_map[sitename].site_id = siteid;
         }

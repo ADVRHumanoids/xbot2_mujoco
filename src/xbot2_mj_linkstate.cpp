@@ -37,7 +37,7 @@ LinkStateMjServer::LinkStateMjServer(mjModel *mj_model, std::string cfg_path):
         auto lss = std::make_shared<LinkStateInstanceMj>(dinfo);
         lss->site_id = siteid;
 
-        std::cout << "found site " << sitename << "\n";
+        fprintf(stdout, "[XBot][LinkStateMjServer]: found site %s \n",sitename.c_str());
 
         _lss.push_back(lss);
 

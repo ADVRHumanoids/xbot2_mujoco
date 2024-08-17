@@ -166,14 +166,14 @@ mjModel* xbot_mujoco::LoadModel(const char* file, mj::Simulate& sim) {
   if (mju::strlen_arr(filename)>4 &&
       !std::strncmp(filename + mju::strlen_arr(filename) - 4, ".mjb",
                     mju::sizeof_arr(filename) - mju::strlen_arr(filename)+4)) {
-    fprintf(stderr, "[xbot_mujoco::LoadModel]: trying to load binary model at %s \n",filename);
+    fprintf(stdout, "[xbot2_mujoco][simulator][LoadModel]: trying to load binary model at %s \n",filename);
     mnew = mj_loadModel(filename, nullptr);
     if (!mnew) {
       mju::strcpy_arr(loadError, "could not load binary model");
     }
 
   } else {
-    fprintf(stderr, "[xbot_mujoco::LoadModel]: trying to load XML model at %s \n",filename);
+    fprintf(stdout, "[xbot2_mujoco][simulator][LoadModel]: trying to load XML model at %s \n",filename);
     mnew = mj_loadXML(filename, nullptr, loadError, kErrorLength);
     // remove trailing newline character from loadError
     if (loadError[0]) {
@@ -435,7 +435,7 @@ void xbot_mujoco::run(const char* fname,
     #endif
 
     // print version, check compatibility
-    std::printf("MuJoCo version %s\n", mj_versionString());
+    std::printf("[xbot2_mujoco][simulator]: MuJoCo version %s\n", mj_versionString());
     if (mjVERSION_HEADER!=mj_version()) {
         mju_error("Headers and library have different versions");
     }
