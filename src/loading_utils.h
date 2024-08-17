@@ -27,9 +27,10 @@ public:
     std::string get_srdf_path_fromxbotconfig();
     std::string get_urdf_path_fromxbotconfig();
     std::map<std::string, double> get_homing_from_srdf(const std::string& srdf_path);
-    std::map<std::string, double> generate_homing_map_from_other(const std::vector<std::string>& jnt_name_list,
+    std::map<std::string, double> generate_homing_map(const std::vector<std::string>& jnt_name_list,
         double fallback_val = 0.0);
-    std::vector<double> generate_homing_from_other(const std::vector<std::string>& jnt_name_list,
+
+    std::vector<double> generate_homing_from_list(const std::vector<std::string>& jnt_name_list,
         double fallback_val = 0.0);
 
     std::string get_mj_xml(); // Public method to get the final MuJoCo XML

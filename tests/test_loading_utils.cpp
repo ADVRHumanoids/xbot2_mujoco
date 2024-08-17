@@ -52,12 +52,12 @@ TEST_F(ParsingTest, GenerateURDFWithRootDir) {
     std::vector<std::string> other_jnt_list = {"knee_pitch_2", "ankle_pitch_3", "j_arm1_4",
         "other_joint"};
     
-    std::map<std::string, double> retrieved_homing = loader.generate_homing_map_from_other(other_jnt_list);
+    std::map<std::string, double> retrieved_homing = loader.generate_homing_map(other_jnt_list);
     for (const auto& pair : retrieved_homing) {
         std::cout << "Joint: " << pair.first << ", Value: " << pair.second << std::endl;
     }
 
-    std::vector<double> ordered_homing = loader.generate_homing_from_other(other_jnt_list);
+    std::vector<double> ordered_homing = loader.generate_homing_from_list(other_jnt_list);
     for (size_t i = 0; i < other_jnt_list.size(); ++i) {
         std::cout << "Joint: " << other_jnt_list[i] << ", Homing Value: " << ordered_homing[i] << std::endl;
     }
@@ -83,13 +83,13 @@ TEST_F(ParsingTest, TestHomingParsing) {
         "other_joint"};
     
     std::cout << "\nhoming map:" << std::endl;
-    std::map<std::string, double> retrieved_homing = loader.generate_homing_map_from_other(other_jnt_list);
+    std::map<std::string, double> retrieved_homing = loader.generate_homing_map(other_jnt_list);
     for (const auto& pair : retrieved_homing) {
         std::cout << "Joint: " << pair.first << ", Value: " << pair.second << std::endl;
     }
 
     std::cout << "\nordered homing list:" << std::endl;
-    std::vector<double> ordered_homing = loader.generate_homing_from_other(other_jnt_list);
+    std::vector<double> ordered_homing = loader.generate_homing_from_list(other_jnt_list);
     for (size_t i = 0; i < other_jnt_list.size(); ++i) {
         std::cout << "Joint: " << other_jnt_list[i] << ", Homing Value: " << ordered_homing[i] << std::endl;
     }

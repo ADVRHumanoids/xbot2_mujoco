@@ -392,7 +392,6 @@ void xbot_mujoco::PhysicsThread(mj::Simulate* sim, const char* filename) {
     }
     if (d) {
       sim->Load(m, d, filename);
-      // xbot2_wrapper->move_to_homing_now(d);
       // lock the sim mutex
       const std::unique_lock<std::recursive_mutex> lock(sim->mtx);
 
@@ -406,6 +405,8 @@ void xbot_mujoco::PhysicsThread(mj::Simulate* sim, const char* filename) {
       sim->LoadMessageClear();
     }
   }
+
+  xbot2_wrapper->move_to_homing_now(d);
 
   xbot_mujoco::PhysicsLoop(*sim);
 
@@ -479,6 +480,7 @@ void xbot_mujoco::xbotmj_control_callback(const mjModel* m, mjData* d)
         return;
     }
 
+    // xbot2_wrapper->move_to_homing_now(d);
     xbot2_wrapper->run(d);
 
 }

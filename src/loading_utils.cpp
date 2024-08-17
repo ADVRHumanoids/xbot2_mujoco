@@ -129,7 +129,7 @@ std::map<std::string, double> LoadingUtils::get_homing_from_srdf(const std::stri
     return homing_map;
 }
 
-std::map<std::string, double> LoadingUtils::generate_homing_map_from_other(const std::vector<std::string>& jnt_name_list,
+std::map<std::string, double> LoadingUtils::generate_homing_map(const std::vector<std::string>& jnt_name_list,
         double fallback_val) {
 
     std::string srdf_path = get_srdf_path_fromxbotconfig();
@@ -149,7 +149,7 @@ std::map<std::string, double> LoadingUtils::generate_homing_map_from_other(const
     return result;
 }
 
-std::vector<double> LoadingUtils::generate_homing_from_other(const std::vector<std::string>& jnt_name_list,
+std::vector<double> LoadingUtils::generate_homing_from_list(const std::vector<std::string>& jnt_name_list,
         double fallback_val) {
     
     std::string srdf_path = get_srdf_path_fromxbotconfig();

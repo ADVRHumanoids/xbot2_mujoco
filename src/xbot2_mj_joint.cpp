@@ -58,7 +58,7 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
         _mj_jnt_names.push_back(jname);
     }
 
-    _homing_map = _loader_ptr->generate_homing_map_from_other(_mj_jnt_names); // retrieved from SRDF
+    _homing_map = _loader_ptr->generate_homing_map(_mj_jnt_names); // retrieved from SRDF
     // _set_model_homing(); // writes default homing for joint contained in both SRDF and mujoco's model
     // (defaults to 0 if mj joint is not in the SRDF homing group)
     _print_homing_config(); // db print
@@ -70,7 +70,7 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
 
 void JointMjServer::_print_homing_config() {
 
-    std::vector<double> ordered_homing = _loader_ptr->generate_homing_from_other(_mj_jnt_names);
+    std::vector<double> ordered_homing = _loader_ptr->generate_homing_from_list(_mj_jnt_names);
 
     // jnt names
     fprintf(stdout, "[XBot][JointMjServer]: joint names ->\n");
@@ -109,7 +109,6 @@ void JointMjServer::move_to_homing_now(mjData * d) {
             d->ctrl[qpos_adr] = 0.0;
         }
     }
-
     
 }
 
