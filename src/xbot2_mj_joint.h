@@ -59,6 +59,7 @@ private:
     std::map<std::string, double> _homing_map;
 
     void _set_model_homing();
+    void _print_homing_config();
 
 };
 

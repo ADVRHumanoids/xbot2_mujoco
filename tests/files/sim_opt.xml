@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <mujoco>
-    <compiler discardvisual="false" strippath="false" angle="radian" autolimits="true" balanceinertia="true"/>
+    <compiler discardvisual="false" strippath="false" angle="radian" autolimits="true" balanceinertia="true" fusestatic="true" boundmass="0"/>
 
     <option cone="elliptic" impratio="100" timestep="0.0005"/>
     <!-- Simulation settings -->
