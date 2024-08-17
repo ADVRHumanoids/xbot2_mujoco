@@ -59,6 +59,8 @@ static mjData* d = NULL;
 // control noise variables
 static mjtNum* ctrlnoise = nullptr;
 
+static std::unique_ptr<mj::Simulate> sim;
+
 using Seconds = std::chrono::duration<double>;
 
 // constants
@@ -85,10 +87,10 @@ void DoStep(mj::Simulate& sim,
     std::chrono::time_point<mj::Simulate::Clock> syncCPU,
     mjtNum syncSim); // single sim step
 void PhysicsLoop(mj::Simulate& sim);
-void PhysicsThread(mj::Simulate* sim, const char* filename);
+void Simulate(mj::Simulate* sim, const char* filename);
 
-// initalize everything
-void init(bool headless = false);
+// close everything
+void close();
 
 // run event loop
 void run(const char* fname, const std::string xbot2_config_path,

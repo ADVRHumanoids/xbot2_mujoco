@@ -29,7 +29,7 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
 
         std::string jname = &_m->names[mj_model->name_jntadr[i]];
 
-        fprintf(stdout, "[XBot][JointMjServer]: constructing xbot joint %s \n",jname.c_str());
+        printf( "[XBot][JointMjServer]: constructing xbot joint %s \n",jname.c_str());
 
         auto j = std::make_shared<JointInstanceMj>(
                      Hal::DeviceInfo{jname, "joint_mj", i}
@@ -73,26 +73,26 @@ void JointMjServer::_print_homing_config() {
     std::vector<double> ordered_homing = _loader_ptr->generate_homing_from_list(_mj_jnt_names);
 
     // jnt names
-    fprintf(stdout, "[XBot][JointMjServer]: joint names ->\n");
-    fprintf(stdout, "[");
+    printf( "[XBot][JointMjServer]: joint names ->\n");
+    printf( "[");
     for (std::size_t i = 0; i < _mj_jnt_names.size(); ++i) {
-        fprintf(stdout, "%s", _mj_jnt_names[i].c_str());
+        printf( "%s", _mj_jnt_names[i].c_str());
         if (i < _mj_jnt_names.size() - 1) {
-            fprintf(stdout, ", ");
+            printf( ", ");
         }
     }
-    fprintf(stdout, "]:\n");
+    printf( "]:\n");
 
     // jnt vals
-    fprintf(stdout, "[XBot][JointMjServer]: homing values ->\n");
-    fprintf(stdout, "[");
+    printf( "[XBot][JointMjServer]: homing values ->\n");
+    printf( "[");
     for (std::size_t i = 0; i < ordered_homing.size(); ++i) {
-        fprintf(stdout, "%.2f", ordered_homing[i]);
+        printf( "%.2f", ordered_homing[i]);
         if (i < ordered_homing.size() - 1) {
-            fprintf(stdout, ", ");
+            printf( ", ");
         }
     }
-    fprintf(stdout, "]\n");
+    printf( "]\n");
 
 }
 

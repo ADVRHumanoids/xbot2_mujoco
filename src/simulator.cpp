@@ -13,7 +13,18 @@
 // limitations under the License.
 
 #include "simulator.h"
+#include <csignal>
 
+// Function to handle the SIGINT signal
+void signalHandler(int signum) {
+    std::printf("[xbot2_mujoco][simulator]: received interrupt signal %i, cleaning up ...\n", signum);
+
+    // Cleanup and close up stuff
+    xbot_mujoco::close();
+
+    // Terminate program
+    exit(signum);
+}
 //---------------------------------------- plugin handling -----------------------------------------
 
 // return the path to the directory containing the current executable
@@ -166,14 +177,14 @@ mjModel* xbot_mujoco::LoadModel(const char* file, mj::Simulate& sim) {
   if (mju::strlen_arr(filename)>4 &&
       !std::strncmp(filename + mju::strlen_arr(filename) - 4, ".mjb",
                     mju::sizeof_arr(filename) - mju::strlen_arr(filename)+4)) {
-    fprintf(stdout, "[xbot2_mujoco][simulator][LoadModel]: trying to load binary model at %s \n",filename);
+    printf( "[xbot2_mujoco][simulator][LoadModel]: trying to load binary model at %s \n",filename);
     mnew = mj_loadModel(filename, nullptr);
     if (!mnew) {
       mju::strcpy_arr(loadError, "could not load binary model");
     }
 
   } else {
-    fprintf(stdout, "[xbot2_mujoco][simulator][LoadModel]: trying to load XML model at %s \n",filename);
+    printf( "[xbot2_mujoco][simulator][LoadModel]: trying to load XML model at %s \n",filename);
     mnew = mj_loadXML(filename, nullptr, loadError, kErrorLength);
     // remove trailing newline character from loadError
     if (loadError[0]) {
@@ -379,7 +390,7 @@ void xbot_mujoco::PhysicsLoop(mj::Simulate& sim) {
   }
 }
 
-void xbot_mujoco::PhysicsThread(mj::Simulate* sim, const char* filename) {
+void xbot_mujoco::Simulate(mj::Simulate* sim, const char* filename) {
   // request loadmodel if file given (otherwise drag-and-drop)
   if (filename != nullptr) {
     sim->LoadMessage(filename);
@@ -416,9 +427,8 @@ void xbot_mujoco::PhysicsThread(mj::Simulate* sim, const char* filename) {
   mj_deleteModel(m);
 }
 
-void xbot_mujoco::init(bool headless)
-{
-
+void xbot_mujoco::close() {
+  sim->exitrequest.store(1);
 }
 
 void xbot_mujoco::run(const char* fname, 
@@ -426,6 +436,8 @@ void xbot_mujoco::run(const char* fname,
     ros::NodeHandle nh,
     bool headless)
 {
+
+    std::signal(SIGINT, signalHandler);
 
     // display an error if running on macOS under Rosetta 2
     #if defined(__APPLE__) && defined(__AVX__)
@@ -454,7 +466,7 @@ void xbot_mujoco::run(const char* fname,
     mjv_defaultPerturb(&pert);
 
     // simulate object encapsulates the UI
-    auto sim = std::make_unique<mj::Simulate>(
+    sim = std::make_unique<mj::Simulate>(
         std::make_unique<mj::GlfwAdapter>(),
         &cam, &opt, &pert, /* is_passive = */ false
     );
@@ -462,12 +474,16 @@ void xbot_mujoco::run(const char* fname,
     mjcb_control = xbot_mujoco::xbotmj_control_callback; // register control callback to mujoco
 
     xbot2_cfg_path=xbot2_config_path;
-    // start physics thread
-    std::thread physicsthreadhandle(&PhysicsThread, sim.get(), fname);
-
-    // start simulation UI loop (blocking call)
-    sim->RenderLoop(nh);
-    physicsthreadhandle.join();
+    
+    if (!headless) {
+      // start physics thread
+      std::thread physicsthreadhandle(&Simulate, sim.get(), fname);
+      // start simulation UI loop (blocking call)
+      sim->RenderLoop(nh);
+      physicsthreadhandle.join();
+    } {
+        Simulate(sim.get(), fname); // blocking call
+    }
 
 }
 //-------------------------------- control callback ----------------------------------------
@@ -480,7 +496,6 @@ void xbot_mujoco::xbotmj_control_callback(const mjModel* m, mjData* d)
         return;
     }
 
-    // xbot2_wrapper->move_to_homing_now(d);
     xbot2_wrapper->run(d);
 
 }

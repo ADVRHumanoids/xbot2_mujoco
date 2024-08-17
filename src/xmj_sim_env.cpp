@@ -2,14 +2,12 @@
 
 
 XBotMjSimEnv::XBotMjSimEnv(const std::string configPath, 
-    const char* model_fname,
+    const std::string model_fname,
     bool headless,
-    bool multithread)
-    :xbot2_cfg_path(configPath),headless(headless),multithread(multithread) {
+    bool manual_stepping)
+    :xbot2_cfg_path(configPath),model_fname(model_fname),headless(headless),manual_stepping(manual_stepping) {
 
-    mju_strncpy(xml_fname, model_fname, 1000);
-
-    fprintf(stdout, "[XBotMjSimEnv]: will use xml file at %s\n", xml_fname);
+    printf( "[xbot2_mujoco][XBotMjSimEnv]: will use MuJoCo xml file at %s and XBot2 config at %s\n", model_fname.c_str(), xbot2_cfg_path.c_str());
 
     initialize();
 
@@ -23,59 +21,26 @@ XBotMjSimEnv::~XBotMjSimEnv() {
 
 void XBotMjSimEnv::close() {
 
-    if (!closed) {
-        require_exit();
-        if (!headless && window && rendering_thread.joinable()) {
-            rendering_thread.join();
-            fprintf(stdout, "[XBotMjSimEnv][close]: joined rendering thread. \n");
-        }
-
-        xbot2_wrapper.reset();
-        fprintf(stdout, "[XBotMjSimEnv][close]: destroyed xbot2 wrapper. \n");
-
-        // delete everything we allocated
-        mj_deleteData(d);
-        mj_deleteModel(m);
-        mjv_freeScene(&scn);
-        mjr_freeContext(&con);
-        if (!headless && window) {
-            uiClearCallback(window);
-            // terminate GLFW (crashes with Linux NVidia drivers)
-            #if defined(__APPLE__) || defined(_WIN32)
-                glfwTerminate();
-            #endif
-        }
-
-        fprintf(stdout, "[XBotMjSimEnv][close]: finished simulation cleanup. \n");
-
-        closed=true;
+    if (!running) {
+        
+        running=false;
     }
 }
 
-void XBotMjSimEnv::initialize() {
+void XBotMjSimEnv::run(ros::NodeHandle nh) {
+    
+    if (!running) {
+        if (!manual_stepping) {
+            run(model_fname.c_str(),xbot2_cfg_path,nh,headless); // sim in separate thread and rendering loop
+        } {
+            if (!headless) {
+                // spawn rendering thread
+            }
+        }
 
-    closed=false;
-
-    init(headless);
-
-    cpusync = 0;
-    simsync = 0;
-
-    if (!headless && multithread) { // rendering in separate thread
-
-        // do some simulation stepping
-        // for (int i = 0; i < sim_init_steps; i++) {
-        //     step(cpusync,simsync);
-        // }
-
-        // spawn rendering in separate thread
-        rendering_thread = std::thread(&XBotMjSimEnv::launch_rendering_loop, this);
-        fprintf(stdout, "[XBotMjSimEnv][initialize]: launched rendering loop in separate thread. \n");
-
+        running=true;
     }
-
-    loadmodel(xml_fname);
-
+    
 }
 
 void XBotMjSimEnv::reset() {

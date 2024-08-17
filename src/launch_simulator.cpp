@@ -51,7 +51,7 @@ int main(int argc, char** argv)
         xbot2_cfg_path = argv[2];
     }
 
-    bool headless=true;
+    bool headless=false;
     ros::init(argc, argv, "mujoco_ros");
     ros::NodeHandle nh("");
     run(filename,xbot2_cfg_path,nh,headless); // run everything

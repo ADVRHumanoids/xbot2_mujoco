@@ -319,31 +319,31 @@ void LoadingUtils::process_urdf() {
     }
 
     urdf = remove_comments(urdf);
-    fprintf(stdout, "[LoadingUtils][mergeXML]: removed comments from URDF \n");
+    printf( "[LoadingUtils][mergeXML]: removed comments from URDF \n");
 
     if (use_custom_mesh_rootdir) {
         urdf = apply_mesh_root(urdf,mesh_rootdir,mesh_root_subdirs);
-        fprintf(stdout, "[LoadingUtils][mergeXML]: applying new mesh root dir %s to URDF \n", mesh_rootdir.c_str());
+        printf( "[LoadingUtils][mergeXML]: applying new mesh root dir %s to URDF \n", mesh_rootdir.c_str());
     }
 
     urdf = add_mesh_simlink_bfix(urdf); // bug fix for mujoco not allowing identical mesh paths on multiple bodies
-    fprintf(stdout, "[LoadingUtils][mergeXML]: created mesh simlink to circumvent mujoco_compile BUG.\n");
+    printf( "[LoadingUtils][mergeXML]: created mesh simlink to circumvent mujoco_compile BUG.\n");
 
     std::ofstream outFile(mjurdf_path);
     outFile << urdf;
-    fprintf(stdout, "[LoadingUtils][mergeXML]: dumped modified URDF at %s \n", mjurdf_path.c_str());
+    printf( "[LoadingUtils][mergeXML]: dumped modified URDF at %s \n", mjurdf_path.c_str());
     outFile.close();
 }
 
 void LoadingUtils::compile_mujoco_xml() {
-    fprintf(stdout, "[LoadingUtils][mergeXML]: compiling URDF using mujoco_compile...\n");
+    printf( "[LoadingUtils][mergeXML]: compiling URDF using mujoco_compile...\n");
     std::string cmd = "mujoco_compile " + mjurdf_path + " " + mjxml_path_orig;
     auto ret = std::system(cmd.c_str());
     if (ret != 0) {
         // If the return value is non-zero, there was an error
-        fprintf(stdout, "[LoadingUtils][compile_mujoco_xml]: Error occurred during mujoco_compile. Return code: %d\n", ret);
+        printf( "[LoadingUtils][compile_mujoco_xml]: Error occurred during mujoco_compile. Return code: %d\n", ret);
     } else {
-        fprintf(stdout, "[LoadingUtils][mergeXML]: done. Return code: %d\n", ret);
+        printf( "[LoadingUtils][mergeXML]: done. Return code: %d\n", ret);
     }
 
 }
@@ -375,9 +375,9 @@ void LoadingUtils::merge_xml() {
 
     mjXmlDoc.load_file(mjxml_path_orig.c_str());
     simOptDoc.load_file(simopt_path.c_str());
-    fprintf(stdout, "[LoadingUtils][mergeXML]: loaded xml at %s \n", simopt_path.c_str());
+    printf( "[LoadingUtils][mergeXML]: loaded xml at %s \n", simopt_path.c_str());
     worldDoc.load_file(world_path.c_str());
-    fprintf(stdout, "[LoadingUtils][mergeXML]: loaded xml at %s \n", world_path.c_str());
+    printf( "[LoadingUtils][mergeXML]: loaded xml at %s \n", world_path.c_str());
 
     // Remove specific nodes from the MuJoCo XML
     pugi::xml_node mujocoNode = mjXmlDoc.child("mujoco");
@@ -415,7 +415,7 @@ void LoadingUtils::add_sites() {
         std::cerr << "[LoadingUtils][add_sites]: Error loading sites XML file at " << sites_path << std::endl;
         return;
     }
-    fprintf(stdout, "[LoadingUtils][add_sites]: Loaded sites from %s\n", sites_path.c_str());
+    printf( "[LoadingUtils][add_sites]: Loaded sites from %s\n", sites_path.c_str());
 
     // Find the root node of the sites XML document
     pugi::xml_node sitesRoot = sitesDoc.child("sites");
