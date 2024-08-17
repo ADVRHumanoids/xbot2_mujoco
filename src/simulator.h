@@ -59,8 +59,6 @@ static mjData* d = NULL;
 // control noise variables
 static mjtNum* ctrlnoise = nullptr;
 
-static std::unique_ptr<mj::Simulate> sim;
-
 using Seconds = std::chrono::duration<double>;
 
 // constants

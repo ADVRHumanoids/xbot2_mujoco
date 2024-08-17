@@ -30,7 +30,7 @@ public:
     }
 
     void move_to_homing_now(mjData * d) {
-        _joint.run(d);
+        _joint.move_to_homing_now(d);
     }
 
 private:

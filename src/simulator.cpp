@@ -13,18 +13,7 @@
 // limitations under the License.
 
 #include "simulator.h"
-#include <csignal>
 
-// Function to handle the SIGINT signal
-void signalHandler(int signum) {
-    std::printf("[xbot2_mujoco][simulator]: received interrupt signal %i, cleaning up ...\n", signum);
-
-    // Cleanup and close up stuff
-    xbot_mujoco::close();
-
-    // Terminate program
-    exit(signum);
-}
 //---------------------------------------- plugin handling -----------------------------------------
 
 // return the path to the directory containing the current executable
@@ -208,9 +197,6 @@ mjModel* xbot_mujoco::LoadModel(const char* file, mj::Simulate& sim) {
     std::printf("Model compiled, but simulation warning (paused):\n  %s\n", loadError);
     sim.run = 0;
   }
-
-  xbot2_wrapper.reset();
-  xbot2_wrapper = std::make_unique<XBot::MjWrapper>(mnew, xbot2_cfg_path);
 
   return mnew;
 }
@@ -417,7 +403,8 @@ void xbot_mujoco::Simulate(mj::Simulate* sim, const char* filename) {
     }
   }
 
-  xbot2_wrapper->move_to_homing_now(d);
+  xbot2_wrapper.reset();
+  xbot2_wrapper = std::make_unique<XBot::MjWrapper>(m, xbot2_cfg_path);
 
   xbot_mujoco::PhysicsLoop(*sim);
 
@@ -427,17 +414,11 @@ void xbot_mujoco::Simulate(mj::Simulate* sim, const char* filename) {
   mj_deleteModel(m);
 }
 
-void xbot_mujoco::close() {
-  sim->exitrequest.store(1);
-}
-
 void xbot_mujoco::run(const char* fname, 
     const std::string xbot2_config_path,
     ros::NodeHandle nh,
     bool headless)
 {
-
-    std::signal(SIGINT, signalHandler);
 
     // display an error if running on macOS under Rosetta 2
     #if defined(__APPLE__) && defined(__AVX__)
@@ -466,7 +447,7 @@ void xbot_mujoco::run(const char* fname,
     mjv_defaultPerturb(&pert);
 
     // simulate object encapsulates the UI
-    sim = std::make_unique<mj::Simulate>(
+    auto sim = std::make_unique<mj::Simulate>(
         std::make_unique<mj::GlfwAdapter>(),
         &cam, &opt, &pert, /* is_passive = */ false
     );
@@ -481,7 +462,7 @@ void xbot_mujoco::run(const char* fname,
       // start simulation UI loop (blocking call)
       sim->RenderLoop(nh);
       physicsthreadhandle.join();
-    } {
+    } else {
         Simulate(sim.get(), fname); // blocking call
     }
 

@@ -98,16 +98,20 @@ void JointMjServer::_print_homing_config() {
 
 void JointMjServer::move_to_homing_now(mjData * d) {
 
-    for (const auto& homing_data : _homing_map) {
-        std::string xbot_jnt = homing_data.first;
-
-        int joint_id = mj_name2id(_m, mjOBJ_JOINT, xbot_jnt.c_str());
+    for(int i = 0; i < _mj_jnt_names.size(); i++)
+    {
+        std::string xbot_jnt_name = _mj_jnt_names[i];
+        auto xbot_jnt = _joints[i];
+        int joint_id = mj_name2id(_m, mjOBJ_JOINT, xbot_jnt_name.c_str());
         if (joint_id != -1) {// joint found -> set default joint pos
             int qpos_adr = _m->jnt_qposadr[joint_id];
-            d->qpos[qpos_adr] = homing_data.second;
+            d->qpos[qpos_adr] = _homing_map[xbot_jnt_name];
             d->qvel[qpos_adr] = 0.0;
             d->ctrl[qpos_adr] = 0.0;
         }
+        xbot_jnt->rx().pos_ref = _homing_map[xbot_jnt_name];
+        xbot_jnt->rx().vel_ref = 0.0;
+        xbot_jnt->rx().tor_ref = 0.0;
     }
     
 }
@@ -120,6 +124,7 @@ void JointMjServer::_set_model_homing() {
         int joint_id = mj_name2id(_m, mjOBJ_JOINT, xbot_jnt.c_str());
         if (joint_id != -1) {// joint found -> set default joint pos
             int qpos_adr = _m->jnt_qposadr[joint_id];
+            // std::cout << "########################"<< std::endl;
             _m->qpos0[qpos_adr] = homing_data.second;
         }
     }
