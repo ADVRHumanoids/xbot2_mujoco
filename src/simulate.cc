@@ -1394,6 +1394,7 @@ void UiEvent(mjuiState* state) {
       switch (it->itemid) {
       case 1:             // Reset
         sim->pending_.reset = true;
+        sim->resetrequest.store(1);
         break;
 
       case 2:             // Reload
@@ -2790,4 +2791,5 @@ void Simulate::UpdateTexture(int texid) {
   texture_upload_ = texid;
   cond_upload_.wait(lock, [this]() { return texture_upload_ == -1; });
 }
+
 }  // namespace mujoco

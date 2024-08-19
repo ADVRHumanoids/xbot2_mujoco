@@ -32,8 +32,9 @@ public:
         _clock.run(d);
     }
 
-    void move_to_homing_now(mjData * d) {
-        _joint.move_to_homing_now(d);
+    void reset(mjData * d) 
+    {
+        _joint.reset(d);
     }
 
 private:

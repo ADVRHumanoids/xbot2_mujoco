@@ -87,6 +87,8 @@ class Simulate {
   // add state to history buffer
   void AddToHistory();
 
+  void Reset();
+
   // constants
   static constexpr int kMaxFilenameLength = 1000;
 
@@ -191,6 +193,7 @@ class Simulate {
 
   // atomics for cross-thread messages
   std::atomic_int exitrequest = 0;
+  std::atomic_int resetrequest = 0;
   std::atomic_int droploadrequest = 0;
   std::atomic_int screenshotrequest = 0;
   std::atomic_int uiloadrequest = 0;

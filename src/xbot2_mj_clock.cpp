@@ -35,6 +35,4 @@ void ClockServer::run(mjData * d) {
     mj_stime_chrono = seconds(sec) + nanoseconds(nsec);
     chrono::simulated_clock::set_time(mj_stime_chrono);
     _clock_sender->try_send(mj_stime_chrono);
-
-    std::cout << mj_stime << std::endl;
 }

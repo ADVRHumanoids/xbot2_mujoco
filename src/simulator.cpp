@@ -150,6 +150,56 @@ void xbot_mujoco::scanPluginLibraries() {
 
 //--------------------------- rendering and simulation ----------------------------------
 
+void xbot_mujoco::SetJntOffsets(mjModel* m) {
+  
+  for(int i = 0; i < std::get<0>(homing).size(); i++)
+  {
+
+    int joint_id = mj_name2id(m, mjOBJ_JOINT, std::get<0>(homing)[i].c_str());
+    if (joint_id != -1) {// joint found -> set default joint pos
+        int qpos_adr = m->jnt_qposadr[joint_id];
+        m->qpos0[qpos_adr] = std::get<1>(homing)[i];
+    }
+  }  
+
+}
+
+void xbot_mujoco::MoveJntToHomingNow(mjData* d) {
+
+  for(int i = 0; i < std::get<0>(homing).size(); i++)
+  {
+    int joint_id = mj_name2id(m, mjOBJ_JOINT, std::get<0>(homing)[i].c_str());
+
+    if (joint_id != -1) {// joint found -> set joint pos
+        int qpos_adr = m->jnt_qposadr[joint_id];
+        d->qpos[qpos_adr] = std::get<1>(homing)[i];
+        // d->qvel[qpos_adr] = 0.0;
+        // d->ctrl[qpos_adr] = 0.0;
+    }
+  }
+}
+
+void xbot_mujoco::MoveBaseNowTo(mjData* d, std::vector<double> p, std::vector<double> q,
+  std::string root_linkname) {
+
+  // Number of bodies in the model
+  int num_bodies = m->nbody;
+
+  int rott_link_idx = mj_name2id(m, mjOBJ_XBODY, root_linkname.c_str());
+
+  if (rott_link_idx != -1) { // root link found
+    d->xpos[rott_link_idx*3] = p[0];
+    d->xpos[rott_link_idx*3 + 1] = p[1];
+    d->xpos[rott_link_idx*3 + 2] = p[2];
+
+    d->xquat[rott_link_idx*4] = q[0];
+    d->xquat[rott_link_idx*4 + 1] = q[1];
+    d->xquat[rott_link_idx*4 + 2] = q[2];
+    d->xquat[rott_link_idx*4 + 3] = q[3];
+  }
+
+}
+
 mjModel* xbot_mujoco::LoadModel(const char* file, mj::Simulate& sim) {
   // this copy is needed so that the mju::strlen call below compiles
   char filename[mj::Simulate::kMaxFilenameLength];
@@ -211,6 +261,11 @@ void xbot_mujoco::DoStep(mj::Simulate& sim,
     if (m) {
         // running
         if (sim.run) {
+
+            if (sim.resetrequest.load()) { // perform reset
+              xbot_mujoco::Reset(sim);
+            }
+
             bool stepped = false;
 
             // record cpu time at start of iteration
@@ -287,6 +342,9 @@ void xbot_mujoco::DoStep(mj::Simulate& sim,
             if (stepped) {
             sim.AddToHistory();
             }
+          
+            step_counter++;
+
         }
 
         // paused
@@ -372,7 +430,10 @@ void xbot_mujoco::PhysicsLoop(mj::Simulate& sim) {
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
+    xbot_mujoco::Reset(sim);
+
     DoStep(sim,syncCPU,syncSim);
+
   }
 }
 
@@ -403,6 +464,9 @@ void xbot_mujoco::Simulate(mj::Simulate* sim, const char* filename) {
     }
   }
 
+  homing = LoadingUtils::generate_ordered_homing(xbot2_cfg_path);
+  LoadingUtils::print_homing(std::get<0>(homing), std::get<1>(homing));
+
   xbot2_wrapper.reset();
   xbot2_wrapper = std::make_unique<XBot::MjWrapper>(m, xbot2_cfg_path);
 
@@ -414,57 +478,68 @@ void xbot_mujoco::Simulate(mj::Simulate* sim, const char* filename) {
   mj_deleteModel(m);
 }
 
+void xbot_mujoco::Reset(mj::Simulate& sim) {
+  xbot_mujoco::MoveJntToHomingNow(d);
+  xbot_mujoco::MoveBaseNowTo(d,p_init,q_init,root_link);
+  xbot2_wrapper->reset(d);
+  step_counter==0;
+}
+
 void xbot_mujoco::run(const char* fname, 
     const std::string xbot2_config_path,
     ros::NodeHandle nh,
     bool headless)
 {
+  p_init[2] = 10.0;
+  p_init[0] = 10.0;
+  q_init[3] = 1.0;
+  root_link="base_link";
 
-    // display an error if running on macOS under Rosetta 2
-    #if defined(__APPLE__) && defined(__AVX__)
-    if (rosetta_error_msg) {
-        DisplayErrorDialogBox("Rosetta 2 is not supported", rosetta_error_msg);
-        std::exit(1);
-    }
-    #endif
+  // display an error if running on macOS under Rosetta 2
+  #if defined(__APPLE__) && defined(__AVX__)
+  if (rosetta_error_msg) {
+      DisplayErrorDialogBox("Rosetta 2 is not supported", rosetta_error_msg);
+      std::exit(1);
+  }
+  #endif
 
-    // print version, check compatibility
-    std::printf("[xbot2_mujoco][simulator]: MuJoCo version %s\n", mj_versionString());
-    if (mjVERSION_HEADER!=mj_version()) {
-        mju_error("Headers and library have different versions");
-    }
+  // print version, check compatibility
+  std::printf("[xbot2_mujoco][simulator]: MuJoCo version %s\n", mj_versionString());
+  if (mjVERSION_HEADER!=mj_version()) {
+      mju_error("Headers and library have different versions");
+  }
 
-    // scan for libraries in the plugin directory to load additional plugins
-    xbot_mujoco::scanPluginLibraries();
+  // scan for libraries in the plugin directory to load additional plugins
+  xbot_mujoco::scanPluginLibraries();
 
-    mjvCamera cam;
-    mjv_defaultCamera(&cam);
+  mjvCamera cam;
+  mjv_defaultCamera(&cam);
 
-    mjvOption opt;
-    mjv_defaultOption(&opt);
+  mjvOption opt;
+  mjv_defaultOption(&opt);
 
-    mjvPerturb pert;
-    mjv_defaultPerturb(&pert);
+  mjvPerturb pert;
+  mjv_defaultPerturb(&pert);
 
-    // simulate object encapsulates the UI
-    auto sim = std::make_unique<mj::Simulate>(
-        std::make_unique<mj::GlfwAdapter>(),
-        &cam, &opt, &pert, /* is_passive = */ false
-    );
-    
-    mjcb_control = xbot_mujoco::xbotmj_control_callback; // register control callback to mujoco
+  // simulate object encapsulates the UI
+  auto sim = std::make_unique<mj::Simulate>(
+      std::make_unique<mj::GlfwAdapter>(),
+      &cam, &opt, &pert, /* is_passive = */ false
+  );
+  
+  mjcb_control = xbot_mujoco::xbotmj_control_callback; // register control callback to mujoco
 
-    xbot2_cfg_path=xbot2_config_path;
-    
-    if (!headless) {
-      // start physics thread
-      std::thread physicsthreadhandle(&Simulate, sim.get(), fname);
-      // start simulation UI loop (blocking call)
-      sim->RenderLoop(nh);
-      physicsthreadhandle.join();
-    } else {
-        Simulate(sim.get(), fname); // blocking call
-    }
+  xbot2_cfg_path=xbot2_config_path;
+  
+  if (!headless) {
+    // start physics thread
+    std::thread physicsthreadhandle(&Simulate, sim.get(), fname);
+    // start simulation UI loop (blocking call)
+    sim->RenderLoop(nh);
+    physicsthreadhandle.join();
+  } else {
+      Simulate(sim.get(), fname); // blocking call
+  }
 
 }
 //-------------------------------- control callback ----------------------------------------

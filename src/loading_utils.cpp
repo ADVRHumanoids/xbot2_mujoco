@@ -56,15 +56,19 @@ void LoadingUtils::set_xbot_config_path(const std::string& configpath) {
     xbot_config_path = configpath;
 }
 
-std::string LoadingUtils::get_srdf_path_fromxbotconfig() {
+std::string LoadingUtils::get_xbot_config_path() {
+    return xbot_config_path;
+}
+
+std::string LoadingUtils::get_srdf_path_fromxbotconfig(const std::string xbot_cf_path) {
     // Load the YAML file
-    YAML::Node config = YAML::LoadFile(xbot_config_path);
+    YAML::Node config = YAML::LoadFile(xbot_cf_path);
     
     // Extract the srdf_path from the YAML structure
     std::string srdf_path = config["XBotInterface"]["srdf_path"].as<std::string>();
 
-    // Replace occurrences of $PWD with the directory of xbot_config_path
-    std::string xbot_dir = std::filesystem::path(xbot_config_path).parent_path().string();
+    // Replace occurrences of $PWD with the directory of xbot_cf_path
+    std::string xbot_dir = std::filesystem::path(xbot_cf_path).parent_path().string();
     std::string::size_type pos = 0;
     while ((pos = srdf_path.find("$PWD", pos)) != std::string::npos) {
         srdf_path.replace(pos, 4, xbot_dir);
@@ -74,14 +78,14 @@ std::string LoadingUtils::get_srdf_path_fromxbotconfig() {
     return srdf_path;
 }
 
-std::string LoadingUtils::get_urdf_path_fromxbotconfig() {
+std::string LoadingUtils::get_urdf_path_fromxbotconfig(const std::string xbot_cf_path) {
     // Load the YAML file
-    YAML::Node config = YAML::LoadFile(xbot_config_path);
+    YAML::Node config = YAML::LoadFile(xbot_cf_path);
     
     std::string urdf_path = config["XBotInterface"]["urdf_path"].as<std::string>();
 
-    // Replace occurrences of $PWD with the directory of xbot_config_path
-    std::string xbot_dir = std::filesystem::path(xbot_config_path).parent_path().string();
+    // Replace occurrences of $PWD with the directory of xbot_cf_path
+    std::string xbot_dir = std::filesystem::path(xbot_cf_path).parent_path().string();
     std::string::size_type pos = 0;
     while ((pos = urdf_path.find("$PWD", pos)) != std::string::npos) {
         urdf_path.replace(pos, 4, xbot_dir);
@@ -129,10 +133,11 @@ std::map<std::string, double> LoadingUtils::get_homing_from_srdf(const std::stri
     return homing_map;
 }
 
-std::map<std::string, double> LoadingUtils::generate_homing_map(const std::vector<std::string>& jnt_name_list,
+std::map<std::string, double> LoadingUtils::generate_homing_map(const std::vector<std::string>& jnt_name_list, 
+        const std::string xbot_cf_path,
         double fallback_val) {
 
-    std::string srdf_path = get_srdf_path_fromxbotconfig();
+    std::string srdf_path = get_srdf_path_fromxbotconfig(xbot_cf_path);
     std::map<std::string, double> homing_map = get_homing_from_srdf(srdf_path);
     std::map<std::string, double> result;
 
@@ -149,10 +154,17 @@ std::map<std::string, double> LoadingUtils::generate_homing_map(const std::vecto
     return result;
 }
 
+std::map<std::string, double> LoadingUtils::generate_homing_map(const std::string xbot_cf_path) {
+
+    std::string srdf_path = get_srdf_path_fromxbotconfig(xbot_cf_path);
+    return get_homing_from_srdf(srdf_path);;
+}
+
 std::vector<double> LoadingUtils::generate_homing_from_list(const std::vector<std::string>& jnt_name_list,
+        const std::string xbot_cf_path,
         double fallback_val) {
     
-    std::string srdf_path = get_srdf_path_fromxbotconfig();
+    std::string srdf_path = get_srdf_path_fromxbotconfig(xbot_cf_path);
     std::map<std::string, double> homing_map = get_homing_from_srdf(srdf_path);
     std::vector<double> result;
 
@@ -167,6 +179,48 @@ std::vector<double> LoadingUtils::generate_homing_from_list(const std::vector<st
     }
 
     return result;
+}
+
+std::tuple<std::vector<std::string>, std::vector<double>> LoadingUtils::generate_ordered_homing(const std::string xbot_cf_path) {
+    
+    std::string srdf_path = get_srdf_path_fromxbotconfig(xbot_cf_path);
+    std::map<std::string, double> homing_map = get_homing_from_srdf(srdf_path);
+
+    std::vector<std::string> jnt_names;
+    std::vector<double> homing_vals;
+
+    // Iterate over the map and collect keys
+    for (const auto& homing : homing_map) {
+        jnt_names.push_back(homing.first);
+        homing_vals.push_back(homing.second);
+    }
+
+    return std::make_tuple(jnt_names, homing_vals);
+}
+
+void LoadingUtils::print_homing(std::vector<std::string> jnt_names, 
+    std::vector<double> vals) {
+    // jnt names
+    printf( "[LoadingUtils][print_homing]: joint names ->\n");
+    printf( "[");
+    for (std::size_t i = 0; i < jnt_names.size(); ++i) {
+        printf( "%s", jnt_names[i].c_str());
+        if (i < jnt_names.size() - 1) {
+            printf( ", ");
+        }
+    }
+    printf( "]:\n");
+
+    // jnt vals
+    printf( "[XBot][JointMjServer]: homing values ->\n");
+    printf( "[");
+    for (std::size_t i = 0; i < vals.size(); ++i) {
+        printf( "%.2f", vals[i]);
+        if (i < vals.size() - 1) {
+            printf( ", ");
+        }
+    }
+    printf( "]\n");
 }
 
 std::string LoadingUtils::remove_comments(const std::string& xml) {

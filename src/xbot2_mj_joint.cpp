@@ -1,15 +1,11 @@
 #include "xbot2_mj_joint.h"
 #include <fnmatch.h>
-#include <yaml-cpp/yaml.h>
 
 using namespace XBot;
 
 JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
     _m(mj_model)
 {
-
-    _loader_ptr = std::make_unique<LoadingUtils>("xbot2_bridge_loading_utils");
-    _loader_ptr->set_xbot_config_path(cfg_path);
 
     YAML::Node cfg;
     if(!cfg_path.empty())
@@ -29,8 +25,6 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
 
         std::string jname = &_m->names[mj_model->name_jntadr[i]];
 
-        printf( "[XBot][JointMjServer]: constructing xbot joint %s \n",jname.c_str());
-
         auto j = std::make_shared<JointInstanceMj>(
                      Hal::DeviceInfo{jname, "joint_mj", i}
                      );
@@ -48,9 +42,13 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
             {
                 j->rx().gain_kp = gains.first;
                 j->rx().gain_kd = gains.second;
-                printf("with impedance gains kp: %f, kd: %f\n", gains.first, gains.second);
+
+                motor_pd_map[jname] = std::make_pair(gains.first,gains.second);
             }
         }
+
+        printf("[XBot][JointMjServer]: constructed xbot joint %s \n with impedance gains kp: %f, kd: %f\n and pos ref %f\n",
+            jname.c_str(),j->rx().gain_kp,j->rx().gain_kd,j->rx().pos_ref);
 
         j->tx().reset(j->rx());
 
@@ -58,78 +56,29 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
         _mj_jnt_names.push_back(jname);
     }
 
-    _homing_map = _loader_ptr->generate_homing_map(_mj_jnt_names); // retrieved from SRDF
-    // _set_model_homing(); // writes default homing for joint contained in both SRDF and mujoco's model
     // (defaults to 0 if mj joint is not in the SRDF homing group)
-    _print_homing_config(); // db print
+    // _print_homing_config(); // db print
 
     std::vector<Hal::DeviceRt::Ptr> devs(_joints.begin(), _joints.end());
 
     _srv = std::make_unique<ServerManager>(devs, "sock", "joint_gz");
 }
 
-void JointMjServer::_print_homing_config() {
-
-    std::vector<double> ordered_homing = _loader_ptr->generate_homing_from_list(_mj_jnt_names);
-
-    // jnt names
-    printf( "[XBot][JointMjServer]: joint names ->\n");
-    printf( "[");
-    for (std::size_t i = 0; i < _mj_jnt_names.size(); ++i) {
-        printf( "%s", _mj_jnt_names[i].c_str());
-        if (i < _mj_jnt_names.size() - 1) {
-            printf( ", ");
-        }
-    }
-    printf( "]:\n");
-
-    // jnt vals
-    printf( "[XBot][JointMjServer]: homing values ->\n");
-    printf( "[");
-    for (std::size_t i = 0; i < ordered_homing.size(); ++i) {
-        printf( "%.2f", ordered_homing[i]);
-        if (i < ordered_homing.size() - 1) {
-            printf( ", ");
-        }
-    }
-    printf( "]\n");
-
-}
-
-void JointMjServer::move_to_homing_now(mjData * d) {
-
-    for(int i = 0; i < _mj_jnt_names.size(); i++)
+void JointMjServer::reset(mjData * d)
+{
+    int qi = 0.0;
+    double current_pos = 0.0;
+    for(int i = 0; i < _joints.size(); i++)
     {
-        std::string xbot_jnt_name = _mj_jnt_names[i];
-        auto xbot_jnt = _joints[i];
-        int joint_id = mj_name2id(_m, mjOBJ_JOINT, xbot_jnt_name.c_str());
-        if (joint_id != -1) {// joint found -> set default joint pos
-            int qpos_adr = _m->jnt_qposadr[joint_id];
-            d->qpos[qpos_adr] = _homing_map[xbot_jnt_name];
-            d->qvel[qpos_adr] = 0.0;
-            d->ctrl[qpos_adr] = 0.0;
-        }
-        xbot_jnt->rx().pos_ref = _homing_map[xbot_jnt_name];
-        xbot_jnt->rx().vel_ref = 0.0;
-        xbot_jnt->rx().tor_ref = 0.0;
-    }
+        qi = _m->jnt_qposadr[_joints[i]->get_id()];
+        current_pos = d->qpos[qi];
+        _joints[i]->reset(current_pos,
+            motor_pd_map[_mj_jnt_names[i]].first,
+            motor_pd_map[_mj_jnt_names[i]].second);
     
-}
-
-void JointMjServer::_set_model_homing() {
-
-    for (const auto& homing_data : _homing_map) {
-        std::string xbot_jnt = homing_data.first;
-
-        int joint_id = mj_name2id(_m, mjOBJ_JOINT, xbot_jnt.c_str());
-        if (joint_id != -1) {// joint found -> set default joint pos
-            int qpos_adr = _m->jnt_qposadr[joint_id];
-            // std::cout << "########################"<< std::endl;
-            _m->qpos0[qpos_adr] = homing_data.second;
-        }
     }
-}
 
+}
 void JointMjServer::run(mjData * d)
 {
     for(auto& j : _joints)
@@ -180,6 +129,16 @@ bool JointInstanceMj::sense()
 bool JointInstanceMj::move()
 {
     return true;
+}
+
+void JointInstanceMj::reset(const double p_ref, const double kp, const double kd)
+{
+    _tx.pos_ref = p_ref;
+    _tx.vel_ref = 0.0;
+    _tx.tor_ref = 0.0;
+    _tx.gain_kp = kp;
+    _tx.gain_kd = kd;
+
 }
 
 double JointInstanceMj::pid_torque()

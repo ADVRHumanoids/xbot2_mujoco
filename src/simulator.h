@@ -66,11 +66,17 @@ const double syncMisalign = 0.1;        // maximum mis-alignment before re-sync 
 const double simRefreshFraction = 0.7;  // fraction of refresh available for simulation
 const int kErrorLength = 1024;          // load error string length
 
+static int step_counter = 0;
+
 // xbot2
 static XBot::MjWrapper::UniquePtr xbot2_wrapper;
 static std::string xbot2_cfg_path;
 
-
+// utility objs
+static std::tuple<std::vector<std::string>, std::vector<double>> homing;
+static std::vector<double> p_init(3, 0.0); 
+static std::vector<double> q_init(4, 0.0);
+static std::string root_link="root_link";
 void xbotmj_control_callback(const mjModel* m, mjData* d);
 
 //---------------------------------------- plugin handling -----------------------------------------
@@ -80,12 +86,18 @@ void scanPluginLibraries();
 
 //--------------------------- rendering and simulation ----------------------------------
 
+void MoveJntToHomingNow(mjData* d);
+void MoveBaseNowTo(mjData* d, std::vector<double> p, std::vector<double> q,
+  std::string root_linkname = "root_link");
+void SetJntOffsets(mjModel* m);
+
 mjModel* LoadModel(const char* file, mj::Simulate& sim);
 void DoStep(mj::Simulate& sim, 
     std::chrono::time_point<mj::Simulate::Clock> syncCPU,
     mjtNum syncSim); // single sim step
 void PhysicsLoop(mj::Simulate& sim);
 void Simulate(mj::Simulate* sim, const char* filename);
+void Reset(mj::Simulate& sim);
 
 // close everything
 void close();
