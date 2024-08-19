@@ -102,6 +102,8 @@ void Reset(mj::Simulate& sim);
 // close everything
 void close();
 
+void reset(mj::Simulate& sim);
+
 // run event loop
 void run(const char* fname, const std::string xbot2_config_path,
     ros::NodeHandle nh,

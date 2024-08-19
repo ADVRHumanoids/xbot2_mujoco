@@ -264,6 +264,11 @@ void xbot_mujoco::DoStep(mj::Simulate& sim,
 
             if (sim.resetrequest.load()) { // perform reset
               xbot_mujoco::Reset(sim);
+              sim.resetrequest.store(0); // reset performed
+            }
+
+            if (step_counter==0) {
+              xbot_mujoco::Reset(sim);
             }
 
             bool stepped = false;
@@ -430,8 +435,6 @@ void xbot_mujoco::PhysicsLoop(mj::Simulate& sim) {
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
-    xbot_mujoco::Reset(sim);
-
     DoStep(sim,syncCPU,syncSim);
 
   }
@@ -480,7 +483,7 @@ void xbot_mujoco::Simulate(mj::Simulate* sim, const char* filename) {
 
 void xbot_mujoco::Reset(mj::Simulate& sim) {
   xbot_mujoco::MoveJntToHomingNow(d);
-  xbot_mujoco::MoveBaseNowTo(d,p_init,q_init,root_link);
+  // xbot_mujoco::MoveBaseNowTo(d,p_init,q_init,root_link);
   xbot2_wrapper->reset(d);
   step_counter==0;
 }
@@ -491,7 +494,6 @@ void xbot_mujoco::run(const char* fname,
     bool headless)
 {
   p_init[2] = 10.0;
-  p_init[0] = 10.0;
   q_init[3] = 1.0;
   root_link="base_link";
 
@@ -542,6 +544,11 @@ void xbot_mujoco::run(const char* fname,
   }
 
 }
+
+void xbot_mujoco::reset(mj::Simulate& sim) {
+  sim.resetrequest.load();
+}
+
 //-------------------------------- control callback ----------------------------------------
 
 void xbot_mujoco::xbotmj_control_callback(const mjModel* m, mjData* d)
