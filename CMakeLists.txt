@@ -57,6 +57,7 @@ add_library(xbot2_mujoco STATIC
     src/xbot2_mj_joint.cpp
     src/xbot2_mj_imu.cpp
     src/xbot2_mj_linkstate.cpp
+    src/xbot2_mj_clock.cpp
     )
 
 target_link_libraries(xbot2_mujoco
