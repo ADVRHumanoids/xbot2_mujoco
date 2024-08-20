@@ -68,6 +68,7 @@ const int kErrorLength = 1024;          // load error string length
 
 static int step_counter = 0;
 
+static std::unique_ptr<mj::Simulate> sim;
 // xbot2
 static XBot::MjWrapper::UniquePtr xbot2_wrapper;
 static std::string xbot2_cfg_path;
@@ -96,7 +97,8 @@ void DoStep(mj::Simulate& sim,
     std::chrono::time_point<mj::Simulate::Clock> syncCPU,
     mjtNum syncSim); // single sim step
 void PhysicsLoop(mj::Simulate& sim);
-void Simulate(mj::Simulate* sim, const char* filename);
+void SimulationLoop(mj::Simulate* sim, const char* filename);
+void RenderingLoop(mj::Simulate* sim,ros::NodeHandle nh);
 void Reset(mj::Simulate& sim);
 
 // close everything

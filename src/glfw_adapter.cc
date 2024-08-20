@@ -111,8 +111,12 @@ GlfwAdapter::GlfwAdapter() {
 
 GlfwAdapter::~GlfwAdapter() {
   FreeMjrContext();
-  Glfw().glfwMakeContextCurrent(nullptr);
-  Glfw().glfwDestroyWindow(window_);
+  if (window_) {
+    Glfw().glfwMakeContextCurrent(nullptr);
+    Glfw().glfwDestroyWindow(window_);
+    window_ = nullptr;
+  }
+  glfwTerminate();
 }
 
 std::pair<double, double> GlfwAdapter::GetCursorPosition() const {

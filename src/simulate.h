@@ -87,8 +87,6 @@ class Simulate {
   // add state to history buffer
   void AddToHistory();
 
-  void Reset();
-
   // constants
   static constexpr int kMaxFilenameLength = 1000;
 

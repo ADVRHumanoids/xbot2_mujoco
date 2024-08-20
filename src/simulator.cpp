@@ -13,6 +13,12 @@
 // limitations under the License.
 
 #include "simulator.h"
+#include <csignal>  // For signal handling
+
+void handle_sigint(int signal_num) {
+  std::printf("[xbot2_mujoco][simulator]: detected SIGINT -> exiting gracefully \n");
+  xbot_mujoco::sim->exitrequest.store(1); // signal sim ad rendering loop to exit gracefully
+}
 
 //---------------------------------------- plugin handling -----------------------------------------
 
@@ -441,7 +447,7 @@ void xbot_mujoco::PhysicsLoop(mj::Simulate& sim) {
   }
 }
 
-void xbot_mujoco::Simulate(mj::Simulate* sim, const char* filename) {
+void xbot_mujoco::SimulationLoop(mj::Simulate* sim, const char* filename) {
   // request loadmodel if file given (otherwise drag-and-drop)
   if (filename != nullptr) {
     sim->LoadMessage(filename);
@@ -480,6 +486,13 @@ void xbot_mujoco::Simulate(mj::Simulate* sim, const char* filename) {
   free(ctrlnoise);
   mj_deleteData(d);
   mj_deleteModel(m);
+
+  std::printf("[xbot2_mujoco][simulator]: simulation loop terminated. \n");
+}
+
+void xbot_mujoco::RenderingLoop(mj::Simulate* sim, ros::NodeHandle nh) {
+  sim->RenderLoop(nh);
+  std::printf("[xbot2_mujoco][simulator]: rendering loop terminated. \n");
 }
 
 void xbot_mujoco::Reset(mj::Simulate& sim) {
@@ -494,6 +507,9 @@ void xbot_mujoco::run(const char* fname,
     ros::NodeHandle nh,
     bool headless)
 {
+  // Install the signal handler for SIGINT (Ctrl+C)
+  std::signal(SIGINT, handle_sigint);
+
   p_init[0] = 0.0;
   p_init[1] = 0.0;
   p_init[2] = 0.8;
@@ -532,7 +548,7 @@ void xbot_mujoco::run(const char* fname,
   mjv_defaultPerturb(&pert);
 
   // simulate object encapsulates the UI
-  auto sim = std::make_unique<mj::Simulate>(
+  sim = std::make_unique<mj::Simulate>(
       std::make_unique<mj::GlfwAdapter>(),
       &cam, &opt, &pert, /* is_passive = */ false
   );
@@ -541,16 +557,14 @@ void xbot_mujoco::run(const char* fname,
 
   xbot2_cfg_path=xbot2_config_path;
   
-  if (!headless) {
-    // start physics thread
-    std::thread physicsthreadhandle(&Simulate, sim.get(), fname);
-    // start simulation UI loop (blocking call)
-    sim->RenderLoop(nh);
-    physicsthreadhandle.join();
-  } else {
-      Simulate(sim.get(), fname); // blocking call
-  }
+  // start physics thread
+  std::thread physicsthreadhandle(&SimulationLoop, sim.get(), fname);
+  
+  RenderingLoop(sim.get(), nh); // render in this thread
 
+  if (physicsthreadhandle.joinable()) {
+    physicsthreadhandle.join();
+  }
 }
 
 void xbot_mujoco::reset(mj::Simulate& sim) {

@@ -27,7 +27,9 @@ void PlatformUIAdapter::FreeMjrContext() {
 
 bool PlatformUIAdapter::RefreshMjrContext(const mjModel* m, int fontscale) {
   if (m != last_model_ || fontscale != last_fontscale_) {
+
     mjr_makeContext(m, &con_, fontscale);
+
     last_model_ = m;
     last_fontscale_ = fontscale;
     return true;
