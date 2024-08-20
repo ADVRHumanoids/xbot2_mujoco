@@ -67,7 +67,6 @@ target_link_libraries(xbot2_mujoco
     matlogger2::matlogger2
     xmj_loading_utils
     )
-target_compile_options(xbot2_mujoco PRIVATE -fPIC)
 
 add_library(mujoco_simulator STATIC
     src/simulator.cpp
@@ -86,11 +85,11 @@ target_link_libraries(mujoco_simulator PUBLIC
     glfw
     ${catkin_LIBRARIES})
 
-# add_library(xbot_mujoco_env STATIC
-#     src/xmj_sim_env.cpp)
+add_library(xbot_mujoco_env STATIC
+    src/xmj_sim_env.cpp)
 
-# target_link_libraries(xbot_mujoco_env PUBLIC
-#     mujoco_simulator)
+target_link_libraries(xbot_mujoco_env PUBLIC
+    mujoco_simulator)
 
 add_executable(launch_simulator src/launch_simulator.cpp)
 

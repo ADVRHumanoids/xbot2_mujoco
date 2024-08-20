@@ -1550,7 +1550,6 @@
   <!-- ************ Control frames ************ -->
   <link name="world"/>
   <joint name="floating_joint" type="floating">
-    <origin xyz="0.0 0.0 1.2"/>
     <parent link="world"/>
     <child link="base_link"/>
   </joint>

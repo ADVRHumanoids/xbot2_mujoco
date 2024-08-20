@@ -183,21 +183,22 @@ void xbot_mujoco::MoveBaseNowTo(mjData* d, std::vector<double> p, std::vector<do
   std::string root_linkname) {
 
   // Number of bodies in the model
-  int num_bodies = m->nbody;
 
-  int rott_link_idx = mj_name2id(m, mjOBJ_XBODY, root_linkname.c_str());
+  int rott_link_idx = mj_name2id(m, mjOBJ_BODY, root_linkname.c_str());
 
   if (rott_link_idx != -1) { // root link found
-    d->xpos[rott_link_idx*3] = p[0];
-    d->xpos[rott_link_idx*3 + 1] = p[1];
-    d->xpos[rott_link_idx*3 + 2] = p[2];
 
-    d->xquat[rott_link_idx*4] = q[0];
-    d->xquat[rott_link_idx*4 + 1] = q[1];
-    d->xquat[rott_link_idx*4 + 2] = q[2];
-    d->xquat[rott_link_idx*4 + 3] = q[3];
+    int floating_jnt_address = m->jnt_qposadr[m->body_jntadr[rott_link_idx]];
+
+    d->qpos[floating_jnt_address+0] = p[0];
+    d->qpos[floating_jnt_address+1] = p[1];
+    d->qpos[floating_jnt_address+2] = p[2];
+
+    d->qpos[floating_jnt_address+3] = q[0];
+    d->qpos[floating_jnt_address+4] = q[1];
+    d->qpos[floating_jnt_address+5] = q[2];
+    d->qpos[floating_jnt_address+6] = q[3];
   }
-
 }
 
 mjModel* xbot_mujoco::LoadModel(const char* file, mj::Simulate& sim) {
@@ -263,7 +264,7 @@ void xbot_mujoco::DoStep(mj::Simulate& sim,
         if (sim.run) {
 
             if (sim.resetrequest.load()) { // perform reset
-              xbot_mujoco::Reset(sim);
+              step_counter=0;
               sim.resetrequest.store(0); // reset performed
             }
 
@@ -483,7 +484,7 @@ void xbot_mujoco::Simulate(mj::Simulate* sim, const char* filename) {
 
 void xbot_mujoco::Reset(mj::Simulate& sim) {
   xbot_mujoco::MoveJntToHomingNow(d);
-  // xbot_mujoco::MoveBaseNowTo(d,p_init,q_init,root_link);
+  xbot_mujoco::MoveBaseNowTo(d,p_init,q_init,root_link);
   xbot2_wrapper->reset(d);
   step_counter==0;
 }
@@ -493,8 +494,13 @@ void xbot_mujoco::run(const char* fname,
     ros::NodeHandle nh,
     bool headless)
 {
-  p_init[2] = 10.0;
+  p_init[0] = 0.0;
+  p_init[1] = 0.0;
+  p_init[2] = 0.8;
   q_init[3] = 1.0;
+  q_init[0] = 0.0;
+  q_init[1] = 0.0;
+  q_init[2] = 0.0;
   root_link="base_link";
 
   // display an error if running on macOS under Rosetta 2
