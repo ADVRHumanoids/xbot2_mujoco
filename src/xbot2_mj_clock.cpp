@@ -7,6 +7,7 @@ ClockServer::ClockServer() {
     /* Create mq */
     using namespace std::chrono_literals;
     chrono::simulated_clock::enable_sim_time(true);
+
     chrono::simulated_clock::initialize(0s);
 
     _clock_sender = Transmitter::Create("mq",
@@ -21,9 +22,14 @@ ClockServer::~ClockServer()
 
 }
 
+void ClockServer::reset(mjData * d) {
+    mj_stime_ref = mj_stime;
+    mj_stime = d->time;
+}
+
 void ClockServer::run(mjData * d) {
     using namespace std::chrono;
-    mj_stime = d->time;
+    mj_stime = d->time+mj_stime_ref;
 
     // Convert the double time to an integer representing nanoseconds
     mj_stime_ns = static_cast<int64_t>(mj_stime*1e9);

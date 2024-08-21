@@ -21,6 +21,8 @@ public:
 
     void run(mjData * d);
 
+    void reset(mjData * d);
+
 private:
 
     ClockServer::UniquePtr _srv;
@@ -31,9 +33,11 @@ private:
     std::string TR_NAME="gz_to_xbot2_time";
     
     double mj_stime=0;
+    double mj_stime_ref=0;
     int64_t mj_stime_ns=0;
 
     std::chrono::nanoseconds mj_stime_chrono;
+
 };
     
 }

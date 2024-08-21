@@ -40,6 +40,7 @@ public:
     void reset(mjData * d) 
     {
         _joint.reset(d);
+        _clock.reset(d);
     }
 
 private:
