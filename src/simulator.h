@@ -93,10 +93,13 @@ void MoveBaseNowTo(mjData* d, std::vector<double> p, std::vector<double> q,
 void SetJntOffsets(mjModel* m);
 
 mjModel* LoadModel(const char* file, mj::Simulate& sim);
+void PreStep(mj::Simulate& sim);
 void DoStep(mj::Simulate& sim, 
     std::chrono::time_point<mj::Simulate::Clock> syncCPU,
     mjtNum syncSim); // single sim step
 void PhysicsLoop(mj::Simulate& sim);
+void InitSimulation(mj::Simulate* sim, const char* filename);
+void ClearSimulation();
 void SimulationLoop(mj::Simulate* sim, const char* filename);
 void RenderingLoop(mj::Simulate* sim,ros::NodeHandle nh);
 void Reset(mj::Simulate& sim);

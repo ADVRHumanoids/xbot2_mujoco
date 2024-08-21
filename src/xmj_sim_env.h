@@ -26,7 +26,8 @@ public:
     void run(); 
     void step();
     void render_window();
-    void reset();
+    void reset(std::vector<double> p, std::vector<double> q,
+        std::string base_link_name="base_link");
     void close();
 
 private:
@@ -47,6 +48,8 @@ private:
     std::thread rendering_thread;
 
     ros::NodeHandle nh;
+
+    void initialize();
 
 };
 

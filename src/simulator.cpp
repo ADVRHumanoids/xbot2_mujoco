@@ -369,15 +369,9 @@ void xbot_mujoco::DoStep(mj::Simulate& sim,
     // release std::lock_guard<std::mutex>
 }
 
-// simulate in background thread (while rendering in main thread)
-void xbot_mujoco::PhysicsLoop(mj::Simulate& sim) {
-  // cpu-sim syncronization point
-  std::chrono::time_point<mj::Simulate::Clock> syncCPU;
-  mjtNum syncSim = 0;
-
-  // run until asked to exit
-  while (!sim.exitrequest.load()) {
-    if (sim.droploadrequest.load()) {
+void xbot_mujoco::PreStep(mj::Simulate& sim) {
+  
+  if (sim.droploadrequest.load()) {
       sim.LoadMessage(sim.dropfilename);
       mjModel* mnew = xbot_mujoco::LoadModel(sim.dropfilename, sim);
       sim.droploadrequest.store(false);
@@ -441,13 +435,25 @@ void xbot_mujoco::PhysicsLoop(mj::Simulate& sim) {
     } else {
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+}
 
+// simulate in background thread (while rendering in main thread)
+void xbot_mujoco::PhysicsLoop(mj::Simulate& sim) {
+  // cpu-sim syncronization point
+  std::chrono::time_point<mj::Simulate::Clock> syncCPU;
+  mjtNum syncSim = 0;
+
+  // run until asked to exit
+  while (!sim.exitrequest.load()) {
+    
+    PreStep(sim);
+    
     DoStep(sim,syncCPU,syncSim);
 
   }
 }
 
-void xbot_mujoco::SimulationLoop(mj::Simulate* sim, const char* filename) {
+void xbot_mujoco::InitSimulation(mj::Simulate* sim, const char* filename) {
   // request loadmodel if file given (otherwise drag-and-drop)
   if (filename != nullptr) {
     sim->LoadMessage(filename);
@@ -479,15 +485,24 @@ void xbot_mujoco::SimulationLoop(mj::Simulate* sim, const char* filename) {
 
   xbot2_wrapper.reset();
   xbot2_wrapper = std::make_unique<XBot::MjWrapper>(m, xbot2_cfg_path);
+}
 
-  xbot_mujoco::PhysicsLoop(*sim);
-
+void xbot_mujoco::ClearSimulation() {
   // delete everything we allocated
   free(ctrlnoise);
   mj_deleteData(d);
   mj_deleteModel(m);
 
   std::printf("[xbot2_mujoco][simulator]: simulation loop terminated. \n");
+}
+
+void xbot_mujoco::SimulationLoop(mj::Simulate* sim, const char* filename) {
+  
+  xbot_mujoco::InitSimulation(sim,filename);
+
+  xbot_mujoco::PhysicsLoop(*sim);
+
+  xbot_mujoco::ClearSimulation();
 }
 
 void xbot_mujoco::RenderingLoop(mj::Simulate* sim, ros::NodeHandle nh) {
