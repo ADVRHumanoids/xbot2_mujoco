@@ -1,13 +1,12 @@
 #include "xmj_sim_env.h"
 
-namespace mj = ::mujoco;
-
 XBotMjSimEnv::XBotMjSimEnv(const std::string configPath, 
     const std::string model_fname,
     ros::NodeHandle nh,
     bool headless,
-    bool manual_stepping)
-    :xbot2_cfg_path(configPath),model_fname(model_fname),nh(nh),headless(headless),manual_stepping(manual_stepping) {
+    bool manual_stepping,
+    int init_steps)
+    :xbot2_cfg_path(configPath),model_fname(model_fname),ros_nh(nh),headless(headless),manual_stepping(manual_stepping) {
 
     printf("[xbot2_mujoco][XBotMjSimEnv]: initializing sim. enviroment with MuJoCo xml file at %s and XBot2 config at %s\n", 
         model_fname.c_str(), xbot2_cfg_path.c_str());
@@ -23,9 +22,11 @@ XBotMjSimEnv::~XBotMjSimEnv() {
 void XBotMjSimEnv::close() {
 
     if (!running) {
-        
-        xbot_mujoco::ClearSimulation();
-        xbot_mujoco::xbot2_wrapper.reset();
+
+        if (!manual_stepping) {
+            xbot_mujoco::ClearSimulation();
+            xbot_mujoco::xbot2_wrapper.reset();
+        }
 
         running=false;
     }
@@ -40,15 +41,22 @@ void XBotMjSimEnv::reset(std::vector<double> p, std::vector<double> q,
     xbot_mujoco::Reset(simulation);
 }
 
-void XBotMjSimEnv::step() {
+bool XBotMjSimEnv::step() {
+    if ((*xbot_mujoco::sim).exitrequest.load()) {
+        return false;
+    }
 
+    xbot_mujoco::PreStep(*xbot_mujoco::sim);
+    xbot_mujoco::DoStep(*xbot_mujoco::sim,syncCPU,syncSim);
+
+    return true;
 }
 
 void XBotMjSimEnv::render_window() {
 
 }
 
-void XBotMjSimEnv::initialize() {
+void XBotMjSimEnv::initialize(bool headless) {
     // display an error if running on macOS under Rosetta 2
     #if defined(__APPLE__) && defined(__AVX__)
     if (rosetta_error_msg) {
@@ -86,8 +94,14 @@ void XBotMjSimEnv::initialize() {
     xbot_mujoco::xbot2_cfg_path=this->xbot2_cfg_path;
     
     xbot_mujoco::InitSimulation(xbot_mujoco::sim.get(),model_fname.c_str());
+    
+    xbot_mujoco::RenderingLoop(xbot_mujoco::sim.get(), ros_nh); // render in this thread
 
-    // RenderingLoop(sim.get(), nh); // render in this thread
+    // do some warmstart timesteps
+    bool init_step_ok = true;
+    for (int i=0; i < init_steps;i++) {
+        init_step_ok = step();
+    }
 
 }
 
@@ -95,11 +109,9 @@ void XBotMjSimEnv::run() {
 
     if (!running) {
         if (!manual_stepping) {
-            xbot_mujoco::run(model_fname.c_str(),xbot2_cfg_path,nh,headless); // sim in separate thread and rendering loop
+            xbot_mujoco::run(model_fname.c_str(),xbot2_cfg_path,ros_nh,headless); // sim in separate thread and rendering loop
         } else { // manual stepping setup
-            if (!headless) {
-                // spawn rendering thread
-            }
+            initialize(headless);
         }
 
         running=true;

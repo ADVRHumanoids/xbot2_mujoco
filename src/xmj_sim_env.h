@@ -11,6 +11,8 @@
 
 #include "simulator.h"
 
+namespace mj = ::mujoco;
+
 class XBotMjSimEnv {
 public:
 
@@ -20,11 +22,12 @@ public:
         const std::string model_fname,
         ros::NodeHandle nh,
         bool headless = false,
-        bool manual_stepping = false);
+        bool manual_stepping = false,
+        int init_steps = 1);
     ~XBotMjSimEnv();
 
     void run(); 
-    void step();
+    bool step();
     void render_window();
     void reset(std::vector<double> p, std::vector<double> q,
         std::string base_link_name="base_link");
@@ -37,7 +40,8 @@ private:
     bool running=false;
     
     int sim_init_steps = 0;
-
+    int init_steps = 1;
+    
     // cpu-sim syncronization points
     double cpusync = 0;
     mjtNum simsync = 0;
@@ -47,9 +51,12 @@ private:
 
     std::thread rendering_thread;
 
-    ros::NodeHandle nh;
+    ros::NodeHandle ros_nh;
+    
+    std::chrono::time_point<mj::Simulate::Clock> syncCPU;
+    mjtNum syncSim = 0;
 
-    void initialize();
+    void initialize(bool headless);
 
 };
 
