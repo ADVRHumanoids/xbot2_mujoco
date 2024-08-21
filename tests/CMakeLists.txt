@@ -4,12 +4,12 @@ include_directories(${GTEST_INCLUDE_DIRS}
                     ${CMAKE_CURRENT_SOURCE_DIR}/include
                     ${CMAKE_CURRENT_BINARY_DIR})
 
-# if(${WITH_XMJ_SIM_ENV})
-#     add_executable(xmj_env_test "test_xmj_env.cpp")
-#     target_link_libraries(xmj_env_test PRIVATE xbot_mujoco_env xmj_loading_utils ${GTEST_BOTH_LIBRARIES} pthread)
-#     gtest_discover_tests(xmj_env_test)
+if(${WITH_XMJ_SIM_ENV})
+    add_executable(xmj_env_test "test_xmj_env.cpp")
+    target_link_libraries(xmj_env_test PRIVATE xbot_mujoco_env xmj_loading_utils ${GTEST_BOTH_LIBRARIES} pthread)
+    gtest_discover_tests(xmj_env_test)
 
-# endif()
+endif()
 
 add_executable(parsing_test "test_loading_utils.cpp")
 target_link_libraries(parsing_test PRIVATE xmj_loading_utils ${GTEST_BOTH_LIBRARIES} pthread)
@@ -30,6 +30,13 @@ set_target_properties(copy_py_tests_all PROPERTIES
 )
 
 # Define the files directory path
+set(iit_centauro_ros_pkg_DIR CACHE STRING "Path to the directory")
+if(NOT EXISTS "${iit_centauro_ros_pkg_DIR}")
+    message(FATAL_ERROR "Provided iit_centauro_ros_pkg_DIR [${iit_centauro_ros_pkg_DIR}] does not exist!")
+else()
+    message(STATUS "iit_centauro_ros_pkg_DIR set to folder ${iit_centauro_ros_pkg_DIR}")
+endif()
+
 set(FILES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/files")
 
 # define a custom target to copy the 'files' directory

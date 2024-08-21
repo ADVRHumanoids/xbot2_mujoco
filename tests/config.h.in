@@ -3,4 +3,6 @@
 
 #define FILES_DIR "@FILES_DIR@"
 
+#define IIT_CENTAURO_ROS_PKG_ROOT "@iit_centauro_ros_pkg_DIR@"
+
 #endif // TEST_CONFIG_H

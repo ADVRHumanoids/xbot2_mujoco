@@ -17,22 +17,23 @@ public:
     typedef std::unique_ptr<XBotMjSimEnv> UniquePtr;
 
     XBotMjSimEnv(const std::string xbot2_cfg_path,
-        const std::string model_fname = "",
+        const std::string model_fname,
+        ros::NodeHandle nh,
         bool headless = false,
         bool manual_stepping = false);
     ~XBotMjSimEnv();
 
+    void run(); 
     void step();
     void render_window();
     void reset();
     void close();
-    void run(ros::NodeHandle nh);
 
 private:
 
     bool headless;
     bool manual_stepping;
-    bool running=true;
+    bool running=false;
     
     int sim_init_steps = 0;
 
@@ -44,6 +45,8 @@ private:
     std::string xbot2_cfg_path;
 
     std::thread rendering_thread;
+
+    ros::NodeHandle nh;
 
 };
 
