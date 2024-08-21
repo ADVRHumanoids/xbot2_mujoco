@@ -565,6 +565,8 @@ void xbot_mujoco::run(const char* fname,
   if (physicsthreadhandle.joinable()) {
     physicsthreadhandle.join();
   }
+
+  xbot2_wrapper.reset();
 }
 
 void xbot_mujoco::reset(mj::Simulate& sim) {

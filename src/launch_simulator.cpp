@@ -28,13 +28,6 @@ using namespace xbot_mujoco;
 // run the full simulation loop
 int main(int argc, char** argv)
 {
-    // display an error if running on macOS under Rosetta 2
-    #if defined(__APPLE__) && defined(__AVX__)
-    if (rosetta_error_msg) {
-        DisplayErrorDialogBox("Rosetta 2 is not supported", rosetta_error_msg);
-        std::exit(1);
-    }
-    #endif
 
     std::string xbot2_cfg_path;
     char filename[mj::Simulate::kMaxFilenameLength];

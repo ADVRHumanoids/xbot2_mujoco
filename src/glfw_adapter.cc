@@ -110,13 +110,14 @@ GlfwAdapter::GlfwAdapter() {
 }
 
 GlfwAdapter::~GlfwAdapter() {
-  FreeMjrContext();
-  if (window_) {
-    Glfw().glfwMakeContextCurrent(nullptr);
-    Glfw().glfwDestroyWindow(window_);
-    window_ = nullptr;
-  }
-  glfwTerminate();
+  // FreeMjrContext();
+  // std::printf("[GlfwAdapter]: freed mjr context\n");
+  // if (window_) {
+  //   Glfw().glfwMakeContextCurrent(nullptr);
+  //   Glfw().glfwDestroyWindow(window_);
+  //   window_ = nullptr;
+  //   std::printf("[GlfwAdapter]: destroying window\n");
+  // }
 }
 
 std::pair<double, double> GlfwAdapter::GetCursorPosition() const {

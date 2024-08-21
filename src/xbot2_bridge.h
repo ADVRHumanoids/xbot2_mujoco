@@ -21,7 +21,12 @@ public:
         _ls(mj_model, cfg_path),
         _clock()
     {
-        printf( "[XBot][MjWrapper]: xbot2 bridge constructed with file  %s \n",cfg_path.c_str());
+        printf("[XBot][MjWrapper]: xbot2 bridge constructed with file  %s \n",cfg_path.c_str());
+    }
+
+    ~MjWrapper()
+    {
+        printf("[XBot][MjWrapper]: xbot2 bridge");
     }
 
     void run(mjData * d)
