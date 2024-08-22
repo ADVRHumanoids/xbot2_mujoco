@@ -15,11 +15,6 @@
 #include "simulator.h"
 #include <csignal>  // For signal handling
 
-void handle_sigint(int signal_num) {
-  std::printf("[xbot2_mujoco][simulator]: detected SIGINT -> exiting gracefully \n");
-  xbot_mujoco::sim->exitrequest.store(1); // signal sim ad rendering loop to exit gracefully
-}
-
 //---------------------------------------- plugin handling -----------------------------------------
 
 // return the path to the directory containing the current executable
@@ -231,8 +226,10 @@ mjModel* xbot_mujoco::LoadModel(const char* file, mj::Simulate& sim) {
 
   } else {
     printf( "[xbot2_mujoco][simulator][LoadModel]: trying to load XML model at %s \n",filename);
+
     mnew = mj_loadXML(filename, nullptr, loadError, kErrorLength);
     // remove trailing newline character from loadError
+
     if (loadError[0]) {
       int error_length = mju::strlen_arr(loadError);
       if (loadError[error_length-1] == '\n') {
@@ -453,11 +450,13 @@ void xbot_mujoco::PhysicsLoop(mj::Simulate& sim) {
   }
 }
 
-void xbot_mujoco::InitSimulation(mj::Simulate* sim, const char* filename) {
+void xbot_mujoco::InitSimulation(mj::Simulate* sim, const char* mj_filename, const char* xbot_config_path) {
   // request loadmodel if file given (otherwise drag-and-drop)
-  if (filename != nullptr) {
-    sim->LoadMessage(filename);
-    m = xbot_mujoco::LoadModel(filename, *sim);    
+  if (mj_filename != nullptr) {
+    sim->LoadMessage(mj_filename);
+
+    m = xbot_mujoco::LoadModel(mj_filename, *sim);  
+
     if (m) {
       // lock the sim mutex
       const std::unique_lock<std::recursive_mutex> lock(sim->mtx);
@@ -465,7 +464,7 @@ void xbot_mujoco::InitSimulation(mj::Simulate* sim, const char* filename) {
       d = mj_makeData(m);
     }
     if (d) {
-      sim->Load(m, d, filename);
+      sim->Load(m, d, mj_filename);
       // lock the sim mutex
       const std::unique_lock<std::recursive_mutex> lock(sim->mtx);
 
@@ -480,11 +479,13 @@ void xbot_mujoco::InitSimulation(mj::Simulate* sim, const char* filename) {
     }
   }
 
-  homing = LoadingUtils::generate_ordered_homing(xbot2_cfg_path);
+  homing = LoadingUtils::generate_ordered_homing(xbot_config_path);
+
   LoadingUtils::print_homing(std::get<0>(homing), std::get<1>(homing));
 
   xbot2_wrapper.reset();
-  xbot2_wrapper = std::make_unique<XBot::MjWrapper>(m, xbot2_cfg_path);
+  xbot2_wrapper = std::make_unique<XBot::MjWrapper>(m, xbot_config_path);
+
 }
 
 void xbot_mujoco::ClearSimulation() {
@@ -496,9 +497,9 @@ void xbot_mujoco::ClearSimulation() {
   std::printf("[xbot2_mujoco][simulator]: simulation loop terminated. \n");
 }
 
-void xbot_mujoco::SimulationLoop(mj::Simulate* sim, const char* filename) {
+void xbot_mujoco::SimulationLoop(mj::Simulate* sim, const char* mj_filename, const char* xbot_config_path) {
   
-  xbot_mujoco::InitSimulation(sim,filename);
+  xbot_mujoco::InitSimulation(sim,mj_filename,xbot_config_path);
 
   xbot_mujoco::PhysicsLoop(*sim);
 
@@ -523,7 +524,7 @@ void xbot_mujoco::run(const char* fname,
     bool headless)
 {
   // Install the signal handler for SIGINT (Ctrl+C)
-  std::signal(SIGINT, handle_sigint);
+  std::signal(SIGINT, xbot_mujoco::handle_sigint);
 
   p_init[0] = 0.0;
   p_init[1] = 0.0;
@@ -541,7 +542,6 @@ void xbot_mujoco::run(const char* fname,
   if (rosetta_error_msg) {
       DisplayErrorDialogBox("Rosetta 2 is not supported", rosetta_error_msg);
       std::exit(1);
-  }
   #endif
 
   // print version, check compatibility
@@ -569,11 +569,9 @@ void xbot_mujoco::run(const char* fname,
   );
   
   mjcb_control = xbot_mujoco::xbotmj_control_callback; // register control callback to mujoco
-
-  xbot2_cfg_path=xbot2_config_path;
   
   // start physics thread
-  std::thread physicsthreadhandle(&SimulationLoop, sim.get(), fname);
+  std::thread physicsthreadhandle(&SimulationLoop, sim.get(), fname, xbot2_config_path.c_str());
   
   RenderingLoop(sim.get(), nh); // render in this thread
 

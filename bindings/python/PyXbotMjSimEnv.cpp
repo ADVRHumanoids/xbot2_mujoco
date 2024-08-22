@@ -18,7 +18,6 @@ PYBIND11_MODULE(PyXbotMjSimEnv, m) {
 
     py::class_<XBotMjSimEnv>(m, "XBotMjSimEnv")
             .def(py::init<const std::string, const char*, ros::NodeHandle, bool, bool>(),  py::arg("xbot2_cfg_path"), py::arg("model_fname") = "", py::arg("ros_nh"), py::arg("headless") = false, py::arg("multithread") = true)
-            .def("step", &XBotMjSimEnv::step)
             .def("render_window", &XBotMjSimEnv::render_window)
             .def("reset", &XBotMjSimEnv::reset)
             .def("close", &XBotMjSimEnv::close)

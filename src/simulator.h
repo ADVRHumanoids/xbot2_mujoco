@@ -71,7 +71,11 @@ static int step_counter = 0;
 static std::unique_ptr<mj::Simulate> sim;
 // xbot2
 static XBot::MjWrapper::UniquePtr xbot2_wrapper;
-static std::string xbot2_cfg_path;
+
+static void handle_sigint(int signal_num) {
+  std::printf("[xbot2_mujoco][simulator]: detected SIGINT -> exiting gracefully \n");
+  xbot_mujoco::sim->exitrequest.store(1); // signal sim ad rendering loop to exit gracefully
+}
 
 // utility objs
 static std::tuple<std::vector<std::string>, std::vector<double>> homing;
@@ -98,9 +102,9 @@ void DoStep(mj::Simulate& sim,
     std::chrono::time_point<mj::Simulate::Clock> syncCPU,
     mjtNum syncSim); // single sim step
 void PhysicsLoop(mj::Simulate& sim);
-void InitSimulation(mj::Simulate* sim, const char* filename);
+void InitSimulation(mj::Simulate* sim, const char* mj_filename, const char* xbot_config_path);
 void ClearSimulation();
-void SimulationLoop(mj::Simulate* sim, const char* filename);
+void SimulationLoop(mj::Simulate* sim, const char* mj_filename, const char* xbot_config_path);
 void RenderingLoop(mj::Simulate* sim,ros::NodeHandle nh);
 void Reset(mj::Simulate& sim);
 

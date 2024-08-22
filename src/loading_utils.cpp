@@ -183,6 +183,8 @@ std::vector<double> LoadingUtils::generate_homing_from_list(const std::vector<st
 
 std::tuple<std::vector<std::string>, std::vector<double>> LoadingUtils::generate_ordered_homing(const std::string xbot_cf_path) {
     
+    printf( "[LoadingUtils][generate_ordered_homing]: will loading homing from xbot2 config file \"%s\" ->\n", xbot_cf_path.c_str());
+
     std::string srdf_path = get_srdf_path_fromxbotconfig(xbot_cf_path);
     std::map<std::string, double> homing_map = get_homing_from_srdf(srdf_path);
 

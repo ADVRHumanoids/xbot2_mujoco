@@ -1,4 +1,5 @@
 #include "xmj_sim_env.h"
+#include <csignal>  // For signal handling
 
 XBotMjSimEnv::XBotMjSimEnv(const std::string configPath, 
     const std::string model_fname,
@@ -6,10 +7,10 @@ XBotMjSimEnv::XBotMjSimEnv(const std::string configPath,
     bool headless,
     bool manual_stepping,
     int init_steps)
-    :xbot2_cfg_path(configPath),model_fname(model_fname),ros_nh(nh),headless(headless),manual_stepping(manual_stepping) {
+    :xbot2_config_path(configPath),model_fname(model_fname),ros_nh(nh),headless(headless),manual_stepping(manual_stepping) {
 
     printf("[xbot2_mujoco][XBotMjSimEnv]: initializing sim. enviroment with MuJoCo xml file at %s and XBot2 config at %s\n", 
-        model_fname.c_str(), xbot2_cfg_path.c_str());
+        model_fname.c_str(), xbot2_config_path.c_str());
 
 }
 
@@ -21,11 +22,15 @@ XBotMjSimEnv::~XBotMjSimEnv() {
 
 void XBotMjSimEnv::close() {
 
-    if (!running) {
+    if (running) {
 
-        if (!manual_stepping) {
+        if (manual_stepping) {
             xbot_mujoco::ClearSimulation();
             xbot_mujoco::xbot2_wrapper.reset();
+        }
+
+        if (physics_thread.joinable()) {
+            physics_thread.join();
         }
 
         running=false;
@@ -41,15 +46,21 @@ void XBotMjSimEnv::reset(std::vector<double> p, std::vector<double> q,
     xbot_mujoco::Reset(simulation);
 }
 
-bool XBotMjSimEnv::step() {
-    if ((*xbot_mujoco::sim).exitrequest.load()) {
-        return false;
+void XBotMjSimEnv::physics_loop() {
+    // InitSimulation has to be called here since it will wait for the render thread to
+    // finish loading
+    xbot_mujoco::InitSimulation(xbot_mujoco::sim.get(),model_fname.c_str(),xbot2_config_path.c_str());
+
+    while (!((*xbot_mujoco::sim).exitrequest.load())) {
+        step();
     }
+}
+
+void XBotMjSimEnv::step() {
 
     xbot_mujoco::PreStep(*xbot_mujoco::sim);
     xbot_mujoco::DoStep(*xbot_mujoco::sim,syncCPU,syncSim);
 
-    return true;
 }
 
 void XBotMjSimEnv::render_window() {
@@ -91,30 +102,45 @@ void XBotMjSimEnv::initialize(bool headless) {
 
     mjcb_control = xbot_mujoco::xbotmj_control_callback; // register control callback to mujoco
     
-    xbot_mujoco::xbot2_cfg_path=this->xbot2_cfg_path;
-    
-    xbot_mujoco::InitSimulation(xbot_mujoco::sim.get(),model_fname.c_str());
-    
-    xbot_mujoco::RenderingLoop(xbot_mujoco::sim.get(), ros_nh); // render in this thread
+    if ((!headless) && (!manual_stepping)) {
+        // Install the signal handler for SIGINT (Ctrl+C)
+        std::signal(SIGINT, xbot_mujoco::handle_sigint);
+        // physics_thread = std::thread(&xbot_mujoco::SimulationLoop, xbot_mujoco::sim.get(), 
+        //     model_fname.c_str(), xbot2_config_path.c_str());
+        physics_thread = std::thread(&XBotMjSimEnv::physics_loop, this);
+        xbot_mujoco::RenderingLoop(xbot_mujoco::sim.get(), ros_nh); // render in this thread
+
+    }
+
+    if ((headless) && (!manual_stepping)) {
+
+    }
+
+    if ((!headless) && (manual_stepping)) {
+
+    }
+
+    if ((headless) && (manual_stepping)) {
+
+    }
+
 
     // do some warmstart timesteps
     bool init_step_ok = true;
     for (int i=0; i < init_steps;i++) {
-        init_step_ok = step();
+        step();
     }
 
 }
 
-void XBotMjSimEnv::run() {
+bool XBotMjSimEnv::run() {
 
     if (!running) {
-        if (!manual_stepping) {
-            xbot_mujoco::run(model_fname.c_str(),xbot2_cfg_path,ros_nh,headless); // sim in separate thread and rendering loop
-        } else { // manual stepping setup
-            initialize(headless);
-        }
-
+        initialize(headless);
         running=true;
+        return true;
+    } else {
+        return false;
     }
     
 }
