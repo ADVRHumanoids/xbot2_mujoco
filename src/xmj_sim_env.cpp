@@ -1,6 +1,11 @@
 #include "xmj_sim_env.h"
 #include <csignal>  // For signal handling
 
+void handle_sigint(int signal_num) {
+  std::printf("[xbot2_mujoco][simulator]: detected SIGINT -> exiting gracefully \n");
+  xbot_mujoco::sim->exitrequest.store(1); // signal sim ad rendering loop to exit gracefully
+}
+
 XBotMjSimEnv::XBotMjSimEnv(const std::string configPath, 
     const std::string model_fname,
     ros::NodeHandle nh,
@@ -24,32 +29,38 @@ void XBotMjSimEnv::close() {
 
     if (running) {
 
-        if (manual_stepping) {
-            xbot_mujoco::ClearSimulation();
-            xbot_mujoco::xbot2_wrapper.reset();
-        }
-
+        xbot_mujoco::ClearSimulation();
+        xbot_mujoco::xbot2_wrapper.reset();
+        
         if (physics_thread.joinable()) {
             physics_thread.join();
+            printf("[xbot2_mujoco][XBotMjSimEnv][close]: physics thread terminated\n");
         }
 
         running=false;
     }
 }
 
-void XBotMjSimEnv::reset(std::vector<double> p, std::vector<double> q,
-    std::string base_link_name) {
-    xbot_mujoco::root_link=base_link_name;
-    xbot_mujoco::p_init.assign(p.begin(), p.end());
-    xbot_mujoco::q_init.assign(q.begin(), q.end());
+void XBotMjSimEnv::assign_init_root_state() {
+
     auto& simulation = *xbot_mujoco::sim;
-    xbot_mujoco::Reset(simulation);
+    xbot_mujoco::Reset(simulation, p_i, q_i, base_link_name);
+
+}
+
+void XBotMjSimEnv::reset() {
+    
+    assign_init_root_state(); // in case p_i and q_i were changed
+    auto& simulation = *xbot_mujoco::sim;
+    xbot_mujoco::Reset(simulation, p_i, q_i, base_link_name);
 }
 
 void XBotMjSimEnv::physics_loop() {
     // InitSimulation has to be called here since it will wait for the render thread to
     // finish loading
     xbot_mujoco::InitSimulation(xbot_mujoco::sim.get(),model_fname.c_str(),xbot2_config_path.c_str());
+    
+    reset();
 
     while (!((*xbot_mujoco::sim).exitrequest.load())) {
         step();
@@ -104,7 +115,7 @@ void XBotMjSimEnv::initialize(bool headless) {
     
     if ((!headless) && (!manual_stepping)) {
         // Install the signal handler for SIGINT (Ctrl+C)
-        std::signal(SIGINT, xbot_mujoco::handle_sigint);
+        std::signal(SIGINT, handle_sigint);
         // physics_thread = std::thread(&xbot_mujoco::SimulationLoop, xbot_mujoco::sim.get(), 
         //     model_fname.c_str(), xbot2_config_path.c_str());
         physics_thread = std::thread(&XBotMjSimEnv::physics_loop, this);

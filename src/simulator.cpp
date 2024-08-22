@@ -15,6 +15,26 @@
 #include "simulator.h"
 #include <csignal>  // For signal handling
 
+// initializing extern variables
+mjModel* xbot_mujoco::m = NULL;
+mjData* xbot_mujoco::d = NULL;
+// control noise variables
+mjtNum* xbot_mujoco::ctrlnoise = nullptr;
+int xbot_mujoco::step_counter = 0;
+std::unique_ptr<xbot_mujoco::mj::Simulate> xbot_mujoco::sim;
+// utility objs
+std::tuple<std::vector<std::string>, std::vector<double>> xbot_mujoco::homing;
+std::vector<double> xbot_mujoco::p_init = {0.0, 0.0, 0.0}; 
+std::vector<double> xbot_mujoco::q_init = {1.0, 0.0, 0.0, 0.0};
+std::string xbot_mujoco::root_link="root_link";
+//xbot2
+XBot::MjWrapper::UniquePtr xbot_mujoco::xbot2_wrapper;
+
+void xbot_mujoco::handle_sigint(int signal_num) {
+  std::printf("[xbot2_mujoco][simulator]: detected SIGINT -> exiting gracefully \n");
+  xbot_mujoco::sim->exitrequest.store(1); // signal sim ad rendering loop to exit gracefully
+}
+
 //---------------------------------------- plugin handling -----------------------------------------
 
 // return the path to the directory containing the current executable
@@ -272,7 +292,12 @@ void xbot_mujoco::DoStep(mj::Simulate& sim,
             }
 
             if (step_counter==0) {
-              xbot_mujoco::Reset(sim);
+              std::cout << "p_init" << std::endl;
+              for (size_t i = 0; i < p_init.size(); ++i) {
+                  std::cout << p_init[i] << " ";
+              }
+              std::cout << std::endl;
+              xbot_mujoco::Reset(sim, p_init, q_init, root_link);
             }
 
             bool stepped = false;
@@ -511,9 +536,14 @@ void xbot_mujoco::RenderingLoop(mj::Simulate* sim, ros::NodeHandle nh) {
   std::printf("[xbot2_mujoco][simulator]: rendering loop terminated. \n");
 }
 
-void xbot_mujoco::Reset(mj::Simulate& sim) {
+void xbot_mujoco::Reset(mj::Simulate& sim, 
+  std::vector<double> p_i, std::vector<double> q_i,
+  std::string base_link) {
+
+  p_init.assign(p_i.begin(),p_i.end());
+  q_init.assign(q_i.begin(),q_i.end());
   xbot_mujoco::MoveJntToHomingNow(d);
-  xbot_mujoco::MoveBaseNowTo(d,p_init,q_init,root_link);
+  xbot_mujoco::MoveBaseNowTo(d,p_i,q_i,base_link);
   xbot2_wrapper->reset(d);
   step_counter==0;
 }

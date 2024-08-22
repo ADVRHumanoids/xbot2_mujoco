@@ -29,9 +29,12 @@ public:
     bool run(); 
     
     void render_window();
-    void reset(std::vector<double> p, std::vector<double> q,
-        std::string base_link_name="base_link");
+    void reset();
     void close();
+
+    std::vector<double> p_i = {0.0,0.0,0.8};
+    std::vector<double> q_i = {1.0, 0.0, 0.0, 0.0};
+    std::string base_link_name = "base_link";
 
 private:
 
@@ -59,6 +62,7 @@ private:
     void initialize(bool headless);
     void physics_loop();
     void step();
+    void assign_init_root_state();
 
 };
 

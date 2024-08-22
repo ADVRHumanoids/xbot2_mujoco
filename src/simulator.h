@@ -53,11 +53,21 @@ namespace xbot_mujoco{
 namespace mj = ::mujoco;
 namespace mju = ::mujoco::sample_util;
 
+void handle_sigint(int signal_num);
+
 // model and data
-static mjModel* m = NULL;
-static mjData* d = NULL;
+extern mjModel* m;
+extern mjData* d;
 // control noise variables
-static mjtNum* ctrlnoise = nullptr;
+extern mjtNum* ctrlnoise;
+extern int step_counter;
+extern std::unique_ptr<mj::Simulate> sim;
+extern XBot::MjWrapper::UniquePtr xbot2_wrapper;
+// utility objs
+extern std::tuple<std::vector<std::string>, std::vector<double>> homing;
+extern std::vector<double> p_init; 
+extern std::vector<double> q_init;
+extern std::string root_link;
 
 using Seconds = std::chrono::duration<double>;
 
@@ -66,22 +76,8 @@ const double syncMisalign = 0.1;        // maximum mis-alignment before re-sync 
 const double simRefreshFraction = 0.7;  // fraction of refresh available for simulation
 const int kErrorLength = 1024;          // load error string length
 
-static int step_counter = 0;
 
-static std::unique_ptr<mj::Simulate> sim;
 // xbot2
-static XBot::MjWrapper::UniquePtr xbot2_wrapper;
-
-static void handle_sigint(int signal_num) {
-  std::printf("[xbot2_mujoco][simulator]: detected SIGINT -> exiting gracefully \n");
-  xbot_mujoco::sim->exitrequest.store(1); // signal sim ad rendering loop to exit gracefully
-}
-
-// utility objs
-static std::tuple<std::vector<std::string>, std::vector<double>> homing;
-static std::vector<double> p_init(3, 0.0); 
-static std::vector<double> q_init(4, 0.0);
-static std::string root_link="root_link";
 void xbotmj_control_callback(const mjModel* m, mjData* d);
 
 //---------------------------------------- plugin handling -----------------------------------------
@@ -106,7 +102,9 @@ void InitSimulation(mj::Simulate* sim, const char* mj_filename, const char* xbot
 void ClearSimulation();
 void SimulationLoop(mj::Simulate* sim, const char* mj_filename, const char* xbot_config_path);
 void RenderingLoop(mj::Simulate* sim,ros::NodeHandle nh);
-void Reset(mj::Simulate& sim);
+void Reset(mj::Simulate& sim,
+  std::vector<double> p_i, std::vector<double> q_i,
+  std::string base_link);
 
 // close everything
 void close();
