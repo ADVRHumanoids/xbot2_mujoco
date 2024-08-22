@@ -5,7 +5,7 @@
 #include "../src/loading_utils.h"
 #include "./config.h"
 
-class SimRunTest : public ::testing::TestWithParam<std::tuple<bool, bool>> {
+class SimRunTest : public ::testing::TestWithParam<std::tuple<bool, bool, int, int>> {
 protected:
 
     SimRunTest(){
@@ -37,7 +37,9 @@ protected:
             mj_xml_path.c_str(),
             ros_nh,
             std::get<0>(GetParam()),
-            std::get<1>(GetParam()));
+            std::get<1>(GetParam()),
+            std::get<2>(GetParam()),
+            std::get<3>(GetParam()));
     }
 
     void SetUp() override {
@@ -46,7 +48,6 @@ protected:
 
     void TearDown() override {
 
-        xbot_mujoco_env_ptr->close();
 
     }
 
@@ -55,7 +56,18 @@ protected:
 };
 
 TEST_P(SimRunTest, TestSim) {
-    xbot_mujoco_env_ptr->run();
+    int n_steps = 1000000;
+    int actual_done = 0;
+    for (int i = 0; i < n_steps; ++i) {
+        if (!xbot_mujoco_env_ptr->step()) {
+            break;
+        }
+        actual_done++;
+    }
+    xbot_mujoco_env_ptr->close(); // close everything
+    printf("[test_xmj_env][SimRunTest]: n of timesteps done %i VS %i\n", actual_done, n_steps);
+
+    EXPECT_EQ(actual_done, n_steps); 
 }
 
 // Instantiate the parameterized test case with different parameters
@@ -63,7 +75,7 @@ INSTANTIATE_TEST_SUITE_P(
     SimRunTestCases,
     SimRunTest,
     ::testing::Values(
-        std::make_tuple(false, true)
+        std::make_tuple(false, true, 10, 10)
     )
 );
 

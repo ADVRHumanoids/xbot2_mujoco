@@ -29,10 +29,9 @@ public:
         int timeout = 10);
     ~XBotMjSimEnv();
 
-    bool run(); 
+    bool is_running();
     bool step();
-    void render_window();
-    void reset();
+    bool reset();
     void close();
 
     std::vector<double> p_i = {0.0,0.0,0.8};
@@ -76,6 +75,7 @@ private:
     void step_sim();
     void clear_sim();
     void assign_init_root_state();
+    bool run();
 
 };
 

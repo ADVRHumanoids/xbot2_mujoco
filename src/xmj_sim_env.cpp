@@ -19,6 +19,10 @@ XBotMjSimEnv::XBotMjSimEnv(const std::string configPath,
     printf("[xbot2_mujoco][XBotMjSimEnv]: initializing sim. enviroment with MuJoCo xml file at %s and XBot2 config at %s\n", 
         model_fname.c_str(), xbot2_config_path.c_str());
 
+    if (!run()) {
+        fprintf(stderr, "[xbot2_mujoco][XBotMjSimEnv]: failed to run environment!");
+    }
+
 }
 
 XBotMjSimEnv::~XBotMjSimEnv() {
@@ -31,6 +35,11 @@ void XBotMjSimEnv::close() {
 
     if (running) {
 
+        if (simulator_thread.joinable()) { 
+            simulator_thread.join();
+            printf("[xbot2_mujoco][XBotMjSimEnv][close]: simulator thread terminated\n");
+        }
+        
         running=false;
     }
 }
@@ -40,7 +49,7 @@ bool XBotMjSimEnv::step() {
     if (manual_stepping) {
         std::lock_guard<std::mutex> lock(mtx);
         step_now = true;    
-        sim_step_cv.notify_one();
+        sim_step_cv.notify_all();
         return true;
     } else {
         return false;
@@ -55,10 +64,16 @@ void XBotMjSimEnv::assign_init_root_state() {
 
 }
 
-void XBotMjSimEnv::reset() {
+bool XBotMjSimEnv::reset() {
     
-    auto& simulation = *xbot_mujoco::sim;
-    xbot_mujoco::Reset(simulation);
+    if (running) {
+        auto& simulation = *xbot_mujoco::sim;
+        xbot_mujoco::Reset(simulation);
+        return true;
+    } else {
+        return false;
+    }
+    
 }
 
 void XBotMjSimEnv::clear_sim() {
@@ -116,10 +131,6 @@ void XBotMjSimEnv::step_sim() {
 
     xbot_mujoco::PreStep(*xbot_mujoco::sim);
     xbot_mujoco::DoStep(*xbot_mujoco::sim,syncCPU,syncSim);
-
-}
-
-void XBotMjSimEnv::render_window() {
 
 }
 
@@ -181,20 +192,28 @@ void XBotMjSimEnv::initialize(bool headless) {
 
 }
 
+bool XBotMjSimEnv::is_running() {
+    return running;
+}
+
 bool XBotMjSimEnv::run() {
 
     if (!running) {
         simulator_thread = std::thread(&XBotMjSimEnv::initialize, this, headless);
 
-        if (simulator_thread.joinable()) { 
-            simulator_thread.join();
-            printf("[xbot2_mujoco][XBotMjSimEnv][close]: simulator thread terminated\n");
-        }
-        
+        if (manual_stepping) { // perform some dummy sim steps
+            for (int i = 0; i < init_steps; ++i) {
+                step();
+            }
+        } 
+
         running=true;
         return true;
+
     } else {
+
         return false;
+        
     }
     
 }
