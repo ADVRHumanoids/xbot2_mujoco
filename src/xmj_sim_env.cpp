@@ -43,16 +43,16 @@ void XBotMjSimEnv::close() {
 
 void XBotMjSimEnv::assign_init_root_state() {
 
-    auto& simulation = *xbot_mujoco::sim;
-    xbot_mujoco::Reset(simulation, p_i, q_i, base_link_name);
+    xbot_mujoco::p_init.assign(p_i.begin(),p_i.end());
+    xbot_mujoco::q_init.assign(q_i.begin(),q_i.end());
+    xbot_mujoco::root_link=base_link_name;
 
 }
 
 void XBotMjSimEnv::reset() {
     
-    assign_init_root_state(); // in case p_i and q_i were changed
     auto& simulation = *xbot_mujoco::sim;
-    xbot_mujoco::Reset(simulation, p_i, q_i, base_link_name);
+    xbot_mujoco::Reset(simulation);
 }
 
 void XBotMjSimEnv::physics_loop() {
@@ -113,6 +113,8 @@ void XBotMjSimEnv::initialize(bool headless) {
 
     mjcb_control = xbot_mujoco::xbotmj_control_callback; // register control callback to mujoco
     
+    assign_init_root_state();
+
     if ((!headless) && (!manual_stepping)) {
         // Install the signal handler for SIGINT (Ctrl+C)
         std::signal(SIGINT, handle_sigint);

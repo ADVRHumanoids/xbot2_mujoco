@@ -102,9 +102,7 @@ void InitSimulation(mj::Simulate* sim, const char* mj_filename, const char* xbot
 void ClearSimulation();
 void SimulationLoop(mj::Simulate* sim, const char* mj_filename, const char* xbot_config_path);
 void RenderingLoop(mj::Simulate* sim,ros::NodeHandle nh);
-void Reset(mj::Simulate& sim,
-  std::vector<double> p_i, std::vector<double> q_i,
-  std::string base_link);
+void Reset(mj::Simulate& sim);
 
 // close everything
 void close();

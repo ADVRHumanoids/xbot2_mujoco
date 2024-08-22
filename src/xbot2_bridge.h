@@ -26,7 +26,7 @@ public:
 
     ~MjWrapper()
     {
-        printf("[XBot][MjWrapper]: xbot2 bridge");
+        printf("[XBot][MjWrapper]: xbot2 bridge destroyed");
     }
 
     void run(mjData * d)
