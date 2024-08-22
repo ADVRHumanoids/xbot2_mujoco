@@ -51,8 +51,6 @@ protected:
     }
 
     XBotMjSimEnv::UniquePtr xbot_mujoco_env_ptr;
-    bool headless = false;
-    bool manual_stepping = false;
 
 };
 
@@ -65,7 +63,7 @@ INSTANTIATE_TEST_SUITE_P(
     SimRunTestCases,
     SimRunTest,
     ::testing::Values(
-        std::make_tuple(false, false)
+        std::make_tuple(false, true)
     )
 );
 

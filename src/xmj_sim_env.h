@@ -8,6 +8,8 @@
 #include <mutex>
 #include <chrono>
 #include <memory>
+#include <mutex>
+#include <condition_variable>
 
 #include "simulator.h"
 
@@ -23,11 +25,12 @@ public:
         ros::NodeHandle nh,
         bool headless = false,
         bool manual_stepping = false,
-        int init_steps = 1);
+        int init_steps = 1,
+        int timeout = 10);
     ~XBotMjSimEnv();
 
     bool run(); 
-    
+    bool step();
     void render_window();
     void reset();
     void close();
@@ -40,8 +43,10 @@ private:
 
     bool headless;
     bool manual_stepping;
+
     bool running=false;
-    
+    bool initialized = false; 
+
     int sim_init_steps = 0;
     int init_steps = 1;
     
@@ -53,6 +58,12 @@ private:
     std::string xbot2_config_path;
 
     std::thread physics_thread;
+    std::thread simulator_thread;
+
+    std::condition_variable sim_step_cv;
+    bool step_now = false;
+    std::mutex mtx; 
+    int timeout = 10; // [s]
 
     ros::NodeHandle ros_nh;
     
@@ -61,7 +72,9 @@ private:
 
     void initialize(bool headless);
     void physics_loop();
-    void step();
+    void physics_loop_manual();
+    void step_sim();
+    void clear_sim();
     void assign_init_root_state();
 
 };

@@ -2,7 +2,7 @@
 #include <csignal>  // For signal handling
 
 void handle_sigint(int signal_num) {
-  std::printf("[xbot2_mujoco][simulator]: detected SIGINT -> exiting gracefully \n");
+  std::printf("[xbot2_mujoco][XBotMjSimEnv]: detected SIGINT -> exiting gracefully \n");
   xbot_mujoco::sim->exitrequest.store(1); // signal sim ad rendering loop to exit gracefully
 }
 
@@ -11,8 +11,10 @@ XBotMjSimEnv::XBotMjSimEnv(const std::string configPath,
     ros::NodeHandle nh,
     bool headless,
     bool manual_stepping,
-    int init_steps)
-    :xbot2_config_path(configPath),model_fname(model_fname),ros_nh(nh),headless(headless),manual_stepping(manual_stepping) {
+    int init_steps,
+    int timeout)
+    :xbot2_config_path(configPath),model_fname(model_fname),ros_nh(nh),
+    headless(headless),manual_stepping(manual_stepping), timeout(timeout) {
 
     printf("[xbot2_mujoco][XBotMjSimEnv]: initializing sim. enviroment with MuJoCo xml file at %s and XBot2 config at %s\n", 
         model_fname.c_str(), xbot2_config_path.c_str());
@@ -29,15 +31,19 @@ void XBotMjSimEnv::close() {
 
     if (running) {
 
-        xbot_mujoco::ClearSimulation();
-        xbot_mujoco::xbot2_wrapper.reset();
-        
-        if (physics_thread.joinable()) {
-            physics_thread.join();
-            printf("[xbot2_mujoco][XBotMjSimEnv][close]: physics thread terminated\n");
-        }
-
         running=false;
+    }
+}
+
+bool XBotMjSimEnv::step() {
+
+    if (manual_stepping) {
+        std::lock_guard<std::mutex> lock(mtx);
+        step_now = true;    
+        sim_step_cv.notify_one();
+        return true;
+    } else {
+        return false;
     }
 }
 
@@ -55,19 +61,58 @@ void XBotMjSimEnv::reset() {
     xbot_mujoco::Reset(simulation);
 }
 
+void XBotMjSimEnv::clear_sim() {
+    xbot_mujoco::ClearSimulation();
+    xbot_mujoco::xbot2_wrapper.reset();
+}
+
 void XBotMjSimEnv::physics_loop() {
     // InitSimulation has to be called here since it will wait for the render thread to
     // finish loading
     xbot_mujoco::InitSimulation(xbot_mujoco::sim.get(),model_fname.c_str(),xbot2_config_path.c_str());
-    
     reset();
 
+    initialized = true;
+
     while (!((*xbot_mujoco::sim).exitrequest.load())) {
-        step();
+        step_sim();
     }
+    
+    clear_sim();
+
 }
 
-void XBotMjSimEnv::step() {
+void XBotMjSimEnv::physics_loop_manual() {
+    // InitSimulation has to be called here since it will wait for the render thread to
+    // finish loading
+    xbot_mujoco::InitSimulation(xbot_mujoco::sim.get(),model_fname.c_str(),xbot2_config_path.c_str());
+    reset();
+
+    initialized = true;
+
+    while (true) {
+
+        std::unique_lock<std::mutex> lock(mtx);  // Lock the mutex
+        if (!sim_step_cv.wait_for(lock, std::chrono::seconds(timeout), [this] { return step_now; })) {
+            printf("[xbot2_mujoco][XBotMjSimEnv][physics_loop_manual]: no step request received within timeout of %i s\n", timeout);
+            xbot_mujoco::sim->exitrequest.store(1);
+            clear_sim();
+            return;
+        } 
+
+        if (!((*xbot_mujoco::sim).exitrequest.load())) {
+            step_sim();
+            step_now=false; // stepped simulation
+        } else {
+            clear_sim();
+            return;
+        }
+        
+    }
+
+}
+
+void XBotMjSimEnv::step_sim() {
 
     xbot_mujoco::PreStep(*xbot_mujoco::sim);
     xbot_mujoco::DoStep(*xbot_mujoco::sim,syncCPU,syncSim);
@@ -88,7 +133,7 @@ void XBotMjSimEnv::initialize(bool headless) {
     #endif
 
     // print version, check compatibility
-    std::printf("[xbot2_mujoco][simulator]: MuJoCo version %s\n", mj_versionString());
+    std::printf("[XBotMjSimEnv][initialize]: MuJoCo version %s\n", mj_versionString());
     if (mjVERSION_HEADER!=mj_version()) {
         mju_error("Headers and library have different versions");
     }
@@ -115,33 +160,23 @@ void XBotMjSimEnv::initialize(bool headless) {
     
     assign_init_root_state();
 
-    if ((!headless) && (!manual_stepping)) {
-        // Install the signal handler for SIGINT (Ctrl+C)
-        std::signal(SIGINT, handle_sigint);
-        // physics_thread = std::thread(&xbot_mujoco::SimulationLoop, xbot_mujoco::sim.get(), 
-        //     model_fname.c_str(), xbot2_config_path.c_str());
+    // Install the signal handler for SIGINT (Ctrl+C)
+    std::signal(SIGINT, handle_sigint);
+    // physics_thread = std::thread(&xbot_mujoco::SimulationLoop, xbot_mujoco::sim.get(), 
+    //     model_fname.c_str(), xbot2_config_path.c_str());
+    if (!manual_stepping) {
+        printf("[xbot2_mujoco][XBotMjSimEnv][initialize]: launching physics sim thread\n");
         physics_thread = std::thread(&XBotMjSimEnv::physics_loop, this);
-        xbot_mujoco::RenderingLoop(xbot_mujoco::sim.get(), ros_nh); // render in this thread
-
+    } else { // will (atomically) wait for step to be called
+        printf("[xbot2_mujoco][XBotMjSimEnv][initialize]: launching physics sim threadh with manual stepping\n");
+        physics_thread = std::thread(&XBotMjSimEnv::physics_loop_manual, this);
     }
 
-    if ((headless) && (!manual_stepping)) {
-
-    }
-
-    if ((!headless) && (manual_stepping)) {
-
-    }
-
-    if ((headless) && (manual_stepping)) {
-
-    }
-
-
-    // do some warmstart timesteps
-    bool init_step_ok = true;
-    for (int i=0; i < init_steps;i++) {
-        step();
+    xbot_mujoco::RenderingLoop(xbot_mujoco::sim.get(), ros_nh); // render in this thread
+    
+    if (physics_thread.joinable()) {
+        physics_thread.join();
+        printf("[xbot2_mujoco][XBotMjSimEnv][close]: physics thread terminated\n");
     }
 
 }
@@ -149,7 +184,13 @@ void XBotMjSimEnv::initialize(bool headless) {
 bool XBotMjSimEnv::run() {
 
     if (!running) {
-        initialize(headless);
+        simulator_thread = std::thread(&XBotMjSimEnv::initialize, this, headless);
+
+        if (simulator_thread.joinable()) { 
+            simulator_thread.join();
+            printf("[xbot2_mujoco][XBotMjSimEnv][close]: simulator thread terminated\n");
+        }
+        
         running=true;
         return true;
     } else {
