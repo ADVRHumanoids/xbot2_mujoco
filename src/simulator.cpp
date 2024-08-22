@@ -282,7 +282,7 @@ void xbot_mujoco::DoStep(mj::Simulate& sim,
     const std::unique_lock<std::recursive_mutex> lock(sim.mtx);
 
     // run only if model is present
-    if (m) {
+    if (m && d) {
         // running
         if (sim.run) {
 
@@ -382,8 +382,9 @@ void xbot_mujoco::DoStep(mj::Simulate& sim,
           mj_forward(m, d);
           sim.speed_changed = true;
         }
+    } else {
+        printf("[xbot2_mujoco][simulator][DoStep]: either m or d are NULL!!\n");
     }
-    // release std::lock_guard<std::mutex>
 }
 
 void xbot_mujoco::PreStep(mj::Simulate& sim) {
