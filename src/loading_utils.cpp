@@ -62,17 +62,23 @@ std::string LoadingUtils::get_xbot_config_path() {
 
 std::string LoadingUtils::get_srdf_path_fromxbotconfig(const std::string xbot_cf_path) {
     // Load the YAML file
-    YAML::Node config = YAML::LoadFile(xbot_cf_path);
+    std::string srdf_path = "";
+    if (!xbot_cf_path.empty()) {
+        YAML::Node config = YAML::LoadFile(xbot_cf_path);
     
-    // Extract the srdf_path from the YAML structure
-    std::string srdf_path = config["XBotInterface"]["srdf_path"].as<std::string>();
-
-    // Replace occurrences of $PWD with the directory of xbot_cf_path
-    std::string xbot_dir = std::filesystem::path(xbot_cf_path).parent_path().string();
-    std::string::size_type pos = 0;
-    while ((pos = srdf_path.find("$PWD", pos)) != std::string::npos) {
-        srdf_path.replace(pos, 4, xbot_dir);
-        pos += xbot_dir.length();
+        // Extract the srdf_path from the YAML structure
+        auto srdf_path_item = config["XBotInterface"]["srdf_path"];
+        if (srdf_path_item) {
+            srdf_path = srdf_path_item.as<std::string>();
+            // Replace occurrences of $PWD with the directory of xbot_cf_path
+            std::string xbot_dir = std::filesystem::path(xbot_cf_path).parent_path().string();
+            std::string::size_type pos = 0;
+            while ((pos = srdf_path.find("$PWD", pos)) != std::string::npos) {
+                srdf_path.replace(pos, 4, xbot_dir);
+                pos += xbot_dir.length();
+            }
+        }
+        
     }
 
     return srdf_path;
@@ -81,15 +87,17 @@ std::string LoadingUtils::get_srdf_path_fromxbotconfig(const std::string xbot_cf
 std::string LoadingUtils::get_urdf_path_fromxbotconfig(const std::string xbot_cf_path) {
     // Load the YAML file
     YAML::Node config = YAML::LoadFile(xbot_cf_path);
-    
-    std::string urdf_path = config["XBotInterface"]["urdf_path"].as<std::string>();
-
-    // Replace occurrences of $PWD with the directory of xbot_cf_path
-    std::string xbot_dir = std::filesystem::path(xbot_cf_path).parent_path().string();
-    std::string::size_type pos = 0;
-    while ((pos = urdf_path.find("$PWD", pos)) != std::string::npos) {
-        urdf_path.replace(pos, 4, xbot_dir);
-        pos += xbot_dir.length();
+    std::string urdf_path = "";
+    auto urdf_item = config["XBotInterface"]["urdf_path"];
+    if (urdf_item) {
+        urdf_path = config["XBotInterface"]["urdf_path"].as<std::string>();
+        // Replace occurrences of $PWD with the directory of xbot_cf_path
+        std::string xbot_dir = std::filesystem::path(xbot_cf_path).parent_path().string();
+        std::string::size_type pos = 0;
+        while ((pos = urdf_path.find("$PWD", pos)) != std::string::npos) {
+            urdf_path.replace(pos, 4, xbot_dir);
+            pos += xbot_dir.length();
+        }
     }
 
     return urdf_path;
@@ -103,8 +111,8 @@ std::map<std::string, double> LoadingUtils::get_homing_from_srdf(const std::stri
     pugi::xml_parse_result result = doc.load_file(srdf_path.c_str());
 
     if (!result) {
-        std::cerr << "Failed to load SRDF file: " << srdf_path << std::endl;
-        std::cerr << "Error description: " << result.description() << std::endl;
+        fprintf(stderr,"[LoadingUtils][get_homing_from_srdf]: failed to load SRDF file at \"%s\" with error \"%s\" \n", 
+            srdf_path.c_str(), result.description());
         return homing_map;
     }
 
@@ -138,16 +146,20 @@ std::map<std::string, double> LoadingUtils::generate_homing_map(const std::vecto
         double fallback_val) {
 
     std::string srdf_path = get_srdf_path_fromxbotconfig(xbot_cf_path);
-    std::map<std::string, double> homing_map = get_homing_from_srdf(srdf_path);
+
     std::map<std::string, double> result;
 
-    for (const std::string& jnt_name : jnt_name_list) {
-        // Check if the joint name exists in the homing map
-        if (homing_map.find(jnt_name) != homing_map.end()) {
-            result[jnt_name] = homing_map[jnt_name];
-        } else {
-            // Default if the joint name is not found in the homing map
-            result[jnt_name] = fallback_val;
+    if (!srdf_path.empty()) {
+        std::map<std::string, double> homing_map = get_homing_from_srdf(srdf_path);
+        
+        for (const std::string& jnt_name : jnt_name_list) {
+            // Check if the joint name exists in the homing map
+            if (homing_map.find(jnt_name) != homing_map.end()) {
+                result[jnt_name] = homing_map[jnt_name];
+            } else {
+                // Default if the joint name is not found in the homing map
+                result[jnt_name] = fallback_val;
+            }
         }
     }
 
@@ -157,7 +169,12 @@ std::map<std::string, double> LoadingUtils::generate_homing_map(const std::vecto
 std::map<std::string, double> LoadingUtils::generate_homing_map(const std::string xbot_cf_path) {
 
     std::string srdf_path = get_srdf_path_fromxbotconfig(xbot_cf_path);
-    return get_homing_from_srdf(srdf_path);;
+    std::map<std::string, double> homing_map;
+    if (!srdf_path.empty()) {
+        homing_map=get_homing_from_srdf(srdf_path);
+    }
+
+    return homing_map;
 }
 
 std::vector<double> LoadingUtils::generate_homing_from_list(const std::vector<std::string>& jnt_name_list,
@@ -165,16 +182,19 @@ std::vector<double> LoadingUtils::generate_homing_from_list(const std::vector<st
         double fallback_val) {
     
     std::string srdf_path = get_srdf_path_fromxbotconfig(xbot_cf_path);
-    std::map<std::string, double> homing_map = get_homing_from_srdf(srdf_path);
+
     std::vector<double> result;
 
-    for (const std::string& jnt_name : jnt_name_list) {
-        // Check if the joint name exists in the homing map
-        if (homing_map.find(jnt_name) != homing_map.end()) {
-            result.push_back(homing_map[jnt_name]);
-        } else {
-            // Default to 0 if the joint name is not found in the homing map
-            result.push_back(0.0);
+    if (!srdf_path.empty()) {
+        std::map<std::string, double> homing_map = get_homing_from_srdf(srdf_path);
+        for (const std::string& jnt_name : jnt_name_list) {
+            // Check if the joint name exists in the homing map
+            if (homing_map.find(jnt_name) != homing_map.end()) {
+                result.push_back(homing_map[jnt_name]);
+            } else {
+                // Default to 0 if the joint name is not found in the homing map
+                result.push_back(0.0);
+            }
         }
     }
 
@@ -183,7 +203,7 @@ std::vector<double> LoadingUtils::generate_homing_from_list(const std::vector<st
 
 std::tuple<std::vector<std::string>, std::vector<double>> LoadingUtils::generate_ordered_homing(const std::string xbot_cf_path) {
     
-    printf( "[LoadingUtils][generate_ordered_homing]: will loading homing from xbot2 config file \"%s\" ->\n", xbot_cf_path.c_str());
+    printf( "[LoadingUtils][generate_ordered_homing]: will load homing from xbot2 config file \"%s\" ->\n", xbot_cf_path.c_str());
 
     std::string srdf_path = get_srdf_path_fromxbotconfig(xbot_cf_path);
     std::map<std::string, double> homing_map = get_homing_from_srdf(srdf_path);

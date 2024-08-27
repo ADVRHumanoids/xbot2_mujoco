@@ -20,9 +20,10 @@ public:
 
     typedef std::unique_ptr<XBotMjSimEnv> UniquePtr;
 
-    XBotMjSimEnv(const std::string xbot2_config_path,
+    XBotMjSimEnv(
         const std::string model_fname,
         ros::NodeHandle nh,
+        const std::string xbot2_config_path = "",
         bool headless = false,
         bool manual_stepping = false,
         int init_steps = 1,

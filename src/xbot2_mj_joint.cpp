@@ -28,24 +28,38 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
         auto j = std::make_shared<JointInstanceMj>(
                      Hal::DeviceInfo{jname, "joint_mj", i}
                      );
-                     
-        j->rx().pos_ref = j->rx().link_pos;
-        j->rx().gain_kp = 100;
-        j->rx().gain_kd = 5;
 
+        // default motor pd map
+        motor_pd_map[jname] = std::make_pair(default_kp,default_kd);
+        if (jname.find("wheel") != std::string::npos) {
+            motor_pd_map[jname] = std::make_pair(0.0,default_kd_wheels);
+        } 
+        if (jname.find("arm") != std::string::npos) {
+            motor_pd_map[jname] = std::make_pair(default_kp_arms,default_kd_arms);
+        } 
+        if (jname.find("velodyne") != std::string::npos) {
+            motor_pd_map[jname] = std::make_pair(0,default_small_kd);
+        } 
+        if (jname.find("d435") != std::string::npos) {
+            motor_pd_map[jname] = std::make_pair(0,default_small_kd);
+        }
+
+        // overriding motor pd map if motor_pd is not empty
         for(auto pair: motor_pd)
-        {
+        {   
             auto pattern = pair.first.as<std::string>();
             auto gains = pair.second.as<std::pair<double, double>>();
 
             if(fnmatch(pattern.c_str(), jname.c_str(), 0) == 0)
             {
-                j->rx().gain_kp = gains.first;
-                j->rx().gain_kd = gains.second;
-
                 motor_pd_map[jname] = std::make_pair(gains.first,gains.second);
             }
         }
+
+        // initializations for this joint
+        j->rx().pos_ref = j->rx().link_pos;
+        j->rx().gain_kp = motor_pd_map[jname].first;
+        j->rx().gain_kd = motor_pd_map[jname].second;
 
         printf("[XBot][JointMjServer]: constructed xbot joint %s \n with impedance gains kp: %f, kd: %f\n and pos ref %f\n",
             jname.c_str(),j->rx().gain_kp,j->rx().gain_kd,j->rx().pos_ref);
@@ -55,9 +69,6 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
         _joints.push_back(j);
         _mj_jnt_names.push_back(jname);
     }
-
-    // (defaults to 0 if mj joint is not in the SRDF homing group)
-    // _print_homing_config(); // db print
 
     std::vector<Hal::DeviceRt::Ptr> devs(_joints.begin(), _joints.end());
 

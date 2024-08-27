@@ -33,9 +33,10 @@ protected:
         std::string mj_xml_path=loader.xml_path();
         std::string mj_xml_content=loader.get_mj_xml();
 
-        xbot_mujoco_env_ptr = std::make_unique<XBotMjSimEnv>(xbot2_cfg_path,
+        xbot_mujoco_env_ptr = std::make_unique<XBotMjSimEnv>(
             mj_xml_path.c_str(),
             ros_nh,
+            xbot2_cfg_path,
             std::get<0>(GetParam()),
             std::get<1>(GetParam()),
             std::get<2>(GetParam()),
@@ -56,7 +57,7 @@ protected:
 };
 
 TEST_P(SimRunTest, TestSim) {
-    int n_steps = 1000000;
+    int n_steps = 1000000000;
     int actual_done = 0;
     for (int i = 0; i < n_steps; ++i) {
         if (!xbot_mujoco_env_ptr->step()) {

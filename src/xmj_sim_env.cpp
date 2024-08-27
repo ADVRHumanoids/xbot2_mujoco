@@ -6,14 +6,15 @@ void handle_sigint(int signal_num) {
   xbot_mujoco::sim->exitrequest.store(1); // signal sim ad rendering loop to exit gracefully
 }
 
-XBotMjSimEnv::XBotMjSimEnv(const std::string configPath, 
+XBotMjSimEnv::XBotMjSimEnv(
     const std::string model_fname,
     ros::NodeHandle nh,
+    const std::string xbot2_config_path, 
     bool headless,
     bool manual_stepping,
     int init_steps,
     int timeout)
-    :xbot2_config_path(configPath),model_fname(model_fname),ros_nh(nh),
+    :xbot2_config_path(xbot2_config_path),model_fname(model_fname),ros_nh(nh),
     headless(headless),manual_stepping(manual_stepping), timeout(timeout) {
 
     printf("[xbot2_mujoco][XBotMjSimEnv]: initializing sim. enviroment with MuJoCo xml file at %s and XBot2 config at %s\n", 
@@ -49,7 +50,7 @@ bool XBotMjSimEnv::step() {
     if (manual_stepping) {
         std::lock_guard<std::mutex> lock(mtx);
         step_now = true;    
-        sim_step_cv.notify_all();
+        sim_step_cv.notify_one();
         return true;
     } else {
         return false;
@@ -114,6 +115,13 @@ void XBotMjSimEnv::physics_loop_manual() {
             clear_sim();
             return;
         } 
+        // sim_step_cv.wait(lock, [this] { return step_now; });
+        // if (!) {
+        //     printf("[xbot2_mujoco][XBotMjSimEnv][physics_loop_manual]: no step request received within timeout of %i s\n", timeout);
+        //     xbot_mujoco::sim->exitrequest.store(1);
+        //     clear_sim();
+        //     return;
+        // } 
 
         if (!((*xbot_mujoco::sim).exitrequest.load())) {
             step_sim();

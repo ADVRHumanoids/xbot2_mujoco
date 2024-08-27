@@ -502,6 +502,10 @@ void xbot_mujoco::InitSimulation(mj::Simulate* sim, const char* mj_filename, con
 
   homing = LoadingUtils::generate_ordered_homing(xbot_config_path);
 
+  // if (std::get<0>(homing).size()==0) { // set homing to 0 by default
+
+  // }
+
   LoadingUtils::print_homing(std::get<0>(homing), std::get<1>(homing));
 
   xbot2_wrapper.reset();
@@ -550,7 +554,7 @@ void xbot_mujoco::run(const char* fname,
 
   p_init[0] = 0.0;
   p_init[1] = 0.0;
-  p_init[2] = 0.8;
+  p_init[2] = 1.8;
 
   q_init[0] = 1.0; // MuJoCo uses the (w, x, y, z) convention for quaternions
   q_init[1] = 0.0;

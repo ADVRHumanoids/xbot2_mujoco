@@ -15,13 +15,13 @@ public:
 
     XBOT2_DECLARE_SMART_PTR(MjWrapper)
 
-    MjWrapper(mjModel * mj_model, std::string cfg_path):
+    MjWrapper(mjModel * mj_model, std::string cfg_path=""):
         _joint(mj_model, cfg_path),
         _imu(mj_model, cfg_path),
         _ls(mj_model, cfg_path),
         _clock()
     {
-        printf("[XBot][MjWrapper]: xbot2 bridge constructed with file  %s \n",cfg_path.c_str());
+        printf("[XBot][MjWrapper]: xbot2 bridge constructed with file  \"%s\" \n",cfg_path.c_str());
     }
 
     ~MjWrapper()

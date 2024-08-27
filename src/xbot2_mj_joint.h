@@ -61,6 +61,14 @@ private:
 
     std::map<std::string, std::pair<double, double>> motor_pd_map;
 
+    double default_kp = 1000;
+    double default_kd = 20;
+    double default_small_kp = 10;
+    double default_small_kd = 1;
+    double default_kp_arms = 200;
+    double default_kd_arms = 10;
+    double default_kd_wheels = 30;
+
 };
 
 }
