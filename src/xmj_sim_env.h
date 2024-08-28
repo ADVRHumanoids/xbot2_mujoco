@@ -35,7 +35,7 @@ public:
     bool reset();
     void close();
 
-    std::vector<double> p_i = {0.0,0.0,0.8};
+    std::vector<double> p_i = {0.0,0.0,1.0};
     std::vector<double> q_i = {1.0, 0.0, 0.0, 0.0};
     std::string base_link_name = "base_link";
 

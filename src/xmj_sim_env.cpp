@@ -80,6 +80,7 @@ bool XBotMjSimEnv::reset() {
     
     if (is_running()) {
         auto& simulation = *xbot_mujoco::sim;
+        assign_init_root_state();
         xbot_mujoco::Reset(simulation);
         return true;
     } else {

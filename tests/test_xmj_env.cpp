@@ -1,15 +1,29 @@
 #include "string.h"
 #include <gtest/gtest.h>
 #include <chrono>
+#include <vector>
+#include <cmath>  // For sin and cos
+#include <random>
 
 #include "../src/xmj_sim_env.h"
 #include "../src/loading_utils.h"
 #include "./config.h"
 
-class SimRunTest : public ::testing::TestWithParam<std::tuple<bool, bool, int, int>> {
+void quaternion_from_rotation_z(double theta_degrees, std::vector<double>& quaternion) {
+    // Convert theta from degrees to radians
+    double theta_radians = theta_degrees * M_PI / 180.0;
+
+    // Calculate the quaternion components for z-axis rotation
+    quaternion[0] = std::cos(theta_radians / 2.0);  // w
+    quaternion[1] = 0.0;                            // x
+    quaternion[2] = 0.0;                            // y
+    quaternion[3] = std::sin(theta_radians / 2.0);  // z
+}
+
+class ManualSteppingTest : public ::testing::TestWithParam<std::tuple<bool, bool, int, int>> {
 protected:
 
-    SimRunTest(){
+    ManualSteppingTest(){
         
         ros::NodeHandle ros_nh("");
 
@@ -57,15 +71,31 @@ protected:
 
 };
 
-TEST_P(SimRunTest, TestSim) {
+TEST_P(ManualSteppingTest, TestSim) {
+
+    // Create a random device to seed the random number generator
+    std::random_device rd;
+    // Create a Mersenne Twister random number generator
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<> dis(-180.0, 180.0);
+    std::uniform_real_distribution<> dis_pos(-1.0, 1.0);
+
     int actual_done = xbot_mujoco_env_ptr->step_counter;
     double target_stime=5.0;
 
-    int n_steps = 10000;
+    int n_steps = 20000;
     auto start = std::chrono::high_resolution_clock::now();
+    int reset_freq = n_steps/8;
     for (int i = 0; i < n_steps; ++i) {
         if (!xbot_mujoco_env_ptr->step()) {
             break;
+        }
+        if ((i+1)%reset_freq==0) {
+            xbot_mujoco_env_ptr->p_i[0] = xbot_mujoco_env_ptr->p_i[0]+dis_pos(gen);
+            xbot_mujoco_env_ptr->p_i[1] = xbot_mujoco_env_ptr->p_i[1]+dis_pos(gen);
+            double random_theta= dis(gen);
+            quaternion_from_rotation_z(random_theta, xbot_mujoco_env_ptr->q_i);
+            xbot_mujoco_env_ptr->reset();
         }
     }
     auto end = std::chrono::high_resolution_clock::now();
@@ -77,8 +107,8 @@ TEST_P(SimRunTest, TestSim) {
     double physics_dt = xbot_mujoco_env_ptr->physics_dt;
     double simtime_elapsed = physics_dt*actual_done;
 
-    printf("[test_xmj_env][SimRunTest]: n of timesteps done %i VS %i\n", actual_done, n_steps);
-    printf("[test_xmj_env][SimRunTest]: elapsed wall time %f [s] VS simulated time %f [s]. \n RT factor %f, physics dt %f \n", 
+    printf("[test_xmj_env][ManualSteppingTest]: n of timesteps done %i VS %i\n", actual_done, n_steps);
+    printf("[test_xmj_env][ManualSteppingTest]: elapsed wall time %f [s] VS simulated time %f [s]. \n RT factor %f, physics dt %f \n", 
         walltime.count(), simtime_elapsed, simtime_elapsed/walltime.count(),physics_dt);
 
     EXPECT_EQ(actual_done, n_steps); 
@@ -86,8 +116,8 @@ TEST_P(SimRunTest, TestSim) {
 
 // Instantiate the parameterized test case with different parameters
 INSTANTIATE_TEST_SUITE_P(
-    SimRunTestCases,
-    SimRunTest,
+    ManualSteppingTestCases,
+    ManualSteppingTest,
     ::testing::Values(
         std::make_tuple(false, // headless
             true, // manual stepping 
