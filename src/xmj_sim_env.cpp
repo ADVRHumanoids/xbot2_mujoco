@@ -34,25 +34,36 @@ XBotMjSimEnv::~XBotMjSimEnv() {
 
 void XBotMjSimEnv::close() {
 
-    if (running) {
-
+    if (running.load()) {
+        
         if (simulator_thread.joinable()) { 
+            
             simulator_thread.join();
             printf("[xbot2_mujoco][XBotMjSimEnv][close]: simulator thread terminated\n");
         }
         
-        running=false;
+        running.store(false);
+        initialized.store(false);
     }
 }
 
 bool XBotMjSimEnv::step() {
 
-    if (manual_stepping) {
-        std::lock_guard<std::mutex> lock(mtx);
-        step_now = true;    
-        sim_step_cv.notify_one();
+    if (manual_stepping && running.load()) {
+        std::unique_lock<std::mutex> lock(mtx);
+        step_req = true;  
+        step_done=false;  
+        sim_step_req_cv.notify_all(); // send step request
+        // wait for ack from simulation loop (will set step_req to false
+        // sim_step_res_cv.wait(lock, [this] { return !step_done; });
+        if (!sim_step_res_cv.wait_for(lock, std::chrono::milliseconds(timeout), [this] { return step_done; })) {
+            fprintf(stderr,"[xbot2_mujoco][XBotMjSimEnv][step]: no step acknowledgement received within timeout of %i ms\n", timeout);
+            xbot_mujoco::sim->exitrequest.store(1);
+            return false;
+        } // sim step performed successfully
+
         return true;
-    } else {
+    } else { 
         return false;
     }
 }
@@ -67,7 +78,7 @@ void XBotMjSimEnv::assign_init_root_state() {
 
 bool XBotMjSimEnv::reset() {
     
-    if (running) {
+    if (is_running()) {
         auto& simulation = *xbot_mujoco::sim;
         xbot_mujoco::Reset(simulation);
         return true;
@@ -85,60 +96,59 @@ void XBotMjSimEnv::clear_sim() {
 void XBotMjSimEnv::physics_loop() {
     // InitSimulation has to be called here since it will wait for the render thread to
     // finish loading
+
+    std::unique_lock<std::mutex> lock(mtx);
+
     xbot_mujoco::InitSimulation(xbot_mujoco::sim.get(),model_fname.c_str(),xbot2_config_path.c_str());
     reset();
+    physics_dt=xbot_mujoco::m->opt.timestep;
 
-    initialized = true;
+    initialized.store(true);
+
+    lock.unlock();
 
     while (!((*xbot_mujoco::sim).exitrequest.load())) {
         step_sim();
     }
     
-    clear_sim();
-
 }
 
 void XBotMjSimEnv::physics_loop_manual() {
     // InitSimulation has to be called here since it will wait for the render thread to
     // finish loading
+
+    std::unique_lock<std::mutex> lock(mtx);
+
     xbot_mujoco::InitSimulation(xbot_mujoco::sim.get(),model_fname.c_str(),xbot2_config_path.c_str());
     reset();
+    physics_dt=xbot_mujoco::m->opt.timestep;
 
-    initialized = true;
+    initialized.store(true);
 
-    while (true) {
+    lock.unlock();
 
-        std::unique_lock<std::mutex> lock(mtx);  // Lock the mutex
-        if (!sim_step_cv.wait_for(lock, std::chrono::seconds(timeout), [this] { return step_now; })) {
-            printf("[xbot2_mujoco][XBotMjSimEnv][physics_loop_manual]: no step request received within timeout of %i s\n", timeout);
+    while (!(xbot_mujoco::sim->exitrequest.load())) {
+
+        std::unique_lock<std::mutex> lock(mtx); 
+        // sim_step_req_cv.wait(lock, [this] { return step_req; });
+        if (!sim_step_req_cv.wait_for(lock, std::chrono::milliseconds(timeout), [this] { return step_req; })) {
+            printf("[xbot2_mujoco][XBotMjSimEnv][physics_loop_manual]: no step request received within timeout of %i ms\n", timeout);
             xbot_mujoco::sim->exitrequest.store(1);
-            clear_sim();
             return;
         } 
-        // sim_step_cv.wait(lock, [this] { return step_now; });
-        // if (!) {
-        //     printf("[xbot2_mujoco][XBotMjSimEnv][physics_loop_manual]: no step request received within timeout of %i s\n", timeout);
-        //     xbot_mujoco::sim->exitrequest.store(1);
-        //     clear_sim();
-        //     return;
-        // } 
-
-        if (!((*xbot_mujoco::sim).exitrequest.load())) {
-            step_sim();
-            step_now=false; // stepped simulation
-        } else {
-            clear_sim();
-            return;
-        }
-        
+        step_sim();
+        step_req=false;
+        step_done=true; // signal that simulation has stepped
+        sim_step_res_cv.notify_all();
     }
-
+    
 }
 
 void XBotMjSimEnv::step_sim() {
 
     xbot_mujoco::PreStep(*xbot_mujoco::sim);
     xbot_mujoco::DoStep(*xbot_mujoco::sim,syncCPU,syncSim);
+    step_counter=xbot_mujoco::step_counter;
 
 }
 
@@ -187,7 +197,7 @@ void XBotMjSimEnv::initialize(bool headless) {
         printf("[xbot2_mujoco][XBotMjSimEnv][initialize]: launching physics sim thread\n");
         physics_thread = std::thread(&XBotMjSimEnv::physics_loop, this);
     } else { // will (atomically) wait for step to be called
-        printf("[xbot2_mujoco][XBotMjSimEnv][initialize]: launching physics sim threadh with manual stepping\n");
+        printf("[xbot2_mujoco][XBotMjSimEnv][initialize]: launching physics sim thread with manual stepping\n");
         physics_thread = std::thread(&XBotMjSimEnv::physics_loop_manual, this);
     }
 
@@ -198,24 +208,34 @@ void XBotMjSimEnv::initialize(bool headless) {
         printf("[xbot2_mujoco][XBotMjSimEnv][close]: physics thread terminated\n");
     }
 
+    clear_sim();
+
 }
 
 bool XBotMjSimEnv::is_running() {
-    return running;
+    return running.load();
 }
 
 bool XBotMjSimEnv::run() {
 
-    if (!running) {
+    if (!is_running()) {
+
         simulator_thread = std::thread(&XBotMjSimEnv::initialize, this, headless);
+
+        while (!initialized.load()) {
+            std::this_thread::sleep_for(100ms);
+        }
+
+        running.store(true);
 
         if (manual_stepping) { // perform some dummy sim steps
             for (int i = 0; i < init_steps; ++i) {
-                step();
+                if (!step()) {
+                    return false;
+                }
             }
         } 
 
-        running=true;
         return true;
 
     } else {

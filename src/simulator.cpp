@@ -554,7 +554,7 @@ void xbot_mujoco::run(const char* fname,
 
   p_init[0] = 0.0;
   p_init[1] = 0.0;
-  p_init[2] = 1.8;
+  p_init[2] = 1.0;
 
   q_init[0] = 1.0; // MuJoCo uses the (w, x, y, z) convention for quaternions
   q_init[1] = 0.0;

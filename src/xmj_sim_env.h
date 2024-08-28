@@ -39,15 +39,17 @@ public:
     std::vector<double> q_i = {1.0, 0.0, 0.0, 0.0};
     std::string base_link_name = "base_link";
 
+    int step_counter=0;
+    double physics_dt=-1.0;
+
 private:
 
     bool headless;
     bool manual_stepping;
 
-    bool running=false;
-    bool initialized = false; 
+    std::atomic_bool running=false;
+    std::atomic_bool initialized = false;
 
-    int sim_init_steps = 0;
     int init_steps = 1;
     
     // cpu-sim syncronization points
@@ -60,10 +62,11 @@ private:
     std::thread physics_thread;
     std::thread simulator_thread;
 
-    std::condition_variable sim_step_cv;
-    bool step_now = false;
+    std::condition_variable sim_step_req_cv, sim_step_res_cv;
+    bool step_req = false;
+    bool step_done = true;
     std::mutex mtx; 
-    int timeout = 10; // [s]
+    int timeout = 1; // [s]
 
     ros::NodeHandle ros_nh;
     

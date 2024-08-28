@@ -2,7 +2,7 @@
 <mujoco>
     <compiler discardvisual="false" strippath="false" angle="radian" autolimits="true" balanceinertia="true" fusestatic="true" boundmass="0"/>
 
-    <option cone="elliptic" impratio="100" timestep="0.0005"/>
+    <option cone="elliptic" impratio="100" timestep="0.0008"/>
     <!-- Simulation settings -->
     <size njmax="1000" nconmax="200"/>
     <contact>

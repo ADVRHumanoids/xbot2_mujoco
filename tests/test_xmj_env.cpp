@@ -1,5 +1,6 @@
 #include "string.h"
 #include <gtest/gtest.h>
+#include <chrono>
 
 #include "../src/xmj_sim_env.h"
 #include "../src/loading_utils.h"
@@ -57,16 +58,28 @@ protected:
 };
 
 TEST_P(SimRunTest, TestSim) {
-    int n_steps = 1000000000;
-    int actual_done = 0;
+    int actual_done = xbot_mujoco_env_ptr->step_counter;
+    double target_stime=5.0;
+
+    int n_steps = 10000;
+    auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < n_steps; ++i) {
         if (!xbot_mujoco_env_ptr->step()) {
             break;
         }
-        actual_done++;
     }
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> walltime = end - start;
+
     xbot_mujoco_env_ptr->close(); // close everything
+    actual_done=xbot_mujoco_env_ptr->step_counter-actual_done;
+
+    double physics_dt = xbot_mujoco_env_ptr->physics_dt;
+    double simtime_elapsed = physics_dt*actual_done;
+
     printf("[test_xmj_env][SimRunTest]: n of timesteps done %i VS %i\n", actual_done, n_steps);
+    printf("[test_xmj_env][SimRunTest]: elapsed wall time %f [s] VS simulated time %f [s]. \n RT factor %f, physics dt %f \n", 
+        walltime.count(), simtime_elapsed, simtime_elapsed/walltime.count(),physics_dt);
 
     EXPECT_EQ(actual_done, n_steps); 
 }
@@ -76,7 +89,11 @@ INSTANTIATE_TEST_SUITE_P(
     SimRunTestCases,
     SimRunTest,
     ::testing::Values(
-        std::make_tuple(false, true, 10, 10)
+        std::make_tuple(false, // headless
+            true, // manual stepping 
+            100, // n of initial steps
+            1000 // timeout [ms]
+            )
     )
 );
 
