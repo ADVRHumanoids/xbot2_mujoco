@@ -234,7 +234,7 @@ void LoadingUtils::print_homing(std::vector<std::string> jnt_names,
     printf( "]:\n");
 
     // jnt vals
-    printf( "[XBot][JointMjServer]: homing values ->\n");
+    printf( "[LoadingUtils][print_homing]: homing values ->\n");
     printf( "[");
     for (std::size_t i = 0; i < vals.size(); ++i) {
         printf( "%.2f", vals[i]);

@@ -24,8 +24,6 @@ class ManualSteppingTest : public ::testing::TestWithParam<std::tuple<bool, bool
 protected:
 
     ManualSteppingTest(){
-        
-        ros::NodeHandle ros_nh("");
 
         std::string mesh_root_directory = std::string(IIT_CENTAURO_ROS_PKG_ROOT)+std::string("/centauro_urdf/meshes");
         std::vector<std::string> subdirs = {"v2", "realsense", "simple"}; // list of subdirs where
@@ -50,7 +48,6 @@ protected:
 
         xbot_mujoco_env_ptr = std::make_unique<XBotMjSimEnv>(
             mj_xml_path.c_str(),
-            ros_nh,
             xbot2_cfg_path,
             std::get<0>(GetParam()),
             std::get<1>(GetParam()),
@@ -108,7 +105,7 @@ TEST_P(ManualSteppingTest, TestSim) {
     double simtime_elapsed = physics_dt*actual_done;
 
     printf("[test_xmj_env][ManualSteppingTest]: n of timesteps done %i VS %i\n", actual_done, n_steps);
-    printf("[test_xmj_env][ManualSteppingTest]: elapsed wall time %f [s] VS simulated time %f [s]. \n RT factor %f, physics dt %f \n", 
+    printf("[test_xmj_env][ManualSteppingTest]: elapsed wall time %f [s] VS simulated time %f [s]. \n RT factor %f, physics dt %f [s]\n", 
         walltime.count(), simtime_elapsed, simtime_elapsed/walltime.count(),physics_dt);
 
     EXPECT_EQ(actual_done, n_steps); 
@@ -129,8 +126,7 @@ INSTANTIATE_TEST_SUITE_P(
 
 int main(int argc, char** argv)
 {   
-    ros::init(argc, argv, "XMjEnvTests");
-
+    // ros::init(argc, argv, std::string("XBotMjSimEnv"));
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 

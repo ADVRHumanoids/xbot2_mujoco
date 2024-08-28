@@ -502,13 +502,10 @@ void xbot_mujoco::InitSimulation(mj::Simulate* sim, const char* mj_filename, con
 
   homing = LoadingUtils::generate_ordered_homing(xbot_config_path);
 
-  // if (std::get<0>(homing).size()==0) { // set homing to 0 by default
-
-  // }
-
   LoadingUtils::print_homing(std::get<0>(homing), std::get<1>(homing));
 
   xbot2_wrapper.reset();
+
   xbot2_wrapper = std::make_unique<XBot::MjWrapper>(m, xbot_config_path);
 
 }

@@ -8,13 +8,12 @@ void handle_sigint(int signal_num) {
 
 XBotMjSimEnv::XBotMjSimEnv(
     const std::string model_fname,
-    ros::NodeHandle nh,
     const std::string xbot2_config_path, 
     bool headless,
     bool manual_stepping,
     int init_steps,
     int timeout)
-    :xbot2_config_path(xbot2_config_path),model_fname(model_fname),ros_nh(nh),
+    :xbot2_config_path(xbot2_config_path),model_fname(model_fname),
     headless(headless),manual_stepping(manual_stepping), timeout(timeout) {
 
     printf("[xbot2_mujoco][XBotMjSimEnv]: initializing sim. enviroment with MuJoCo xml file at %s and XBot2 config at %s\n", 
@@ -23,6 +22,7 @@ XBotMjSimEnv::XBotMjSimEnv(
     if (!run()) {
         fprintf(stderr, "[xbot2_mujoco][XBotMjSimEnv]: failed to run environment!");
     }
+    
 
 }
 
@@ -154,6 +154,11 @@ void XBotMjSimEnv::step_sim() {
 }
 
 void XBotMjSimEnv::initialize(bool headless) {
+    // ROS stuff
+
+    std::string ros_namespace=""; // operate in ros global ns
+    ros::NodeHandle ros_nh(ros_namespace);
+
     // display an error if running on macOS under Rosetta 2
     #if defined(__APPLE__) && defined(__AVX__)
     if (rosetta_error_msg) {
@@ -189,6 +194,7 @@ void XBotMjSimEnv::initialize(bool headless) {
     mjcb_control = xbot_mujoco::xbotmj_control_callback; // register control callback to mujoco
     
     assign_init_root_state();
+    
 
     // Install the signal handler for SIGINT (Ctrl+C)
     std::signal(SIGINT, handle_sigint);
@@ -220,6 +226,15 @@ bool XBotMjSimEnv::is_running() {
 bool XBotMjSimEnv::run() {
 
     if (!is_running()) {
+
+        std::vector<std::string> args;
+        std::vector<char*> argv;
+        for (std::string& arg : args)
+        {
+            argv.push_back(&arg[0]);
+        }
+        int argc = argv.size();
+        ros::init(argc, argv.data(), std::string("XBotMjSimEnv"));
 
         simulator_thread = std::thread(&XBotMjSimEnv::initialize, this, headless);
 

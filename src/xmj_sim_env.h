@@ -12,6 +12,7 @@
 #include <condition_variable>
 
 #include "simulator.h"
+#include <ros/ros.h>
 
 namespace mj = ::mujoco;
 
@@ -22,7 +23,6 @@ public:
 
     XBotMjSimEnv(
         const std::string model_fname,
-        ros::NodeHandle nh,
         const std::string xbot2_config_path = "",
         bool headless = false,
         bool manual_stepping = false,
@@ -67,8 +67,6 @@ private:
     bool step_done = true;
     std::mutex mtx; 
     int timeout = 1; // [s]
-
-    ros::NodeHandle ros_nh;
     
     std::chrono::time_point<mj::Simulate::Clock> syncCPU;
     mjtNum syncSim = 0;

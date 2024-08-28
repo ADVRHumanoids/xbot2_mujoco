@@ -31,10 +31,12 @@ public:
 
     void run(mjData * d)
     {
+
         _joint.run(d);
         _imu.run(d);
         _ls.run(d);
         _clock.run(d);
+
     }
 
     void reset(mjData * d) 
