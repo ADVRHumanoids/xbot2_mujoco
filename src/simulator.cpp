@@ -27,6 +27,7 @@ std::tuple<std::vector<std::string>, std::vector<double>> xbot_mujoco::homing;
 std::vector<double> xbot_mujoco::p_init = {0.0, 0.0, 0.8}; 
 std::vector<double> xbot_mujoco::q_init = {1.0, 0.0, 0.0, 0.0};
 std::string xbot_mujoco::root_link="root_link";
+
 //xbot2
 XBot::MjWrapper::UniquePtr xbot_mujoco::xbot2_wrapper;
 
@@ -170,6 +171,27 @@ void xbot_mujoco::scanPluginLibraries() {
 }
 
 //--------------------------- rendering and simulation ----------------------------------
+std::vector<std::string> JntNames(mjModel* m) {
+
+  std::vector<std::string> jnt_names;
+
+  for(int i = 0; i < m->njnt; i++)
+  {
+    std::string jname = &m->names[m->name_jntadr[i]];
+
+    if(m->jnt_type[i] != mjtJoint::mjJNT_HINGE &&
+            m->jnt_type[i] != mjtJoint::mjJNT_SLIDE)
+    { // not supported
+      fprintf(stderr, "[xbot2_mujoco][JntNames]: Joint %s neither of type mjJNT_HINGE nor mjJNT_SLIDE. Will be ignored", 
+        jname.c_str());
+      continue;
+    } else {
+      jnt_names.push_back(jname);
+    }
+  }
+
+  return jnt_names;
+}
 
 void xbot_mujoco::SetJntOffsets(mjModel* m) {
   
@@ -185,7 +207,7 @@ void xbot_mujoco::SetJntOffsets(mjModel* m) {
 
 }
 
-void xbot_mujoco::MoveJntToHomingNow(mjData* d) {
+void xbot_mujoco::MoveJntsToHomingNow(mjData* d) {
 
   for(int i = 0; i < std::get<0>(homing).size(); i++)
   {
@@ -535,7 +557,7 @@ void xbot_mujoco::RenderingLoop(mj::Simulate* sim, ros::NodeHandle nh) {
 
 void xbot_mujoco::Reset(mj::Simulate& sim) {
 
-  xbot_mujoco::MoveJntToHomingNow(d);
+  xbot_mujoco::MoveJntsToHomingNow(d);
   xbot_mujoco::MoveBaseNowTo(d,p_init,q_init,root_link);
   xbot2_wrapper->reset(d);
   step_counter==0;

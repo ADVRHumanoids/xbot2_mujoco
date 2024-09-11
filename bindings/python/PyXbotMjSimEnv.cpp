@@ -30,6 +30,10 @@ PYBIND11_MODULE(PyXbotMjSimEnv, m) {
         .def("close", &XBotMjSimEnv::close, "Close the simulation environment")
         .def("step", &XBotMjSimEnv::step, "Perform one simulation step")
         .def("is_running", &XBotMjSimEnv::is_running, "Check if the simulation is running")
+        .def("n_jnts", &XBotMjSimEnv::n_jnts, "get n of controllable joints")
+        .def("jnt_names", &XBotMjSimEnv::jnt_names, "get names of controllable joints")
+        .def("move_to_homing_now", &XBotMjSimEnv::jnt_names, "move robot to homing NOW!")
+        .def("move_base_to_now", &XBotMjSimEnv::jnt_names, "move robot base somewhere NOW!")
 
         // Bind the public attributes
         .def_readwrite("p_i", &XBotMjSimEnv::p_i, "Initial position vector")

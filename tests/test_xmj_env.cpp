@@ -79,6 +79,9 @@ TEST_P(ManualSteppingTest, TestSim) {
 
     int actual_done = xbot_mujoco_env_ptr->step_counter;
     double target_stime=5.0;
+    
+    std::vector<std::string> read_jnts = xbot_mujoco_env_ptr->jnt_names();
+    int n_jnts = xbot_mujoco_env_ptr->n_jnts();
 
     int n_steps = 20000;
     auto start = std::chrono::high_resolution_clock::now();

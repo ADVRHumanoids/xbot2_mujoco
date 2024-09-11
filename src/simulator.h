@@ -86,8 +86,8 @@ std::string getExecutableDir();
 void scanPluginLibraries();
 
 //--------------------------- rendering and simulation ----------------------------------
-
-void MoveJntToHomingNow(mjData* d);
+std::vector<std::string> JntNames(mjModel* m);
+void MoveJntsToHomingNow(mjData* d);
 void MoveBaseNowTo(mjData* d, std::vector<double> p, std::vector<double> q,
   std::string root_linkname = "root_link");
 void SetJntOffsets(mjModel* m);

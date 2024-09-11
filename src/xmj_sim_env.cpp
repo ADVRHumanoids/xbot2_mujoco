@@ -262,5 +262,19 @@ bool XBotMjSimEnv::run() {
     
 }
 
+std::vector<std::string> XBotMjSimEnv::jnt_names() {
+    return xbot_mujoco::JntNames(xbot_mujoco::m);
+}
 
+int XBotMjSimEnv::n_jnts() {
+    std::vector<std::string> names=xbot_mujoco::JntNames(xbot_mujoco::m);
+    return names.size();
+}
 
+void XBotMjSimEnv::move_to_homing_now() {
+    xbot_mujoco::MoveJntsToHomingNow(xbot_mujoco::d);
+}
+
+void XBotMjSimEnv::move_base_to_now(std::vector<double> p, std::vector<double> q) {
+    xbot_mujoco::MoveBaseNowTo(xbot_mujoco::d, p, q, base_link_name);
+}

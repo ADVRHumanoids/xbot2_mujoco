@@ -34,9 +34,15 @@ public:
     bool step();
     bool reset();
     void close();
+    
+    int n_jnts();
+    std::vector<std::string> jnt_names();
 
+    void move_to_homing_now();
+    void move_base_to_now(std::vector<double> p, std::vector<double> q);
+    
     std::vector<double> p_i = {0.0,0.0,1.0};
-    std::vector<double> q_i = {1.0, 0.0, 0.0, 0.0};
+    std::vector<double> q_i = {1.0,0.0,0.0,0.0};
     std::string base_link_name = "base_link";
 
     int step_counter=0;
@@ -51,7 +57,7 @@ private:
     std::atomic_bool initialized = false;
 
     int init_steps = 1;
-    
+        
     // cpu-sim syncronization points
     double cpusync = 0;
     mjtNum simsync = 0;

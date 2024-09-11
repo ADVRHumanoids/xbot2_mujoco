@@ -15,7 +15,7 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
 
     auto motor_pd = cfg["motor_pd"];
 
-    for(int i = 0; i < mj_model->njnt; i++)
+    for(int i = 0; i < _m->njnt; i++)
     {
         if(_m->jnt_type[i] != mjtJoint::mjJNT_HINGE &&
                _m->jnt_type[i] != mjtJoint::mjJNT_SLIDE)
@@ -23,7 +23,7 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
             continue;
         }
 
-        std::string jname = &_m->names[mj_model->name_jntadr[i]];
+        std::string jname = &_m->names[_m->name_jntadr[i]];
 
         auto j = std::make_shared<JointInstanceMj>(
                      Hal::DeviceInfo{jname, "joint_mj", i}
