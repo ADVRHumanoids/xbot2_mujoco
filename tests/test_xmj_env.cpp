@@ -82,6 +82,15 @@ TEST_P(ManualSteppingTest, TestSim) {
     
     std::vector<std::string> read_jnts = xbot_mujoco_env_ptr->jnt_names();
     int n_jnts = xbot_mujoco_env_ptr->n_jnts();
+    printf( "[ManualSteppingTest][TestSim]: joint names (expected size %i)->\n",n_jnts);
+    printf( "[");
+    for (std::size_t i = 0; i < read_jnts.size(); ++i) {
+        printf( "%s", read_jnts[i].c_str());
+        if (i < read_jnts.size() - 1) {
+            printf( ", ");
+        }
+    }
+    printf( "]:\n");
 
     int n_steps = 20000;
     auto start = std::chrono::high_resolution_clock::now();

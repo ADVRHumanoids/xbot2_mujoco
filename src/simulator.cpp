@@ -171,7 +171,7 @@ void xbot_mujoco::scanPluginLibraries() {
 }
 
 //--------------------------- rendering and simulation ----------------------------------
-std::vector<std::string> JntNames(mjModel* m) {
+std::vector<std::string>  xbot_mujoco::JntNames(mjModel* m) {
 
   std::vector<std::string> jnt_names;
 
