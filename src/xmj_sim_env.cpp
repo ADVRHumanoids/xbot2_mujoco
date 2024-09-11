@@ -81,7 +81,7 @@ void XBotMjSimEnv::read_dofs() {
     // std::copy(d->qvel, d->qvel + n_dofs, jnts_v.begin());
     // std::copy(d->qacc, d->qacc + n_dofs, jnts_a.begin());
     // std::copy(d->qfrc_applied, d->qfrc_applied + n_dofs, jnts_eff.begin());
-    for (int i=0; i<xbot_mujoco::m->nu; i++) {
+    for (int i=0; i<dof_names.size(); i++) {
         int joint_id = mj_name2id(xbot_mujoco::m, mjOBJ_JOINT, dof_names[i].c_str());
         int qi = xbot_mujoco::m->jnt_qposadr[joint_id];
         int vi = xbot_mujoco::m->jnt_dofadr[joint_id];
@@ -97,13 +97,12 @@ void XBotMjSimEnv::read_root() {
     if (rott_link_idx != -1) { // root link found
         int root_pos_address = xbot_mujoco::m->jnt_qposadr[xbot_mujoco::m->body_jntadr[rott_link_idx]];
         int root_vel_address = xbot_mujoco::m->jnt_dofadr[xbot_mujoco::m->body_jntadr[rott_link_idx]];
-        std::copy(xbot_mujoco::d->qpos, xbot_mujoco::d->qpos + n_dofs, jnts_q.begin());
         std::copy(xbot_mujoco::d->qpos+root_pos_address, 
             xbot_mujoco::d->qpos+root_pos_address+2, p.begin()); // root position
         std::copy(xbot_mujoco::d->qpos+root_pos_address+3, 
             xbot_mujoco::d->qpos+root_pos_address+6, q.begin()); // root orientation
         std::copy(xbot_mujoco::d->qpos+root_vel_address, 
-            xbot_mujoco::d->qpos+root_vel_address+6, twist.begin()); // root twist
+            xbot_mujoco::d->qpos+root_vel_address+5, twist.begin()); // root twist
 
     }
 }
