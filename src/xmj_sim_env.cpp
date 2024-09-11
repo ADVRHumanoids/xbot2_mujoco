@@ -144,6 +144,15 @@ void XBotMjSimEnv::physics_loop() {
     reset();
     physics_dt=xbot_mujoco::m->opt.timestep;
 
+    n_dofs = n_jnts();
+    jnts_q.resize(n_dofs);
+    jnts_v.resize(n_dofs);
+    jnts_a.resize(n_dofs);
+    jnts_eff.resize(n_dofs);
+
+    dof_names.resize(n_dofs);
+    dof_names=jnt_names();
+
     initialized.store(true);
 
     lock.unlock();
@@ -165,6 +174,15 @@ void XBotMjSimEnv::physics_loop_manual() {
     physics_dt=xbot_mujoco::m->opt.timestep;
 
     initialized.store(true);
+
+    n_dofs = n_jnts();
+    jnts_q.resize(n_dofs);
+    jnts_v.resize(n_dofs);
+    jnts_a.resize(n_dofs);
+    jnts_eff.resize(n_dofs);
+
+    dof_names.resize(n_dofs);
+    dof_names=jnt_names();
 
     lock.unlock();
 
@@ -246,15 +264,6 @@ void XBotMjSimEnv::initialize(bool headless) {
         printf("[xbot2_mujoco][XBotMjSimEnv][initialize]: launching physics sim thread with manual stepping\n");
         physics_thread = std::thread(&XBotMjSimEnv::physics_loop_manual, this);
     }
-
-    n_dofs = n_jnts();
-    jnts_q.resize(n_dofs);
-    jnts_v.resize(n_dofs);
-    jnts_a.resize(n_dofs);
-    jnts_eff.resize(n_dofs);
-
-    dof_names.resize(n_dofs);
-    dof_names=jnt_names();
 
     xbot_mujoco::RenderingLoop(xbot_mujoco::sim.get(), ros_nh); // render in this thread
     

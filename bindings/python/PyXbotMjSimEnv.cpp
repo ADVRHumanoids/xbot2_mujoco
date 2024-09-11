@@ -4,7 +4,23 @@
 #include "../../src/xmj_sim_env.h"
 #include "../../src/loading_utils.h"
 
+#include <pybind11/numpy.h>
+#include <vector>
+
 namespace py = pybind11;
+
+py::array_t<double> vector_to_numpy(const std::vector<double>& vec) {
+    return py::array_t<double>(
+        { vec.size() },                  // shape
+        { sizeof(double) },              // strides
+        vec.data() // data pointer
+    );
+}
+
+void numpy_to_vector(const pybind11::array_t<double>& arr, std::vector<double>& vec) {
+    auto buf = arr.request();
+    vec.assign(static_cast<double*>(buf.ptr), static_cast<double*>(buf.ptr) + buf.size);
+}
 
 inline bool isRelease() {
     #ifdef IS_RELEASE
@@ -36,18 +52,21 @@ PYBIND11_MODULE(PyXbotMjSimEnv, m) {
         .def("move_base_to_now", &XBotMjSimEnv::jnt_names, "move robot base somewhere NOW!")
 
         // Bind the public attributes
-        .def_readwrite("p_i", &XBotMjSimEnv::p_i, "Initial position vector")
-        .def_readwrite("q_i", &XBotMjSimEnv::q_i, "Initial quaternion")
         .def_readwrite("base_link_name", &XBotMjSimEnv::base_link_name, "Name of the base link")
         .def_readwrite("step_counter", &XBotMjSimEnv::step_counter, "Step counter")
         .def_readwrite("physics_dt", &XBotMjSimEnv::physics_dt, "Physics time step")
-        .def_readwrite("p", &XBotMjSimEnv::p, "p")
-        .def_readwrite("q", &XBotMjSimEnv::q, "q")
-        .def_readwrite("twist", &XBotMjSimEnv::twist, "jnt twist")
-        .def_readwrite("jnts_q", &XBotMjSimEnv::jnts_q, "jnts_q")
-        .def_readwrite("jnts_v", &XBotMjSimEnv::jnts_v, "jnts_v")
-        .def_readwrite("jnts_a", &XBotMjSimEnv::jnts_a, "jnts_a")
-        .def_readwrite("jnts_eff", &XBotMjSimEnv::jnts_eff, "jnts_eff")
+
+        .def("get_pi", [](const XBotMjSimEnv& self) { return vector_to_numpy(self.p_i); })
+        .def("set_pi", [](XBotMjSimEnv& self, const pybind11::array_t<double>& arr) {numpy_to_vector(arr, self.p_i);})
+        .def("get_qi", [](const XBotMjSimEnv& self) { return vector_to_numpy(self.q_i); })
+        .def("set_qi", [](XBotMjSimEnv& self, const pybind11::array_t<double>& arr) {numpy_to_vector(arr, self.q_i);})
+        .def_property_readonly("p", [](const XBotMjSimEnv& self) { return vector_to_numpy(self.p); })
+        .def_property_readonly("q", [](const XBotMjSimEnv& self) { return vector_to_numpy(self.q); })
+        .def_property_readonly("twist", [](const XBotMjSimEnv& self) { return vector_to_numpy(self.twist); })
+        .def_property_readonly("jnts_q", [](const XBotMjSimEnv& self) { return vector_to_numpy(self.jnts_q); })
+        .def_property_readonly("jnts_v", [](const XBotMjSimEnv& self) { return vector_to_numpy(self.jnts_v); })
+        .def_property_readonly("jnts_a", [](const XBotMjSimEnv& self) { return vector_to_numpy(self.jnts_a); })
+        .def_property_readonly("jnts_eff", [](const XBotMjSimEnv& self) { return vector_to_numpy(self.jnts_eff); })
 
         ;
     
