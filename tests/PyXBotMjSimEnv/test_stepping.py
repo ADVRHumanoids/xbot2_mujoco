@@ -64,6 +64,10 @@ class TestSimStepping(unittest.TestCase):
         n_steps_done = 0
 
         actual_done = self._xmj_env.step_counter
+        
+        jnt_names=self._xmj_env.jnt_names()
+        print("\nControllable joint names: ->\n")
+        print(", ".join(jnt_names))
 
         for i in range(n_steps):
             if not self._xmj_env.step():
