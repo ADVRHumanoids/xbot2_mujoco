@@ -61,10 +61,50 @@ bool XBotMjSimEnv::step() {
             xbot_mujoco::sim->exitrequest.store(1);
             return false;
         } // sim step performed successfully
+        
+        read_state(); // update state from sim
 
         return true;
     } else { 
         return false;
+    }
+}
+
+void XBotMjSimEnv::read_state() {
+    read_dofs();
+    read_root();
+}
+
+void XBotMjSimEnv::read_dofs() {
+    // we should be ok (lengths match)
+    // std::copy(d->qpos, d->qpos + n_dofs, jnts_q.begin());
+    // std::copy(d->qvel, d->qvel + n_dofs, jnts_v.begin());
+    // std::copy(d->qacc, d->qacc + n_dofs, jnts_a.begin());
+    // std::copy(d->qfrc_applied, d->qfrc_applied + n_dofs, jnts_eff.begin());
+    for (int i=0; i<xbot_mujoco::m->nu; i++) {
+        int joint_id = mj_name2id(xbot_mujoco::m, mjOBJ_JOINT, dof_names[i].c_str());
+        int qi = xbot_mujoco::m->jnt_qposadr[joint_id];
+        int vi = xbot_mujoco::m->jnt_dofadr[joint_id];
+        jnts_q[i]=xbot_mujoco::d->qpos[qi];
+        jnts_v[i]=xbot_mujoco::d->qvel[vi];
+        jnts_a[i]=xbot_mujoco::d->qacc[vi];
+        jnts_eff[i]=xbot_mujoco::d->qfrc_applied[vi];
+    }
+}
+
+void XBotMjSimEnv::read_root() {
+    int rott_link_idx = mj_name2id(xbot_mujoco::m, mjOBJ_BODY, base_link_name.c_str());
+    if (rott_link_idx != -1) { // root link found
+        int root_pos_address = xbot_mujoco::m->jnt_qposadr[xbot_mujoco::m->body_jntadr[rott_link_idx]];
+        int root_vel_address = xbot_mujoco::m->jnt_dofadr[xbot_mujoco::m->body_jntadr[rott_link_idx]];
+        std::copy(xbot_mujoco::d->qpos, xbot_mujoco::d->qpos + n_dofs, jnts_q.begin());
+        std::copy(xbot_mujoco::d->qpos+root_pos_address, 
+            xbot_mujoco::d->qpos+root_pos_address+2, p.begin()); // root position
+        std::copy(xbot_mujoco::d->qpos+root_pos_address+3, 
+            xbot_mujoco::d->qpos+root_pos_address+6, q.begin()); // root orientation
+        std::copy(xbot_mujoco::d->qpos+root_vel_address, 
+            xbot_mujoco::d->qpos+root_vel_address+6, twist.begin()); // root twist
+
     }
 }
 
@@ -195,7 +235,6 @@ void XBotMjSimEnv::initialize(bool headless) {
     
     assign_init_root_state();
     
-
     // Install the signal handler for SIGINT (Ctrl+C)
     std::signal(SIGINT, handle_sigint);
     // physics_thread = std::thread(&xbot_mujoco::SimulationLoop, xbot_mujoco::sim.get(), 
@@ -207,6 +246,15 @@ void XBotMjSimEnv::initialize(bool headless) {
         printf("[xbot2_mujoco][XBotMjSimEnv][initialize]: launching physics sim thread with manual stepping\n");
         physics_thread = std::thread(&XBotMjSimEnv::physics_loop_manual, this);
     }
+
+    n_dofs = n_jnts();
+    jnts_q.resize(n_dofs);
+    jnts_v.resize(n_dofs);
+    jnts_a.resize(n_dofs);
+    jnts_eff.resize(n_dofs);
+
+    dof_names.resize(n_dofs);
+    dof_names=jnt_names();
 
     xbot_mujoco::RenderingLoop(xbot_mujoco::sim.get(), ros_nh); // render in this thread
     

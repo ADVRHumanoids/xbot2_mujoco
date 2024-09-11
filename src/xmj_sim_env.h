@@ -41,9 +41,19 @@ public:
     void move_to_homing_now();
     void move_base_to_now(std::vector<double> p, std::vector<double> q);
     
+    void read_state();
+
     std::vector<double> p_i = {0.0,0.0,1.0};
     std::vector<double> q_i = {1.0,0.0,0.0,0.0};
+    std::vector<double> p = {0.0,0.0,1.0};
+    std::vector<double> q = {1.0,0.0,0.0,0.0};
+    std::vector<double> twist = {0.0,0.0,0.0,0.0,0.0,0.0};
+    std::vector<double> jnts_q, jnts_v, jnts_a, jnts_eff;
+
     std::string base_link_name = "base_link";
+    
+    std::vector<std::string> dof_names;
+    int n_dofs=-1;
 
     int step_counter=0;
     double physics_dt=-1.0;
@@ -57,7 +67,7 @@ private:
     std::atomic_bool initialized = false;
 
     int init_steps = 1;
-        
+
     // cpu-sim syncronization points
     double cpusync = 0;
     mjtNum simsync = 0;
@@ -84,6 +94,8 @@ private:
     void clear_sim();
     void assign_init_root_state();
     bool run();
+    void read_dofs();
+    void read_root();
 
 };
 

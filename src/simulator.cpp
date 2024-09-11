@@ -178,16 +178,15 @@ std::vector<std::string>  xbot_mujoco::JntNames(mjModel* m) {
   for(int i = 0; i < m->njnt; i++)
   {
     std::string jname = &m->names[m->name_jntadr[i]];
+    jnt_names.push_back(jname);
 
-    if(m->jnt_type[i] != mjtJoint::mjJNT_HINGE &&
-            m->jnt_type[i] != mjtJoint::mjJNT_SLIDE)
-    { // not supported
-      fprintf(stderr, "[xbot2_mujoco][JntNames]: Joint %s neither of type mjJNT_HINGE nor mjJNT_SLIDE. Will be ignored", 
-        jname.c_str());
-      continue;
-    } else {
-      jnt_names.push_back(jname);
-    }
+    // if(m->jnt_type[i] != mjtJoint::mjJNT_HINGE &&
+    //         m->jnt_type[i] != mjtJoint::mjJNT_SLIDE)
+    // { // not supported
+    //   fprintf(stderr, "[xbot2_mujoco][JntNames]: Joint %s neither of type mjJNT_HINGE nor mjJNT_SLIDE. Will be ignored", 
+    //     jname.c_str());
+    //   continue;
+    // } 
   }
 
   return jnt_names;

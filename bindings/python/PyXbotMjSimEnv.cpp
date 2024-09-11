@@ -41,6 +41,14 @@ PYBIND11_MODULE(PyXbotMjSimEnv, m) {
         .def_readwrite("base_link_name", &XBotMjSimEnv::base_link_name, "Name of the base link")
         .def_readwrite("step_counter", &XBotMjSimEnv::step_counter, "Step counter")
         .def_readwrite("physics_dt", &XBotMjSimEnv::physics_dt, "Physics time step")
+        .def_readwrite("p", &XBotMjSimEnv::p, "p")
+        .def_readwrite("q", &XBotMjSimEnv::q, "q")
+        .def_readwrite("twist", &XBotMjSimEnv::twist, "jnt twist")
+        .def_readwrite("jnts_q", &XBotMjSimEnv::jnts_q, "jnts_q")
+        .def_readwrite("jnts_v", &XBotMjSimEnv::jnts_v, "jnts_v")
+        .def_readwrite("jnts_a", &XBotMjSimEnv::jnts_a, "jnts_a")
+        .def_readwrite("jnts_eff", &XBotMjSimEnv::jnts_eff, "jnts_eff")
+
         ;
     
     py::class_<LoadingUtils>(m, "LoadingUtils")
