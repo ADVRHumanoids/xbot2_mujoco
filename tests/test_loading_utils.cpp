@@ -52,12 +52,14 @@ TEST_F(ParsingTest, GenerateURDFWithRootDir) {
         "other_joint"};
     
     std::map<std::string, double> retrieved_homing = loader.generate_homing_map(other_jnt_list,
+        "",
         loader.get_xbot_config_path(),0.0);
     for (const auto& pair : retrieved_homing) {
         std::cout << "Joint: " << pair.first << ", Value: " << pair.second << std::endl;
     }
 
     std::vector<double> ordered_homing = loader.generate_homing_from_list(other_jnt_list,
+        "",
         loader.get_xbot_config_path(),0.0);
     for (size_t i = 0; i < other_jnt_list.size(); ++i) {
         std::cout << "Joint: " << other_jnt_list[i] << ", Homing Value: " << ordered_homing[i] << std::endl;
@@ -92,6 +94,7 @@ TEST_F(ParsingTest, TestHomingParsing) {
 
     std::cout << "\nordered homing list:" << std::endl;
     std::vector<double> ordered_homing = loader.generate_homing_from_list(other_jnt_list,
+        "",
         loader.get_xbot_config_path(),0.0);
     for (size_t i = 0; i < other_jnt_list.size(); ++i) {
         std::cout << "Joint: " << other_jnt_list[i] << ", Homing Value: " << ordered_homing[i] << std::endl;

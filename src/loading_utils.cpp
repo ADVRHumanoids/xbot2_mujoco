@@ -36,6 +36,10 @@ void LoadingUtils::set_urdf_path(const std::string& urdfpath) {
     urdf_path = urdfpath;
 }
 
+void LoadingUtils::set_srdf_path(const std::string& srdfpath) {
+    srdf_path = srdfpath;
+}
+
 void LoadingUtils::set_urdf_cmd(const std::string& urdfcommand) {
     urdf_command = urdfcommand;
 }
@@ -142,15 +146,18 @@ std::map<std::string, double> LoadingUtils::get_homing_from_srdf(const std::stri
 }
 
 std::map<std::string, double> LoadingUtils::generate_homing_map(const std::vector<std::string>& jnt_name_list, 
+        std::string srdfpath,
         const std::string xbot_cf_path,
         double fallback_val) {
-
-    std::string srdf_path = get_srdf_path_fromxbotconfig(xbot_cf_path);
-
+    
+    if (srdfpath.empty()) { // then we try to read it from xbot config file
+        srdfpath = get_srdf_path_fromxbotconfig(xbot_cf_path);
+    }
+    
     std::map<std::string, double> result;
 
-    if (!srdf_path.empty()) {
-        std::map<std::string, double> homing_map = get_homing_from_srdf(srdf_path);
+    if (!srdfpath.empty()) {
+        std::map<std::string, double> homing_map = get_homing_from_srdf(srdfpath);
         
         for (const std::string& jnt_name : jnt_name_list) {
             // Check if the joint name exists in the homing map
@@ -166,27 +173,35 @@ std::map<std::string, double> LoadingUtils::generate_homing_map(const std::vecto
     return result;
 }
 
-std::map<std::string, double> LoadingUtils::generate_homing_map(const std::string xbot_cf_path) {
+std::map<std::string, double> LoadingUtils::generate_homing_map(std::string srdfpath,
+    const std::string xbot_cf_path) {
 
-    std::string srdf_path = get_srdf_path_fromxbotconfig(xbot_cf_path);
+    if (srdfpath.empty()) { // then we try to read it from xbot config file
+        srdfpath = get_srdf_path_fromxbotconfig(xbot_cf_path);
+    }
+
     std::map<std::string, double> homing_map;
-    if (!srdf_path.empty()) {
-        homing_map=get_homing_from_srdf(srdf_path);
+
+    if (!srdfpath.empty()) {
+        homing_map=get_homing_from_srdf(srdfpath);
     }
 
     return homing_map;
 }
 
 std::vector<double> LoadingUtils::generate_homing_from_list(const std::vector<std::string>& jnt_name_list,
+        std::string srdfpath,
         const std::string xbot_cf_path,
         double fallback_val) {
     
-    std::string srdf_path = get_srdf_path_fromxbotconfig(xbot_cf_path);
+    if (srdfpath.empty()) { // then we try to read it from xbot config file
+        srdfpath = get_srdf_path_fromxbotconfig(xbot_cf_path);
+    }
 
     std::vector<double> result;
 
-    if (!srdf_path.empty()) {
-        std::map<std::string, double> homing_map = get_homing_from_srdf(srdf_path);
+    if (!srdfpath.empty()) {
+        std::map<std::string, double> homing_map = get_homing_from_srdf(srdfpath);
         for (const std::string& jnt_name : jnt_name_list) {
             // Check if the joint name exists in the homing map
             if (homing_map.find(jnt_name) != homing_map.end()) {
@@ -201,12 +216,15 @@ std::vector<double> LoadingUtils::generate_homing_from_list(const std::vector<st
     return result;
 }
 
-std::tuple<std::vector<std::string>, std::vector<double>> LoadingUtils::generate_ordered_homing(const std::string xbot_cf_path) {
+std::tuple<std::vector<std::string>, std::vector<double>> LoadingUtils::generate_ordered_homing(std::string srdfpath,
+    const std::string xbot_cf_path) {
     
     printf( "[LoadingUtils][generate_ordered_homing]: will load homing from xbot2 config file \"%s\" ->\n", xbot_cf_path.c_str());
 
-    std::string srdf_path = get_srdf_path_fromxbotconfig(xbot_cf_path);
-    std::map<std::string, double> homing_map = get_homing_from_srdf(srdf_path);
+    if (srdfpath.empty()) { // then we try to read it from xbot config file
+        srdfpath = get_srdf_path_fromxbotconfig(xbot_cf_path);
+    }
+    std::map<std::string, double> homing_map = get_homing_from_srdf(srdfpath);
 
     std::vector<std::string> jnt_names;
     std::vector<double> homing_vals;

@@ -93,12 +93,22 @@ PYBIND11_MODULE(PyXbotMjSimEnv, m) {
         .def_static("get_srdf_path_fromxbotconfig", &LoadingUtils::get_srdf_path_fromxbotconfig, py::arg("xbot_cf_path"))
         .def_static("get_urdf_path_fromxbotconfig", &LoadingUtils::get_urdf_path_fromxbotconfig, py::arg("xbot_cf_path"))
         .def_static("get_homing_from_srdf", &LoadingUtils::get_homing_from_srdf, py::arg("srdf_path"))
-        .def_static("generate_homing_map", py::overload_cast<const std::vector<std::string>&, const std::string, double>(&LoadingUtils::generate_homing_map),
-                    py::arg("jnt_name_list"), py::arg("xbot_cf_path"), py::arg("fallback_val") = 0.0)
-        .def_static("generate_homing_map", py::overload_cast<const std::string>(&LoadingUtils::generate_homing_map),
-                    py::arg("xbot_cf_path"))
-        .def_static("generate_homing_from_list", &LoadingUtils::generate_homing_from_list, py::arg("jnt_name_list"), py::arg("xbot_cf_path"), py::arg("fallback_val") = 0.0)
-        .def_static("generate_ordered_homing", &LoadingUtils::generate_ordered_homing, py::arg("xbot_cf_path"))
+        .def_static("generate_homing_map", py::overload_cast<const std::vector<std::string>&, std::string, const std::string, double>(&LoadingUtils::generate_homing_map),
+                        py::arg("jnt_name_list"), 
+                        py::arg("srdf_path")="",
+                        py::arg("xbot_cf_path")="",
+                        py::arg("fallback_val") = 0.0)
+        .def_static("generate_homing_map", py::overload_cast<std::string,const std::string>(&LoadingUtils::generate_homing_map),
+                        py::arg("srdf_path")="",
+                        py::arg("xbot_cf_path"))
+        .def_static("generate_homing_from_list", &LoadingUtils::generate_homing_from_list, 
+                        py::arg("jnt_name_list"), 
+                        py::arg("srdf_path")="",
+                        py::arg("xbot_cf_path")="", 
+                        py::arg("fallback_val") = 0.0)
+        .def_static("generate_ordered_homing", &LoadingUtils::generate_ordered_homing, 
+                        py::arg("srdf_path")="",
+                        py::arg("xbot_cf_path")="")
         .def_static("print_homing", &LoadingUtils::print_homing, py::arg("jnt_names"), py::arg("vals"))
         ;
 }

@@ -18,6 +18,7 @@ public:
     void set_mesh_rootdir(const std::string& mesh_root_dir="None");
     void set_mesh_rootdir_subdirs(const std::vector<std::string>& mesh_rootsubdirs);
     void set_urdf_path(const std::string& urdfpath);
+    void set_srdf_path(const std::string& urdfpath);
     void set_urdf_cmd(const std::string& urdfcmd);
     void set_simopt_path(const std::string& simoptpath);
     void set_world_path(const std::string& worldpath);
@@ -30,11 +31,15 @@ public:
     static std::string get_urdf_path_fromxbotconfig(std::string xbot_cf_path);
     static std::map<std::string, double> get_homing_from_srdf(const std::string& srdf_path);
     static std::map<std::string, double> generate_homing_map(const std::vector<std::string>& jnt_name_list,
-        const std::string xbot_cf_path, double fallback_val = 0.0);
-    static std::map<std::string, double> generate_homing_map(const std::string xbot_cf_path);
+        std::string srdfpath="",
+        const std::string xbot_cf_path="", double fallback_val = 0.0);
+    static std::map<std::string, double> generate_homing_map(const std::string xbot_cf_path="",
+        std::string srdfpath="");
     static std::vector<double> generate_homing_from_list(const std::vector<std::string>& jnt_name_list,
-        const std::string xbot_cf_path, double fallback_val = 0.0);
-    static std::tuple<std::vector<std::string>, std::vector<double>> generate_ordered_homing(const std::string xbot_cf_path);
+        std::string srdfpath="",
+        const std::string xbot_cf_path="", double fallback_val = 0.0);
+    static std::tuple<std::vector<std::string>, std::vector<double>> generate_ordered_homing(std::string srdfpath="",
+        const std::string xbot_cf_path="");
     static void print_homing(std::vector<std::string> jnt_names, 
     std::vector<double> vals);
 
@@ -53,6 +58,7 @@ private:
     std::vector<std::string> mesh_root_subdirs;
 
     std::string urdf_path;
+    std::string srdf_path;
     std::string urdf_command;
     std::string simopt_path;
     std::string world_path;

@@ -30,10 +30,10 @@ class TestSimStepping(unittest.TestCase):
         files_dir = "/root/ibrido_ws/src/xbot2_mujoco/tests/files"
 
         # optonally set a custom root dir
-        # mesh_root_directory = "/root/ibrido_ws/src/iit-centauro-ros-pkg/centauro_urdf/meshes"
-        # subdirs = ["v2", "realsense", "simple"]
-        # self.loader.set_mesh_rootdir(mesh_root_directory)
-        # self.loader.set_mesh_rootdir_subdirs(subdirs)
+        mesh_root_directory = "/root/ibrido_ws/src/iit-centauro-ros-pkg/centauro_urdf/meshes"
+        subdirs = ["v2", "realsense", "simple"]
+        self.loader.set_mesh_rootdir(mesh_root_directory)
+        self.loader.set_mesh_rootdir_subdirs(subdirs)
         self.loader.set_urdf_path(f"{files_dir}/centauro.urdf")
         self.loader.set_simopt_path(f"{files_dir}/sim_opt.xml")
         self.loader.set_world_path(f"{files_dir}/world.xml")

@@ -522,7 +522,7 @@ void xbot_mujoco::InitSimulation(mj::Simulate* sim, const char* mj_filename, con
     }
   }
 
-  homing = LoadingUtils::generate_ordered_homing(xbot_config_path);
+  homing = LoadingUtils::generate_ordered_homing("", xbot_config_path);
 
   LoadingUtils::print_homing(std::get<0>(homing), std::get<1>(homing));
 
