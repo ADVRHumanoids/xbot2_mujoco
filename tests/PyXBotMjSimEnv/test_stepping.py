@@ -27,12 +27,13 @@ class TestSimStepping(unittest.TestCase):
         # Set up the LoadingUtils instance using command-line arguments
         self.loader = LoadingUtils("XMjEnvPyTest")
 
-        mesh_root_directory = "/root/ibrido_ws/src/iit-centauro-ros-pkg/centauro_urdf/meshes"
-        subdirs = ["v2", "realsense", "simple"]
         files_dir = "/root/ibrido_ws/src/xbot2_mujoco/tests/files"
 
-        self.loader.set_mesh_rootdir(mesh_root_directory)
-        self.loader.set_mesh_rootdir_subdirs(subdirs)
+        # optonally set a custom root dir
+        # mesh_root_directory = "/root/ibrido_ws/src/iit-centauro-ros-pkg/centauro_urdf/meshes"
+        # subdirs = ["v2", "realsense", "simple"]
+        # self.loader.set_mesh_rootdir(mesh_root_directory)
+        # self.loader.set_mesh_rootdir_subdirs(subdirs)
         self.loader.set_urdf_path(f"{files_dir}/centauro.urdf")
         self.loader.set_simopt_path(f"{files_dir}/sim_opt.xml")
         self.loader.set_world_path(f"{files_dir}/world.xml")
@@ -70,7 +71,7 @@ class TestSimStepping(unittest.TestCase):
             legacy=None)
 
         n_steps = 200000
-        reset_freq = n_steps // 8
+        reset_freq = 1000
         state_print_freq = 200
         start_time = time.time()
         n_steps_done = 0
@@ -114,11 +115,10 @@ class TestSimStepping(unittest.TestCase):
                 pi[1] += random.uniform(-1.0, 1.0)
                 random_theta = random.uniform(-180.0, 180.0)
                 qi[:] = self.quaternion_from_rotation_z(random_theta)
-                # self._xmj_env.set_pi(pi)
-                # self._xmj_env.set_qi(qi)
-                # self._xmj_env.reset()
-                
-
+                self._xmj_env.set_pi(pi)
+                self._xmj_env.set_qi(qi)
+                self._xmj_env.reset()
+            
             n_steps_done += 1
 
         elapsed_time = time.time() - start_time
