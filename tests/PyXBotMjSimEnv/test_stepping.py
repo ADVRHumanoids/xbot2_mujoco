@@ -57,9 +57,21 @@ class TestSimStepping(unittest.TestCase):
         self._xmj_env.close()
 
     def test_sim_stepping(self):
-        n_steps = 20000
-        reset_freq = n_steps // 8
+        np.set_printoptions(precision=2, 
+            threshold=None, 
+            edgeitems=None, 
+            linewidth=200, 
+            suppress=None,
+            nanstr=None,
+            infstr=None, 
+            formatter=None, 
+            sign=None, 
+            floatmode=None, 
+            legacy=None)
 
+        n_steps = 200000
+        reset_freq = n_steps // 8
+        state_print_freq = 200
         start_time = time.time()
         n_steps_done = 0
 
@@ -68,18 +80,44 @@ class TestSimStepping(unittest.TestCase):
         jnt_names=self._xmj_env.jnt_names()
         print("\nControllable joint names: ->\n")
         print(", ".join(jnt_names))
+        pi=np.zeros((3))
+        qi=np.zeros((4))
+        qi[0] = 1
+        pi[2]=self._xmj_env.get_pi()[2]
 
         for i in range(n_steps):
             if not self._xmj_env.step():
                 break
+            
+            if (i + 1) % state_print_freq == 0:
+                print("\n########## MEAS STATE DUMP ############\n p")
+                print(self._xmj_env.p)
+                print("q")
+                print(self._xmj_env.q)
+                print("v")
+                print(self._xmj_env.twist[0:3])
+                print("omega")
+                print(self._xmj_env.twist[3:6])
+                print(", ".join(jnt_names))
+                print("jnts q")
+                print(self._xmj_env.jnts_q)
+                print("jnts v")
+                print(self._xmj_env.jnts_v)
+                print("jnts a")
+                print(self._xmj_env.jnts_a)
+                print("jnts eff")
+                print(self._xmj_env.jnts_eff)
 
             if (i + 1) % reset_freq == 0:
                 # Update position and orientation
-                self._xmj_env.p_i[0] += random.uniform(-1.0, 1.0)
-                self._xmj_env.p_i[1] += random.uniform(-1.0, 1.0)
+                pi[0] += random.uniform(-1.0, 1.0)
+                pi[1] += random.uniform(-1.0, 1.0)
                 random_theta = random.uniform(-180.0, 180.0)
-                self._xmj_env.q_i = self.quaternion_from_rotation_z(random_theta)
-                self._xmj_env.reset()
+                qi[:] = self.quaternion_from_rotation_z(random_theta)
+                # self._xmj_env.set_pi(pi)
+                # self._xmj_env.set_qi(qi)
+                # self._xmj_env.reset()
+                
 
             n_steps_done += 1
 
