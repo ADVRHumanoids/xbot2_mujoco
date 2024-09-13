@@ -23,7 +23,7 @@ mjtNum* xbot_mujoco::ctrlnoise = nullptr;
 int xbot_mujoco::step_counter = 0;
 std::unique_ptr<xbot_mujoco::mj::Simulate> xbot_mujoco::sim;
 // utility objs
-std::tuple<std::vector<std::string>, std::vector<double>> xbot_mujoco::homing;
+std::map<std::string, double> xbot_mujoco::homing;
 std::vector<double> xbot_mujoco::p_init = {0.0, 0.0, 0.8}; 
 std::vector<double> xbot_mujoco::q_init = {1.0, 0.0, 0.0, 0.0};
 std::string xbot_mujoco::root_link="root_link";
@@ -195,27 +195,25 @@ std::vector<std::string>  xbot_mujoco::JntNames(mjModel* m) {
 
 void xbot_mujoco::SetJntOffsets(mjModel* m) {
   
-  for(int i = 0; i < std::get<0>(homing).size(); i++)
-  {
-
-    int joint_id = mj_name2id(m, mjOBJ_JOINT, std::get<0>(homing)[i].c_str());
-    if (joint_id != -1) {// joint found -> set default joint pos
-        int qpos_adr = m->jnt_qposadr[joint_id];
-        m->qpos0[qpos_adr] = std::get<1>(homing)[i];
-    }
-  }  
+  for (const auto& pair : homing) {
+      
+      int joint_id = mj_name2id(m, mjOBJ_JOINT, pair.first.c_str());
+      if (joint_id != -1) {// joint found -> set default joint pos
+          int qpos_adr = m->jnt_qposadr[joint_id];
+          m->qpos0[qpos_adr] = pair.second;
+      }
+  }
 
 }
 
 void xbot_mujoco::MoveJntsToHomingNow(mjData* d) {
 
-  for(int i = 0; i < std::get<0>(homing).size(); i++)
-  {
-    int joint_id = mj_name2id(m, mjOBJ_JOINT, std::get<0>(homing)[i].c_str());
+  for (const auto& pair : homing) {
+    int joint_id = mj_name2id(m, mjOBJ_JOINT, pair.first.c_str());
 
     if (joint_id != -1) {// joint found -> set joint pos
         int qpos_adr = m->jnt_qposadr[joint_id];
-        d->qpos[qpos_adr] = std::get<1>(homing)[i];
+        d->qpos[qpos_adr] = pair.second;
         // d->qvel[qpos_adr] = 0.0;
         // d->ctrl[qpos_adr] = 0.0;
     }
@@ -521,13 +519,18 @@ void xbot_mujoco::InitSimulation(mj::Simulate* sim, const char* mj_filename, con
       sim->LoadMessageClear();
     }
   }
+  
+  std::vector<std::string> jnt_names = JntNames(m);
 
-  homing = LoadingUtils::generate_ordered_homing("", xbot_config_path);
-
-  LoadingUtils::print_homing(std::get<0>(homing), std::get<1>(homing));
+  homing = LoadingUtils::generate_homing_map(jnt_names, 
+    "", // no explicit srdf used
+    xbot_config_path, // try to look in config file
+    0.0 // fallback to 0.0 if not found
+  );
+  
+  LoadingUtils::print_homing(homing);
 
   xbot2_wrapper.reset();
-
   xbot2_wrapper = std::make_unique<XBot::MjWrapper>(m, xbot_config_path);
 
 }

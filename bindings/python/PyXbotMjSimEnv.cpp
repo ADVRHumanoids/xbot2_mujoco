@@ -77,6 +77,7 @@ PYBIND11_MODULE(PyXbotMjSimEnv, m) {
         .def("set_mesh_rootdir", &LoadingUtils::set_mesh_rootdir, py::arg("mesh_root_dir") = "None")
         .def("set_mesh_rootdir_subdirs", &LoadingUtils::set_mesh_rootdir_subdirs, py::arg("mesh_rootsubdirs"))
         .def("set_urdf_path", &LoadingUtils::set_urdf_path, py::arg("urdfpath"))
+        .def("set_srdf_path", &LoadingUtils::set_srdf_path, py::arg("urdfpath"))
         .def("set_urdf_cmd", &LoadingUtils::set_urdf_cmd, py::arg("urdfcmd"))
         .def("set_simopt_path", &LoadingUtils::set_simopt_path, py::arg("simoptpath"))
         .def("set_world_path", &LoadingUtils::set_world_path, py::arg("worldpath"))
@@ -109,6 +110,6 @@ PYBIND11_MODULE(PyXbotMjSimEnv, m) {
         .def_static("generate_ordered_homing", &LoadingUtils::generate_ordered_homing, 
                         py::arg("srdf_path")="",
                         py::arg("xbot_cf_path")="")
-        .def_static("print_homing", &LoadingUtils::print_homing, py::arg("jnt_names"), py::arg("vals"))
+        .def_static("print_homing", &LoadingUtils::print_homing, py::arg("homing_map"))
         ;
 }

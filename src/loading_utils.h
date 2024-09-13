@@ -40,8 +40,7 @@ public:
         const std::string xbot_cf_path="", double fallback_val = 0.0);
     static std::tuple<std::vector<std::string>, std::vector<double>> generate_ordered_homing(std::string srdfpath="",
         const std::string xbot_cf_path="");
-    static void print_homing(std::vector<std::string> jnt_names, 
-    std::vector<double> vals);
+    static void print_homing(std::map<std::string, double> homing_map);
 
     // getters
     std::string get_mj_xml(); // Public method to get the final MuJoCo XML

@@ -87,6 +87,7 @@ TEST_F(ParsingTest, TestHomingParsing) {
     
     std::cout << "\nhoming map:" << std::endl;
     std::map<std::string, double> retrieved_homing = loader.generate_homing_map(other_jnt_list,
+        "",
         loader.get_xbot_config_path());
     for (const auto& pair : retrieved_homing) {
         std::cout << "Joint: " << pair.first << ", Value: " << pair.second << std::endl;

@@ -64,7 +64,7 @@ extern int step_counter;
 extern std::unique_ptr<mj::Simulate> sim;
 extern XBot::MjWrapper::UniquePtr xbot2_wrapper;
 // utility objs
-extern std::tuple<std::vector<std::string>, std::vector<double>> homing;
+extern std::map<std::string, double> homing;
 extern std::vector<double> p_init; 
 extern std::vector<double> q_init;
 extern std::string root_link;

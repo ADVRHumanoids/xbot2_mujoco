@@ -151,7 +151,10 @@ std::map<std::string, double> LoadingUtils::generate_homing_map(const std::vecto
         double fallback_val) {
     
     if (srdfpath.empty()) { // then we try to read it from xbot config file
+        printf( "[LoadingUtils][generate_homing_map]: will try to retrieve homing configuration from xbot2 config file \"%s\" \n", xbot_cf_path.c_str());
         srdfpath = get_srdf_path_fromxbotconfig(xbot_cf_path);
+    } else {
+        printf( "[LoadingUtils][generate_homing_map]: will try to retrieve homing configuration SRDF file \"%s\" \n", srdfpath.c_str());
     }
     
     std::map<std::string, double> result;
@@ -177,7 +180,10 @@ std::map<std::string, double> LoadingUtils::generate_homing_map(std::string srdf
     const std::string xbot_cf_path) {
 
     if (srdfpath.empty()) { // then we try to read it from xbot config file
+        printf( "[LoadingUtils][generate_homing_map]: will try to retrieve homing configuration from xbot2 config file \"%s\" \n", xbot_cf_path.c_str());
         srdfpath = get_srdf_path_fromxbotconfig(xbot_cf_path);
+    } else {
+        printf( "[LoadingUtils][generate_homing_map]: will try to retrieve homing configuration SRDF file \"%s\" \n", srdfpath.c_str());
     }
 
     std::map<std::string, double> homing_map;
@@ -193,9 +199,12 @@ std::vector<double> LoadingUtils::generate_homing_from_list(const std::vector<st
         std::string srdfpath,
         const std::string xbot_cf_path,
         double fallback_val) {
-    
+
     if (srdfpath.empty()) { // then we try to read it from xbot config file
+        printf( "[LoadingUtils][generate_homing_from_list]: will try to retrieve homing configuration from xbot2 config file \"%s\" \n", xbot_cf_path.c_str());
         srdfpath = get_srdf_path_fromxbotconfig(xbot_cf_path);
+    } else {
+        printf( "[LoadingUtils][generate_homing_from_list]: will try to retrieve homing configuration SRDF file \"%s\" \n", srdfpath.c_str());
     }
 
     std::vector<double> result;
@@ -218,12 +227,14 @@ std::vector<double> LoadingUtils::generate_homing_from_list(const std::vector<st
 
 std::tuple<std::vector<std::string>, std::vector<double>> LoadingUtils::generate_ordered_homing(std::string srdfpath,
     const std::string xbot_cf_path) {
-    
-    printf( "[LoadingUtils][generate_ordered_homing]: will load homing from xbot2 config file \"%s\" ->\n", xbot_cf_path.c_str());
 
     if (srdfpath.empty()) { // then we try to read it from xbot config file
+        printf( "[LoadingUtils][generate_ordered_homing]: will try to retrieve homing configuration from xbot2 config file \"%s\" \n", xbot_cf_path.c_str());
         srdfpath = get_srdf_path_fromxbotconfig(xbot_cf_path);
+    } else {
+        printf( "[LoadingUtils][generate_ordered_homing]: will try to retrieve homing configuration SRDF file \"%s\" \n", srdfpath.c_str());
     }
+
     std::map<std::string, double> homing_map = get_homing_from_srdf(srdfpath);
 
     std::vector<std::string> jnt_names;
@@ -238,29 +249,35 @@ std::tuple<std::vector<std::string>, std::vector<double>> LoadingUtils::generate
     return std::make_tuple(jnt_names, homing_vals);
 }
 
-void LoadingUtils::print_homing(std::vector<std::string> jnt_names, 
-    std::vector<double> vals) {
-    // jnt names
-    printf( "[LoadingUtils][print_homing]: joint names ->\n");
-    printf( "[");
-    for (std::size_t i = 0; i < jnt_names.size(); ++i) {
-        printf( "%s", jnt_names[i].c_str());
-        if (i < jnt_names.size() - 1) {
-            printf( ", ");
+void LoadingUtils::print_homing(std::map<std::string, double> homing_map) {
+    // Print joint names
+    printf("[LoadingUtils][print_homing]: joint names\n");
+    printf("[");
+    
+    // Iterate over the map to print the keys (joint names)
+    std::size_t count = 0;
+    for (const auto& pair : homing_map) {
+        printf("%s", pair.first.c_str());  // Print joint name (key)
+        if (count < homing_map.size() - 1) {
+            printf(", ");  // Add a comma except for the last element
         }
+        ++count;
     }
-    printf( "]:\n");
+    printf("]:\n");
 
-    // jnt vals
-    printf( "[LoadingUtils][print_homing]: homing values ->\n");
-    printf( "[");
-    for (std::size_t i = 0; i < vals.size(); ++i) {
-        printf( "%.2f", vals[i]);
-        if (i < vals.size() - 1) {
-            printf( ", ");
+    // Print homing values
+    printf("[LoadingUtils][print_homing]: homing values\n");
+    printf("[");
+    
+    count = 0;
+    for (const auto& pair : homing_map) {
+        printf("%.2f", pair.second);  // Print homing value (value)
+        if (count < homing_map.size() - 1) {
+            printf(", ");  // Add a comma except for the last element
         }
+        ++count;
     }
-    printf( "]\n");
+    printf("]\n");
 }
 
 std::string LoadingUtils::remove_comments(const std::string& xml) {
