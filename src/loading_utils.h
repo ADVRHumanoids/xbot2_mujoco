@@ -18,7 +18,7 @@ public:
     void set_mesh_rootdir(const std::string& mesh_root_dir="None");
     void set_mesh_rootdir_subdirs(const std::vector<std::string>& mesh_rootsubdirs);
     void set_urdf_path(const std::string& urdfpath);
-    void set_srdf_path(const std::string& urdfpath);
+    void set_srdf_path(const std::string& srdfpath);
     void set_urdf_cmd(const std::string& urdfcmd);
     void set_simopt_path(const std::string& simoptpath);
     void set_world_path(const std::string& worldpath);
