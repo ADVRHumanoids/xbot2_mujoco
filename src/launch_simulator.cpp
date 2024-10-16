@@ -36,9 +36,10 @@ int main(int argc, char** argv)
     }
 
     bool headless=false;
-    ros::init(argc, argv, "mujoco_ros");
-    ros::NodeHandle nh("");
-    run(filename,xbot2_cfg_path,nh,headless); // run everything
-    
+    // ros::init(argc, argv, "mujoco_ros");
+    // ros::NodeHandle nh("");
+    // run(filename,xbot2_cfg_path,nh,headless); // run everything
+    run(filename,xbot2_cfg_path,headless); // run everything
+
     return 0;
 }

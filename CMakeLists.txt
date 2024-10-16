@@ -7,7 +7,7 @@ find_package(xbot2 REQUIRED)
 find_package(matlogger2 REQUIRED)
 find_package(pugixml REQUIRED)
 find_package(yaml-cpp REQUIRED)
-find_package(catkin COMPONENTS roscpp) # necessary for publishing ros clock from sim
+# find_package(catkin COMPONENTS roscpp) # necessary for publishing ros clock from sim
 
 set(CMAKE_CXX_STANDARD 17)
 # Ensure position-independent code is generated for all targets
@@ -83,7 +83,8 @@ target_link_libraries(mujoco_simulator PUBLIC
     mujoco_cmake::mujoco
     xbot2_mujoco
     glfw
-    ${catkin_LIBRARIES})
+    # ${catkin_LIBRARIES}
+    )
 
 add_library(xbot_mujoco_env STATIC
     src/xmj_sim_env.cpp)

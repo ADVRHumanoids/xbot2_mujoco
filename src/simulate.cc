@@ -2598,7 +2598,7 @@ void Simulate::Render() {
 
 
 
-void Simulate::RenderLoop(ros::NodeHandle nh) {
+void Simulate::RenderLoop() {
   // Set timer callback (milliseconds)
   mjcb_time = Timer;
 
@@ -2669,7 +2669,7 @@ void Simulate::RenderLoop(ros::NodeHandle nh) {
   frames_ = 0;
   last_fps_update_ = mj::Simulate::Clock::now();
 
-  ros::Publisher time_pub = nh.advertise<rosgraph_msgs::Clock>("/clock", 1);
+  // ros::Publisher time_pub = nh.advertise<rosgraph_msgs::Clock>("/clock", 1);
 
   // run event loop
   while (!this->platform_ui->ShouldCloseWindow() && !this->exitrequest.load()) {
@@ -2730,16 +2730,16 @@ void Simulate::RenderLoop(ros::NodeHandle nh) {
       frames_ = 0;
     }
 
-    if (d_)
-    {
-        rosgraph_msgs::Clock time_msg;
-        double mj_time = d_->time;
-        time_msg.clock.sec = std::floor(d_->time);
-        mj_time -= std::floor(d_->time);
-        time_msg.clock.nsec = mj_time * 1e9;
+    // if (d_)
+    // {
+    //     rosgraph_msgs::Clock time_msg;
+    //     double mj_time = d_->time;
+    //     time_msg.clock.sec = std::floor(d_->time);
+    //     mj_time -= std::floor(d_->time);
+    //     time_msg.clock.nsec = mj_time * 1e9;
 
-        time_pub.publish(time_msg);
-    }
+    //     time_pub.publish(time_msg);
+    // }
   }
 
   const MutexLock lock(this->mtx);

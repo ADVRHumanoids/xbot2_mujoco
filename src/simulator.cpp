@@ -553,8 +553,12 @@ void xbot_mujoco::SimulationLoop(mj::Simulate* sim, const char* mj_filename, con
   xbot_mujoco::ClearSimulation();
 }
 
-void xbot_mujoco::RenderingLoop(mj::Simulate* sim, ros::NodeHandle nh) {
-  sim->RenderLoop(nh);
+// void xbot_mujoco::RenderingLoop(mj::Simulate* sim, ros::NodeHandle nh) {
+//   sim->RenderLoop(nh);
+//   std::printf("[xbot2_mujoco][simulator]: rendering loop terminated. \n");
+// }
+void xbot_mujoco::RenderingLoop(mj::Simulate* sim) {
+  sim->RenderLoop();
   std::printf("[xbot2_mujoco][simulator]: rendering loop terminated. \n");
 }
 
@@ -566,10 +570,14 @@ void xbot_mujoco::Reset(mj::Simulate& sim) {
   step_counter==0;
 }
 
+// void xbot_mujoco::run(const char* fname, 
+//   const std::string xbot2_config_path,
+//   ros::NodeHandle nh,
+//   bool headless)
+// {
 void xbot_mujoco::run(const char* fname, 
-    const std::string xbot2_config_path,
-    ros::NodeHandle nh,
-    bool headless)
+  const std::string xbot2_config_path,
+  bool headless)
 {
   // Install the signal handler for SIGINT (Ctrl+C)
   std::signal(SIGINT, xbot_mujoco::handle_sigint);
@@ -621,7 +629,8 @@ void xbot_mujoco::run(const char* fname,
   // start physics thread
   std::thread physicsthreadhandle(&SimulationLoop, sim.get(), fname, xbot2_config_path.c_str());
   
-  RenderingLoop(sim.get(), nh); // render in this thread
+  // RenderingLoop(sim.get(), nh); // render in this thread
+  RenderingLoop(sim.get()); // render in this thread
 
   if (physicsthreadhandle.joinable()) {
     physicsthreadhandle.join();

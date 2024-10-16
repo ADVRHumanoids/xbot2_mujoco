@@ -12,7 +12,7 @@
 #include <condition_variable>
 
 #include "simulator.h"
-#include <ros/ros.h>
+// #include <ros/ros.h>
 
 namespace mj = ::mujoco;
 

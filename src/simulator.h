@@ -33,7 +33,7 @@
 #include "array_safety.h"
 #include "xbot2_bridge.h"
 
-#include <ros/ros.h> // used for publishing sim time on ros clock
+// #include <ros/ros.h> // used for publishing sim time on ros clock
 
 #define MUJOCO_PLUGIN_DIR "mujoco_plugin"
 
@@ -101,7 +101,8 @@ void PhysicsLoop(mj::Simulate& sim);
 void InitSimulation(mj::Simulate* sim, const char* mj_filename, const char* xbot_config_path);
 void ClearSimulation();
 void SimulationLoop(mj::Simulate* sim, const char* mj_filename, const char* xbot_config_path);
-void RenderingLoop(mj::Simulate* sim,ros::NodeHandle nh);
+void RenderingLoop(mj::Simulate* sim);
+// void RenderingLoop(mj::Simulate* sim,ros::NodeHandle nh);
 void Reset(mj::Simulate& sim);
 
 // close everything
@@ -110,9 +111,11 @@ void close();
 void reset(mj::Simulate& sim);
 
 // run event loop
+// void run(const char* fname, const std::string xbot2_config_path,
+//     ros::NodeHandle nh,
+//     bool headless = false);
+// }
 void run(const char* fname, const std::string xbot2_config_path,
-    ros::NodeHandle nh,
     bool headless = false);
 }
-
 #endif // SIMULATOR_H

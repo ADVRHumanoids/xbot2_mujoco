@@ -29,7 +29,7 @@
 #include <mujoco/mjui.h>
 #include <mujoco/mujoco.h>
 #include "platform_ui_adapter.h"
-#include <ros/ros.h>
+// #include <ros/ros.h>
 
 namespace mujoco {
 
@@ -82,7 +82,8 @@ class Simulate {
   void Render();
 
   // loop to render the UI (must be called from main thread because of MacOS)
-  void RenderLoop(ros::NodeHandle nh);
+  // void RenderLoop(ros::NodeHandle nh);
+  void RenderLoop();
 
   // add state to history buffer
   void AddToHistory();

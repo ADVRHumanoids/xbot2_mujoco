@@ -213,8 +213,8 @@ void XBotMjSimEnv::step_sim() {
 void XBotMjSimEnv::initialize(bool headless) {
     // ROS stuff
 
-    std::string ros_namespace=""; // operate in ros global ns
-    ros::NodeHandle ros_nh(ros_namespace);
+    // std::string ros_namespace=""; // operate in ros global ns
+    // ros::NodeHandle ros_nh(ros_namespace);
 
     // display an error if running on macOS under Rosetta 2
     #if defined(__APPLE__) && defined(__AVX__)
@@ -264,8 +264,9 @@ void XBotMjSimEnv::initialize(bool headless) {
         physics_thread = std::thread(&XBotMjSimEnv::physics_loop_manual, this);
     }
 
-    xbot_mujoco::RenderingLoop(xbot_mujoco::sim.get(), ros_nh); // render in this thread
-    
+    // xbot_mujoco::RenderingLoop(xbot_mujoco::sim.get(), ros_nh); // render in this thread
+    xbot_mujoco::RenderingLoop(xbot_mujoco::sim.get()); // render in this thread
+
     if (physics_thread.joinable()) {
         physics_thread.join();
         printf("[xbot2_mujoco][XBotMjSimEnv][close]: physics thread terminated\n");
@@ -283,14 +284,14 @@ bool XBotMjSimEnv::run() {
 
     if (!is_running()) {
 
-        std::vector<std::string> args;
-        std::vector<char*> argv;
-        for (std::string& arg : args)
-        {
-            argv.push_back(&arg[0]);
-        }
-        int argc = argv.size();
-        ros::init(argc, argv.data(), std::string("XBotMjSimEnv"));
+        // std::vector<std::string> args;
+        // std::vector<char*> argv;
+        // for (std::string& arg : args)
+        // {
+        //     argv.push_back(&arg[0]);
+        // }
+        // int argc = argv.size();
+        // ros::init(argc, argv.data(), std::string("XBotMjSimEnv"));
 
         simulator_thread = std::thread(&XBotMjSimEnv::initialize, this, headless);
 
