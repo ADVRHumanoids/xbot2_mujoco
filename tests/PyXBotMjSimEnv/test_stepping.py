@@ -70,48 +70,45 @@ class TestSimStepping(unittest.TestCase):
             floatmode=None, 
             legacy=None)
 
-        n_steps = 200000
+        n_steps = 20000
         reset_freq = 1000
-        state_print_freq = 200
-        start_time = time.time()
+        state_print_freq = 400
+        start_time = time.time()  # Track total time
+        stepping_time = 0.0       # Track only time spent stepping
         n_steps_done = 0
 
         actual_done = self._xmj_env.step_counter
         
-        jnt_names=self._xmj_env.jnt_names()
+        jnt_names = self._xmj_env.jnt_names()
         print("\nControllable joint names: ->\n")
         print(", ".join(jnt_names))
-        pi=np.zeros((3))
-        qi=np.zeros((4))
-        qi[0] = 1
-        pi[2]=self._xmj_env.get_pi()[2]
+        pi = np.zeros((3))
+        qi = np.zeros((4))
+        qi[0] = 1  # Quaternion identity
+        pi[2] = self._xmj_env.get_pi()[2]  # Initial z position
 
         for i in range(n_steps):
+            step_start = time.time()  # Start timing the step
             if not self._xmj_env.step():
                 break
+            step_end = time.time()  # End timing the step
+            stepping_time += (step_end - step_start)  # Accumulate stepping time
             
+            # Print state at defined frequency
             if (i + 1) % state_print_freq == 0:
-                print("\n########## MEAS STATE DUMP ############\n")
-                print("p")
-                print(self._xmj_env.p)
-                print("q")
-                print(self._xmj_env.q)
-                print("v")
-                print(self._xmj_env.twist[0:3])
-                print("omega")
-                print(self._xmj_env.twist[3:6])
+                print(f"\n########## MEAS STATE DUMP ({self._xmj_env.step_counter+1}/{n_steps}) ############\n")
+                print("p:", self._xmj_env.p)
+                print("q:", self._xmj_env.q)
+                print("v:", self._xmj_env.twist[0:3])
+                print("omega:", self._xmj_env.twist[3:6])
                 print(", ".join(jnt_names))
-                print("jnts q")
-                print(self._xmj_env.jnts_q)
-                print("jnts v")
-                print(self._xmj_env.jnts_v)
-                print("jnts a")
-                print(self._xmj_env.jnts_a)
-                print("jnts eff")
-                print(self._xmj_env.jnts_eff)
+                print("jnts q:", self._xmj_env.jnts_q)
+                print("jnts v:", self._xmj_env.jnts_v)
+                print("jnts a:", self._xmj_env.jnts_a)
+                print("jnts eff:", self._xmj_env.jnts_eff)
 
+            # Reset environment at defined frequency
             if (i + 1) % reset_freq == 0:
-                # Update position and orientation
                 pi[0] += random.uniform(-1.0, 1.0)
                 pi[1] += random.uniform(-1.0, 1.0)
                 random_theta = random.uniform(-180.0, 180.0)
@@ -119,19 +116,25 @@ class TestSimStepping(unittest.TestCase):
                 self._xmj_env.set_pi(pi)
                 self._xmj_env.set_qi(qi)
                 self._xmj_env.reset()
-            
+
             n_steps_done += 1
 
-        elapsed_time = time.time() - start_time
-
-        # Compute simulated time
-        actual_done = self._xmj_env.step_counter-actual_done
+        total_elapsed_time = time.time() - start_time  # Total wall time (including everything)
+        
+        # Simulated time based on the number of steps done and the physics time step
+        actual_done = self._xmj_env.step_counter - actual_done
         physics_dt = self._xmj_env.physics_dt
         simtime_elapsed = physics_dt * actual_done
 
+        # Calculate the RT factor based only on the stepping time (excluding resets, printing, etc.)
+        stepping_rt_factor = simtime_elapsed / stepping_time
+
         print(f"[test_xmj_env][ManualSteppingTest]: n of timesteps done {actual_done} VS {n_steps}")
-        print(f"[test_xmj_env][ManualSteppingTest]: elapsed wall time {elapsed_time:.6f} [s] VS simulated time {simtime_elapsed:.6f} [s].")
-        print(f"RT factor {simtime_elapsed / elapsed_time:.2f}, physics dt {physics_dt:.6f} [s]")
+        print(f"[test_xmj_env][ManualSteppingTest]: total elapsed wall time {total_elapsed_time:.6f} [s] (including all operations).")
+        print(f"[test_xmj_env][ManualSteppingTest]: actual stepping time {stepping_time:.6f} [s].")
+        print(f"[test_xmj_env][ManualSteppingTest]: simulated time {simtime_elapsed:.6f} [s].")
+        print(f"RT factor based on total elapsed time: {simtime_elapsed / total_elapsed_time:.2f}")
+        print(f"RT factor based on actual stepping time: {stepping_rt_factor:.2f}, physics dt {physics_dt:.6f} [s]")
 
         self.assertEqual(actual_done, n_steps)
 
