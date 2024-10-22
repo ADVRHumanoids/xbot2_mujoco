@@ -98,11 +98,11 @@ void XBotMjSimEnv::read_root() {
         int root_pos_address = xbot_mujoco::m->jnt_qposadr[xbot_mujoco::m->body_jntadr[rott_link_idx]];
         int root_vel_address = xbot_mujoco::m->jnt_dofadr[xbot_mujoco::m->body_jntadr[rott_link_idx]];
         std::copy(xbot_mujoco::d->qpos+root_pos_address, 
-            xbot_mujoco::d->qpos+root_pos_address+2, p.begin()); // root position
+            xbot_mujoco::d->qpos+root_pos_address+3, p.begin()); // root position
         std::copy(xbot_mujoco::d->qpos+root_pos_address+3, 
-            xbot_mujoco::d->qpos+root_pos_address+6, q.begin()); // root orientation
+            xbot_mujoco::d->qpos+root_pos_address+7, q.begin()); // root orientation
         std::copy(xbot_mujoco::d->qpos+root_vel_address, 
-            xbot_mujoco::d->qpos+root_vel_address+5, twist.begin()); // root twist
+            xbot_mujoco::d->qpos+root_vel_address+6, twist.begin()); // root twist
 
     }
 }

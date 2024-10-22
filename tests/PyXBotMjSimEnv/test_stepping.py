@@ -91,7 +91,8 @@ class TestSimStepping(unittest.TestCase):
                 break
             
             if (i + 1) % state_print_freq == 0:
-                print("\n########## MEAS STATE DUMP ############\n p")
+                print("\n########## MEAS STATE DUMP ############\n")
+                print("p")
                 print(self._xmj_env.p)
                 print("q")
                 print(self._xmj_env.q)
