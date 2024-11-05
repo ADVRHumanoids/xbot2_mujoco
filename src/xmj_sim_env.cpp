@@ -121,6 +121,7 @@ bool XBotMjSimEnv::reset() {
         auto& simulation = *xbot_mujoco::sim;
         assign_init_root_state();
         xbot_mujoco::Reset(simulation);
+        read_state(); // update state from sim
         return true;
     } else {
         return false;
