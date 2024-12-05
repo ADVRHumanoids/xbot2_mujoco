@@ -18,15 +18,15 @@ target_link_libraries(parsing_test PRIVATE xmj_loading_utils ${GTEST_BOTH_LIBRAR
 # copying python bindings tests to build folder
 add_custom_target(copy_py_tests_all ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_CURRENT_SOURCE_DIR}/PyXBotMjSimEnv"
-            "${CMAKE_CURRENT_BINARY_DIR}/PyXBotMjSimEnv"
-    COMMENT "Copying PyXBotMjSimEnv python unittests directory to test folder"
+            "${CMAKE_CURRENT_SOURCE_DIR}/PyXBotMjSim"
+            "${CMAKE_CURRENT_BINARY_DIR}/PyXBotMjSim"
+    COMMENT "Copying PyXBotMjSim python unittests directory to test folder"
 )
 # ensure this target is always run by setting a phony output
 # used to specify that the copied directory should be considered
 # for cleaning purposes (i.e., when running make clean)
 set_target_properties(copy_py_tests_all PROPERTIES
-    ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/PyXBotMjSimEnv"
+    ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/PyXBotMjSim"
 )
 
 # Define the files directory path

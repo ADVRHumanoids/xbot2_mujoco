@@ -16,19 +16,19 @@
 
 namespace mj = ::mujoco;
 
-class XBotMjSimEnv {
+class XBotMjSim {
 public:
 
-    typedef std::unique_ptr<XBotMjSimEnv> UniquePtr;
+    typedef std::unique_ptr<XBotMjSim> UniquePtr;
 
-    XBotMjSimEnv(
+    XBotMjSim(
         const std::string model_fname,
         const std::string xbot2_config_path = "",
         bool headless = false,
         bool manual_stepping = false,
         int init_steps = 1,
         int timeout = 10);
-    ~XBotMjSimEnv();
+    ~XBotMjSim();
 
     bool is_running();
     bool step();

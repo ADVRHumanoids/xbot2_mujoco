@@ -4,7 +4,7 @@ import numpy as np
 import random
 import argparse
 
-from xbot2_mujoco.PyXbotMjSimEnv import XBotMjSimEnv
+from xbot2_mujoco.PyXbotMjSimEnv import XBotMjSim
 from xbot2_mujoco.PyXbotMjSimEnv import LoadingUtils
 
 import rospy
@@ -38,14 +38,14 @@ class TestSimStepping(unittest.TestCase):
         self.loader.set_simopt_path(f"{files_dir}/sim_opt.xml")
         self.loader.set_world_path(f"{files_dir}/world.xml")
         self.loader.set_sites_path(f"{files_dir}/sites.xml")
-        self.loader.set_xbot_config_path(f"{files_dir}/xbot2_basic.yaml")
+        self.loader.set_xbot_config_path(f"{files_dir}/xbot2_basic.yaml") # used for homing and pd gains
         self.loader.generate()
 
         mj_xml_path = self.loader.xml_path()
         # mj_xml_path = "/tmp/XMjEnvTest_mujoco/XMjEnvTest.mjcf"
 
-        # Create the XBotMjSimEnv instance
-        self._xmj_env = XBotMjSimEnv(
+        # Create the XBotMjSim instance
+        self._xmj_sim = XBotMjSim(
             model_fname=mj_xml_path,
             xbot2_config_path=f"{files_dir}/xbot2_basic.yaml",
             headless=False,
@@ -55,7 +55,7 @@ class TestSimStepping(unittest.TestCase):
         )
 
     def tearDown(self):
-        self._xmj_env.close()
+        self._xmj_sim.close()
 
     def test_sim_stepping(self):
         np.set_printoptions(precision=2, 
@@ -77,35 +77,35 @@ class TestSimStepping(unittest.TestCase):
         stepping_time = 0.0       # Track only time spent stepping
         n_steps_done = 0
 
-        actual_done = self._xmj_env.step_counter
+        actual_done = self._xmj_sim.step_counter
         
-        jnt_names = self._xmj_env.jnt_names()
+        jnt_names = self._xmj_sim.jnt_names()
         print("\nControllable joint names: ->\n")
         print(", ".join(jnt_names))
         pi = np.zeros((3))
         qi = np.zeros((4))
         qi[0] = 1  # Quaternion identity
-        pi[2] = self._xmj_env.get_pi()[2]  # Initial z position
+        pi[2] = self._xmj_sim.get_pi()[2]  # Initial z position
 
         for i in range(n_steps):
             step_start = time.time()  # Start timing the step
-            if not self._xmj_env.step():
+            if not self._xmj_sim.step():
                 break
             step_end = time.time()  # End timing the step
             stepping_time += (step_end - step_start)  # Accumulate stepping time
             
             # Print state at defined frequency
             if (i + 1) % state_print_freq == 0:
-                print(f"\n########## MEAS STATE DUMP ({self._xmj_env.step_counter+1}/{n_steps}) ############\n")
-                print("p:", self._xmj_env.p)
-                print("q:", self._xmj_env.q)
-                print("v:", self._xmj_env.twist[0:3])
-                print("omega:", self._xmj_env.twist[3:6])
+                print(f"\n########## MEAS STATE DUMP ({self._xmj_sim.step_counter+1}/{n_steps}) ############\n")
+                print("p:", self._xmj_sim.p)
+                print("q:", self._xmj_sim.q)
+                print("v:", self._xmj_sim.twist[0:3])
+                print("omega:", self._xmj_sim.twist[3:6])
                 print(", ".join(jnt_names))
-                print("jnts q:", self._xmj_env.jnts_q)
-                print("jnts v:", self._xmj_env.jnts_v)
-                print("jnts a:", self._xmj_env.jnts_a)
-                print("jnts eff:", self._xmj_env.jnts_eff)
+                print("jnts q:", self._xmj_sim.jnts_q)
+                print("jnts v:", self._xmj_sim.jnts_v)
+                print("jnts a:", self._xmj_sim.jnts_a)
+                print("jnts eff:", self._xmj_sim.jnts_eff)
 
             # Reset environment at defined frequency
             if (i + 1) % reset_freq == 0:
@@ -113,17 +113,17 @@ class TestSimStepping(unittest.TestCase):
                 pi[1] += random.uniform(-1.0, 1.0)
                 random_theta = random.uniform(-180.0, 180.0)
                 qi[:] = self.quaternion_from_rotation_z(random_theta)
-                self._xmj_env.set_pi(pi)
-                self._xmj_env.set_qi(qi)
-                self._xmj_env.reset()
+                self._xmj_sim.set_pi(pi)
+                self._xmj_sim.set_qi(qi)
+                self._xmj_sim.reset()
 
             n_steps_done += 1
 
         total_elapsed_time = time.time() - start_time  # Total wall time (including everything)
         
         # Simulated time based on the number of steps done and the physics time step
-        actual_done = self._xmj_env.step_counter - actual_done
-        physics_dt = self._xmj_env.physics_dt
+        actual_done = self._xmj_sim.step_counter - actual_done
+        physics_dt = self._xmj_sim.physics_dt
         simtime_elapsed = physics_dt * actual_done
 
         # Calculate the RT factor based only on the stepping time (excluding resets, printing, etc.)
@@ -140,7 +140,7 @@ class TestSimStepping(unittest.TestCase):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description='Run XBotMjSimEnv tests with specified parameters.')
+    parser = argparse.ArgumentParser(description='Run XBotMjSim tests with specified parameters.')
 
     args = parser.parse_args()
 

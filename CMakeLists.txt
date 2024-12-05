@@ -28,9 +28,9 @@ if(DEFINED ENV{CONDA_PREFIX})
 #   set(CMAKE_SYSROOT "$ENV{CONDA_PREFIX}/x86_64-conda-linux-gnu/sysroot")
 endif()
 
-option(WITH_XMJ_SIM_ENV "Compile XBotMjSimEnv" TRUE)
+option(WITH_XMJ_SIM_ENV "Compile XBotMjSim" TRUE)
 if(${WITH_XMJ_SIM_ENV})
-    message(STATUS "Will compile XBotMjSimEnv.")
+    message(STATUS "Will compile XBotMjSim.")
 endif()
 
 option(WITH_TESTS "Compile tests" FALSE)
@@ -87,7 +87,7 @@ target_link_libraries(mujoco_simulator PUBLIC
     )
 
 add_library(xbot_mujoco_env STATIC
-    src/xmj_sim_env.cpp)
+    src/xmj_sim.cpp)
 
 target_link_libraries(xbot_mujoco_env PUBLIC
     mujoco_simulator)

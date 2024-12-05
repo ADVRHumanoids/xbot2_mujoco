@@ -25,9 +25,9 @@ execute_process(
       OUTPUT_VARIABLE PYTHON_SITE
       OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-pybind11_add_module("PyXbotMjSimEnv" PyXbotMjSimEnv.cpp)
-target_link_libraries("PyXbotMjSimEnv" PUBLIC xbot_mujoco_env pybind11::module)
+pybind11_add_module("PyXbotMjSim" PyXbotMjSim.cpp)
+target_link_libraries("PyXbotMjSim" PUBLIC xbot_mujoco_env pybind11::module)
 # install python bindings
-install(TARGETS "PyXbotMjSimEnv"
+install(TARGETS "PyXbotMjSim"
     DESTINATION ${CMAKE_INSTALL_PREFIX}/${PYTHON_SITE}/${PROJECT_NAME})
 install(FILES __init__.py DESTINATION ${CMAKE_INSTALL_PREFIX}/${PYTHON_SITE}/${PROJECT_NAME})

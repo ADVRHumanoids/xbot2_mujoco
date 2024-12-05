@@ -5,7 +5,7 @@
 #include <cmath>  // For sin and cos
 #include <random>
 
-#include "../src/xmj_sim_env.h"
+#include "../src/xmj_sim.h"
 #include "../src/loading_utils.h"
 #include "./config.h"
 
@@ -46,7 +46,7 @@ protected:
         std::string mj_xml_path=loader.xml_path();
         std::string mj_xml_content=loader.get_mj_xml();
 
-        xbot_mujoco_env_ptr = std::make_unique<XBotMjSimEnv>(
+        xbot_mujoco_env_ptr = std::make_unique<XBotMjSim>(
             mj_xml_path.c_str(),
             xbot2_cfg_path,
             std::get<0>(GetParam()),
@@ -64,7 +64,7 @@ protected:
 
     }
 
-    XBotMjSimEnv::UniquePtr xbot_mujoco_env_ptr;
+    XBotMjSim::UniquePtr xbot_mujoco_env_ptr;
 
 };
 
@@ -138,7 +138,7 @@ INSTANTIATE_TEST_SUITE_P(
 
 int main(int argc, char** argv)
 {   
-    // ros::init(argc, argv, std::string("XBotMjSimEnv"));
+    // ros::init(argc, argv, std::string("XBotMjSim"));
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 
