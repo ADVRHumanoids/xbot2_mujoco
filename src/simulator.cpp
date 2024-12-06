@@ -494,6 +494,7 @@ void xbot_mujoco::PhysicsLoop(mj::Simulate& sim) {
 void xbot_mujoco::InitSimulation(mj::Simulate* sim, const char* mj_filename, const char* xbot_config_path) {
   // request loadmodel if file given (otherwise drag-and-drop)
   if (mj_filename != nullptr) {
+
     sim->LoadMessage(mj_filename);
 
     m = xbot_mujoco::LoadModel(mj_filename, *sim);  
@@ -505,7 +506,9 @@ void xbot_mujoco::InitSimulation(mj::Simulate* sim, const char* mj_filename, con
       d = mj_makeData(m);
     }
     if (d) {
+
       sim->Load(m, d, mj_filename);
+
       // lock the sim mutex
       const std::unique_lock<std::recursive_mutex> lock(sim->mtx);
 
@@ -621,7 +624,8 @@ void xbot_mujoco::run(const char* fname,
   // simulate object encapsulates the UI
   sim = std::make_unique<mj::Simulate>(
       std::make_unique<mj::GlfwAdapter>(),
-      &cam, &opt, &pert, /* is_passive = */ false
+      &cam, &opt, &pert, /* is_passive = */ false,
+      headless
   );
   
   mjcb_control = xbot_mujoco::xbotmj_control_callback; // register control callback to mujoco

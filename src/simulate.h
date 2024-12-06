@@ -25,6 +25,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <thread>
 
 #include <mujoco/mjui.h>
 #include <mujoco/mujoco.h>
@@ -52,7 +53,8 @@ class Simulate {
   // create object and initialize the simulate ui
   Simulate(
       std::unique_ptr<PlatformUIAdapter> platform_ui_adapter,
-      mjvCamera* cam, mjvOption* opt, mjvPerturb* pert, bool is_passive);
+      mjvCamera* cam, mjvOption* opt, mjvPerturb* pert, bool is_passive, 
+      bool headless = false);
 
   // Synchronize mjModel and mjData state with UI inputs, and update
   // visualization.
@@ -94,6 +96,8 @@ class Simulate {
   // whether the viewer is operating in passive mode, where it cannot assume
   // that it has exclusive access to mjModel, mjData, and various mjv objects
   bool is_passive_ = false;
+  
+  bool headless_ = false;
 
   // model and data to be visualized
   mjModel* mnew_ = nullptr;

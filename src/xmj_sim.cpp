@@ -170,6 +170,7 @@ void XBotMjSim::physics_loop_manual() {
     std::unique_lock<std::mutex> lock(mtx);
 
     xbot_mujoco::InitSimulation(xbot_mujoco::sim.get(),model_fname.c_str(),xbot2_config_path.c_str());
+
     reset();
     physics_dt=xbot_mujoco::m->opt.timestep;
 
@@ -212,8 +213,7 @@ void XBotMjSim::step_sim() {
 }
 
 void XBotMjSim::initialize(bool headless) {
-    // ROS stuff
-
+    
     // std::string ros_namespace=""; // operate in ros global ns
     // ros::NodeHandle ros_nh(ros_namespace);
 
@@ -246,7 +246,8 @@ void XBotMjSim::initialize(bool headless) {
     // simulate object encapsulates the UI
     xbot_mujoco::sim = std::make_unique<mj::Simulate>(
         std::make_unique<mj::GlfwAdapter>(),
-        &cam, &opt, &pert, /* is_passive = */ false
+        &cam, &opt, &pert, /* is_passive = */ false,
+        headless
     );
 
     mjcb_control = xbot_mujoco::xbotmj_control_callback; // register control callback to mujoco
@@ -265,9 +266,8 @@ void XBotMjSim::initialize(bool headless) {
         physics_thread = std::thread(&XBotMjSim::physics_loop_manual, this);
     }
 
-    // xbot_mujoco::RenderingLoop(xbot_mujoco::sim.get(), ros_nh); // render in this thread
-    xbot_mujoco::RenderingLoop(xbot_mujoco::sim.get()); // render in this thread
-
+    xbot_mujoco::RenderingLoop(xbot_mujoco::sim.get()); // render in this thread 
+    // (if headlees no actual rendering is performed)
     if (physics_thread.joinable()) {
         physics_thread.join();
         printf("[xbot2_mujoco][XBotMjSim][close]: physics thread terminated\n");

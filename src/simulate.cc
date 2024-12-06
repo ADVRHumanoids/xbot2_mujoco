@@ -1798,8 +1798,10 @@ namespace mju = ::mujoco::sample_util;
 
 Simulate::Simulate(std::unique_ptr<PlatformUIAdapter> platform_ui,
                    mjvCamera* cam, mjvOption* opt, mjvPerturb* pert,
-                   bool is_passive)
+                   bool is_passive,
+                   bool headless)
     : is_passive_(is_passive),
+      headless_(headless),
       cam(*cam),
       opt(*opt),
       pert(*pert),
@@ -2684,7 +2686,9 @@ void Simulate::RenderLoop() {
       }
 
       // poll and handle events
-      this->platform_ui->PollEvents();
+      if (!headless_) {
+        this->platform_ui->PollEvents();
+      }
 
       // upload assets if requested
       bool upload_notify = false;
@@ -2718,28 +2722,20 @@ void Simulate::RenderLoop() {
     }  // MutexLock (unblocks simulation thread)
 
     // render while simulation is running
-    this->Render();
-
-    // update FPS stat, at most 5 times per second
-    auto now = mj::Simulate::Clock::now();
-    double interval = Seconds(now - last_fps_update_).count();
-    ++frames_;
-    if (interval > 0.2) {
-      last_fps_update_ = now;
-      fps_ = frames_ / interval;
-      frames_ = 0;
+    if (!headless_) {
+      this->Render();
+      // update FPS stat, at most 5 times per second
+      auto now = mj::Simulate::Clock::now();
+      double interval = Seconds(now - last_fps_update_).count();
+      ++frames_;
+      if (interval > 0.2) {
+        last_fps_update_ = now;
+        fps_ = frames_ / interval;
+        frames_ = 0;
+      }
+    } else { // avoid busy loop
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-
-    // if (d_)
-    // {
-    //     rosgraph_msgs::Clock time_msg;
-    //     double mj_time = d_->time;
-    //     time_msg.clock.sec = std::floor(d_->time);
-    //     mj_time -= std::floor(d_->time);
-    //     time_msg.clock.nsec = mj_time * 1e9;
-
-    //     time_pub.publish(time_msg);
-    // }
   }
 
   const MutexLock lock(this->mtx);
