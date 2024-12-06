@@ -13,6 +13,7 @@ class SimulatorLauncher:
         self.clock_publisher = None
 
         if self.args.pub_rostime:
+            rospy.set_param('/use_sim_time', True)
             rospy.init_node('sim_clock_publisher', anonymous=True)
             self.clock_publisher = rospy.Publisher('/clock', Clock, queue_size=10)
 
