@@ -50,7 +50,7 @@ class SimulatorLauncher:
         db_stepfreq = 1000  # Frequency to print and update RT factor
         initial_step_counter = self.sim.step_counter
         
-        ros_clock_freq=100
+        ros_clock_freq=1
 
         jnt_names = self.sim.jnt_names()
         print("\nControllable joint names: ->\n")
