@@ -81,7 +81,7 @@ void ImuMjServer::run(mjData * d)
         imu->rx().lin_acc_y = d->sensordata[acc_adr+1];
         imu->rx().lin_acc_z = d->sensordata[acc_adr+2];
 
-        auto R = Eigen::Matrix3d::Map(&d->site_xmat[imu->site_id]);
+        auto R = Eigen::Matrix3d::Map(&d->site_xmat[(imu->site_id)*9]);
         auto quat = Eigen::Quaterniond(R.transpose());
         imu->rx().orientation_x = quat.x();
         imu->rx().orientation_y = quat.y();
