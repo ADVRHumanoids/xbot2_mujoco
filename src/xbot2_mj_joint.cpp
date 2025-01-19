@@ -78,6 +78,7 @@ void JointMjServer::run(mjData * d)
         j->rx().motor_pos = d->qpos[qi];
         j->rx().motor_vel = d->qvel[vi];
         j->rx().torque = j->pid_torque();
+        j->rx().tor_ref = j->tx().tor_ref;
         j->sense();
     }
 
