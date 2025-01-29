@@ -28,20 +28,25 @@ parser.add_argument('--simopt', help='The path to an XML file containing simulat
 parser.add_argument('--world', help='The path to an XML file containing the world description')
 parser.add_argument('--ctrlcfg', help='The path to a YAML file containing decentralized control configuration')
 parser.add_argument('--sites', help='The path to an XML file containing additional sites for the model')
+parser.add_argument('--actuators', help='The path to an XML file containing actuators for the model')
 parser.add_argument('--name', help='Unique robot name')
+parser.add_argument('--output-dir', '-o', help='Output directory')
+parser.add_argument('--skip-sim', action='store_true', help='Do not run simulate (only generate self contained directory with mesh symlinks and xml file)')
 args, _ = parser.parse_known_args()
 
 # handle to rospack system
 rospack = rospkg.RosPack()
 
-# utils
-def remove_comments(XML):
+# util: remove comments, add mujoco compiler options
+def preprocess_urdf(XML):
     tree = etree.fromstring(XML)
     etree.strip_tags(tree, etree.Comment)
     robot = tree.xpath('/robot')[0]
     mujoco = etree.Element("mujoco")
     compiler = etree.Element("compiler")
     compiler.attrib['fusestatic'] = 'false'
+    compiler.attrib['discardvisual'] = 'false'
+    compiler.attrib['strippath'] = 'false'
     mujoco.append(compiler)
     robot.append(mujoco)
     return etree.tostring(tree)
@@ -66,14 +71,16 @@ def treeMerge(a, b):
 
 
 # useful paths
-mj_xml_dir = f'/tmp/{args.name}_mujoco'
+mj_xml_dir = f'/tmp/{args.name}_mujoco' if args.output_dir is None else args.output_dir
 mj_urdf_path = os.path.join(mj_xml_dir, f'{args.name}.urdf')
 mj_xml_path = os.path.join(mj_xml_dir, f'{args.name}.xml')
 mj_xml_path_orig = os.path.join(mj_xml_dir, f'{args.name}.orig.xml')
+mj_assetsdir = os.path.join(mj_xml_dir, 'assets')
 
 # create directory
 shutil.rmtree(mj_xml_dir, ignore_errors=True)
 os.makedirs(mj_xml_dir, exist_ok=True)
+os.makedirs(mj_assetsdir, exist_ok=True)
 
 # get urdf
 if args.urdf:
@@ -93,7 +100,7 @@ with open(urdf_path, 'r') as file:
     urdf = file.read()
 
 seq_id = 0
-urdf = remove_comments(urdf.encode()).decode()
+urdf = preprocess_urdf(urdf.encode()).decode()
 urdf_processed = str()
 last_pos = 0
 pos = urdf.find('filename="')    
@@ -109,7 +116,7 @@ while pos != -1:
         uri = rospack.get_path(pkg_name) + uri[pkg_end:] 
     
     filename = os.path.basename(uri)
-    dst_file = os.path.join(mj_xml_dir, str(seq_id) + '_' + filename)
+    dst_file = os.path.join(mj_assetsdir, str(seq_id) + '_' + filename)
     seq_id += 1
     if not os.path.exists(dst_file):
         try: 
@@ -118,7 +125,7 @@ while pos != -1:
         
         os.symlink(uri, dst_file)
 
-    urdf_processed = urdf_processed + urdf[last_pos:uri_start] + dst_file
+    urdf_processed = urdf_processed + urdf[last_pos:uri_start] + './assets/' + os.path.basename(dst_file)
     last_pos = uri_end
     pos = urdf.find('filename="', uri_end)    
 
@@ -132,13 +139,18 @@ cmd = f'mujoco_compile {mj_urdf_path} {mj_xml_path_orig}'
 print(f'calling {cmd}')
 subprocess.run(cmd.split())
 
-# add options and world
 with open(mj_xml_path_orig, 'r') as file:
     mj_xml = file.read()
     mj_xml_tree = etree.fromstring(mj_xml)
+    mujoco = mj_xml_tree.xpath('/mujoco')[0]
     etree.strip_tags(mj_xml_tree, etree.Comment)
+    
 
 
+# add compiler attr
+
+
+# add options and world
 with open(args.simopt, 'r') as file:
     mj_opt = file.read()
     mj_opt_tree = etree.fromstring(mj_opt)
@@ -154,11 +166,19 @@ with open(args.sites, 'r') as file:
     mj_sites_tree = etree.fromstring(mj_sites)
     etree.strip_tags(mj_sites_tree, etree.Comment)
 
+mj_act = None 
+if args.actuators:
+    with open(args.actuators, 'r') as file:
+        mj_act = file.read()
+        mj_act_tree = etree.fromstring(mj_act)
+        etree.strip_tags(mj_sites_tree, etree.Comment)
 
+# why do I do this?
 try:
     mj_xml_tree.remove(mj_xml_tree.xpath('./compiler')[0])
 except IndexError:
     pass
+
 
 try:
     mj_xml_tree.remove(mj_xml_tree.xpath('./size')[0])
@@ -168,6 +188,8 @@ except IndexError:
 
 xml_merged = treeMerge(mj_xml_tree, mj_opt_tree)
 xml_merged = treeMerge(xml_merged, mj_world_tree)
+if mj_act is not None:
+    xml_merged = treeMerge(xml_merged, mj_act_tree)
 
 # add sites
 site_bodies = mj_sites_tree.xpath('./body')
@@ -179,6 +201,10 @@ for sb in site_bodies:
     body.append(site)
 
 open(mj_xml_path, 'w').write(etree.tostring(xml_merged, pretty_print=True).decode())
+
+if args.skip_sim:
+    exit(0)
+
 print(f'running mujoco_simulator {mj_xml_path} {args.ctrlcfg}')
 subprocess.run(['mujoco_simulator', mj_xml_path, args.ctrlcfg])
 
