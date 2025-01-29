@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.20)
 project(xbot2_mujoco)
 
 find_package(mujoco_cmake REQUIRED)
