@@ -174,11 +174,14 @@ if args.actuators:
         etree.strip_tags(mj_sites_tree, etree.Comment)
 
 # why do I do this?
-try:
-    mj_xml_tree.remove(mj_xml_tree.xpath('./compiler')[0])
-except IndexError:
-    pass
+# try:
+#     mj_xml_tree.remove(mj_xml_tree.xpath('./compiler')[0])
+# except IndexError:
+#     pass
 
+compiler = etree.Element("compiler")
+compiler.attrib['meshdir'] = './assets'
+mujoco.append(compiler)
 
 try:
     mj_xml_tree.remove(mj_xml_tree.xpath('./size')[0])
