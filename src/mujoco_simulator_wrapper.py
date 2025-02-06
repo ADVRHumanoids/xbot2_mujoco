@@ -180,7 +180,7 @@ if args.actuators:
 #     pass
 
 compiler = etree.Element("compiler")
-compiler.attrib['meshdir'] = './assets'
+compiler.attrib['meshdir'] = '.'
 mujoco.append(compiler)
 
 try:
