@@ -32,6 +32,7 @@ parser.add_argument('--actuators', help='The path to an XML file containing actu
 parser.add_argument('--name', help='Unique robot name')
 parser.add_argument('--output-dir', '-o', help='Output directory')
 parser.add_argument('--skip-sim', action='store_true', help='Do not run simulate (only generate self contained directory with mesh symlinks and xml file)')
+parser.add_argument('--copy-assets', action='store_true', help='Copy assets instead of symlinking them')
 args, _ = parser.parse_known_args()
 
 # handle to rospack system
@@ -122,8 +123,11 @@ while pos != -1:
         try: 
             os.remove(dst_file)
         except: pass
-        
-        os.symlink(uri, dst_file)
+
+        if args.copy_assets:
+            shutil.copy(uri, dst_file)
+        else:
+            os.symlink(uri, dst_file)
 
     urdf_processed = urdf_processed + urdf[last_pos:uri_start] + './assets/' + os.path.basename(dst_file)
     last_pos = uri_end
