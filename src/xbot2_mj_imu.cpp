@@ -24,6 +24,8 @@ ImuMjServer::ImuMjServer(mjModel *mj_model, std::string cfg_path):
     {
         std::string sensorname = &_m->names[mj_model->name_sensoradr[i]];
 
+        std::cout << "found sensor " << sensorname << "\n";
+
         if(_m->sensor_objtype[i] != mjtObj::mjOBJ_SITE)
         {
             continue;

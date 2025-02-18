@@ -5,6 +5,7 @@ find_package(mujoco_cmake REQUIRED)
 find_package(glfw3 REQUIRED)
 find_package(xbot2 REQUIRED)
 find_package(matlogger2 REQUIRED)
+find_package(catkin COMPONENTS roscpp)
 
 
 set(CMAKE_CXX_STANDARD 17)
@@ -34,7 +35,8 @@ add_executable(mujoco_simulator
 
 target_link_libraries(mujoco_simulator
     glfw
-    xbot2_mujoco)
+    xbot2_mujoco
+    ${catkin_LIBRARIES})
 
 install(TARGETS mujoco_simulator
     DESTINATION bin)

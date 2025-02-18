@@ -31,6 +31,8 @@
 
 #include "xbot2_bridge.h"
 
+#include <ros/ros.h>
+
 #define MUJOCO_PLUGIN_DIR "mujoco_plugin"
 
 extern "C" {
@@ -509,6 +511,9 @@ int main(int argc, char** argv) {
     mju_error("Headers and library have different versions");
   }
 
+  ros::init(argc, argv, "mujoco_ros");
+  ros::NodeHandle nh("");
+
   // scan for libraries in the plugin directory to load additional plugins
   scanPluginLibraries();
 
@@ -543,7 +548,7 @@ int main(int argc, char** argv) {
   std::thread physicsthreadhandle(&PhysicsThread, sim.get(), filename);
 
   // start simulation UI loop (blocking call)
-  sim->RenderLoop();
+  sim->RenderLoop(nh);
   physicsthreadhandle.join();
 
   return 0;
