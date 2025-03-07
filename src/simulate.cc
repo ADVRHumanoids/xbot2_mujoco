@@ -1598,19 +1598,19 @@ void UiEvent(mjuiState* state) {
             }
             break;
 
-        case mjKEY_PAGE_UP:         // select parent body
-            if ((sim->m_ || sim->is_passive_) && sim->pert.select > 0) {
-                sim->pert.select = sim->body_parentid_[sim->pert.select];
-                sim->pert.flexselect = -1;
-                sim->pert.skinselect = -1;
+        // case mjKEY_PAGE_UP:         // select parent body
+        //     if ((sim->m_ || sim->is_passive_) && sim->pert.select > 0) {
+        //         sim->pert.select = sim->body_parentid_[sim->pert.select];
+        //         sim->pert.flexselect = -1;
+        //         sim->pert.skinselect = -1;
 
-                // stop perturbation if world reached
-                if (sim->pert.select<=0) {
-                    sim->pert.active = 0;
-                }
-            }
+        //         // stop perturbation if world reached
+        //         if (sim->pert.select<=0) {
+        //             sim->pert.active = 0;
+        //         }
+        //     }
 
-            break;
+        //     break;
 
         case ']':                   // cycle up fixed cameras
             if ((sim->m_ || !sim->is_passive_) && sim->ncam_) {
@@ -1660,7 +1660,7 @@ void UiEvent(mjuiState* state) {
             mjui0_update_section(sim, SECT_RENDERING);
             break;
 
-        case '-':                   // slow down
+        case mjKEY_PAGE_DOWN:                   // slow down
             if (!sim->is_passive_) {
                 int numclicks = sizeof(sim->percentRealTime) / sizeof(sim->percentRealTime[0]);
                 if (sim->real_time_index < numclicks-1 && !state->shift) {
@@ -1670,7 +1670,7 @@ void UiEvent(mjuiState* state) {
             }
             break;
 
-        case '=':                   // speed up
+        case mjKEY_PAGE_UP:                         // speed up
             if (!sim->is_passive_ && sim->real_time_index > 0 && !state->shift) {
                 sim->real_time_index--;
                 sim->speed_changed = true;

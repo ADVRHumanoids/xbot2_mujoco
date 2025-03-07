@@ -5,6 +5,8 @@
 #include <xbot2/client_server/server_manager.h>
 #include <mujoco/mujoco.h>
 
+#include <matlogger2/matlogger2.h>
+
 namespace XBot
 {
 
@@ -70,6 +72,7 @@ private:
     ServerManager::UniquePtr _srv;
     std::vector<ImuInstanceMj::Ptr> _imus;
     mjModel * _m;
+    MatLogger2::Ptr _logger;
 
 };
 

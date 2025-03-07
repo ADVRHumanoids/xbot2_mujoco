@@ -5,7 +5,6 @@ using namespace XBot;
 ImuInstanceMj::ImuInstanceMj(Hal::DeviceInfo devinfo):
     BaseType(devinfo)
 {
-
 }
 
 ImuMjServer::ImuMjServer(mjModel *mj_model, std::string cfg_path):
@@ -65,16 +64,23 @@ ImuMjServer::ImuMjServer(mjModel *mj_model, std::string cfg_path):
     std::vector<Hal::DeviceRt::Ptr> devs(_imus.begin(), _imus.end());
 
     _srv = std::make_unique<ServerManager>(devs, "sock", "imu_gz");
+
+    _logger = MatLogger2::MakeLogger("/tmp/imu_mj_server_log");
+    _logger->set_buffer_mode(VariableBuffer::Mode::circular_buffer);
 }
 
 void ImuMjServer::run(mjData * d)
 {
+    _logger->add("time", d->time);
+
     for(auto imu : _imus)
     {
         int gyro_adr = _m->sensor_adr[imu->gyro_id];
         imu->rx().ang_vel_x = d->sensordata[gyro_adr];
         imu->rx().ang_vel_y = d->sensordata[gyro_adr+1];
         imu->rx().ang_vel_z = d->sensordata[gyro_adr+2];
+
+        _logger->add("gyro", Eigen::Vector3d::Map(&d->sensordata[gyro_adr]));
 
         int acc_adr = _m->sensor_adr[imu->acc_id];
         imu->rx().lin_acc_x = d->sensordata[acc_adr];

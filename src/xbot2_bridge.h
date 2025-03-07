@@ -6,6 +6,7 @@
 #include "xbot2_mj_linkstate.h"
 
 #include <xbot2/ipc/pipe.h>
+#include <xbot2/executor/xbot2executor.h>
 
 namespace XBot {
 
@@ -32,23 +33,61 @@ public:
                                             "gz_to_xbot2_time",
                                             10,
                                             sizeof(std::chrono::nanoseconds));
+
+        
     }
 
     void run(mjData * d)
     {
-        _joint.run(d);
-        _imu.run(d);
-        _ls.run(d);
+        auto do_run = [this, d](){
+            _joint.run(d);
+            _imu.run(d);
+            _ls.run(d);
 
-        using ns = std::chrono::nanoseconds;
-        ns clock_msg = std::chrono::duration_cast<ns>(std::chrono::duration<double>(d->time));
-        _clock_sender->try_send(clock_msg);
+            using ns = std::chrono::nanoseconds;
+            ns clock_msg = std::chrono::duration_cast<ns>(std::chrono::duration<double>(d->time));
+            _clock_sender->try_send(clock_msg);
+        };
+
+        
+        
+        if(!_xbot2){
+
+            std::atomic_bool xbot2_init_in_progress(true);
+
+            std::thread t([&xbot2_init_in_progress, &do_run](){
+                while(xbot2_init_in_progress)
+                {
+                    do_run();
+                    this_thread::sleep_for(10ms);
+                }
+            });
+            
+            _xbot2 = std::make_unique<XBot2Executor>(
+                "/home/alaurenzi/code/ros2_ws/src/iit-centauro-ros-pkg/centauro_config/centauro_basic.yaml",
+                "sim", 
+                true,
+                true, 
+                false
+            );
+
+            xbot2_init_in_progress = false;
+
+            t.join();
+        }
+
+        do_run();
+
+        _xbot2->run(false);
+
+        
     }
 private:
 
     JointMjServer _joint;
     ImuMjServer _imu;
     LinkStateMjServer _ls;
+    std::unique_ptr<XBot2Executor> _xbot2;
 
     Transmitter::Ptr _clock_sender;
 

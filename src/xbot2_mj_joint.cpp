@@ -54,10 +54,15 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
     std::vector<Hal::DeviceRt::Ptr> devs(_joints.begin(), _joints.end());
 
     _srv = std::make_unique<ServerManager>(devs, "sock", "joint_gz");
+
+    _logger = MatLogger2::MakeLogger("/tmp/joint_mj_server_log");
+    // _logger->set_buffer_mode(VariableBuffer::Mode::circular_buffer);
 }
 
 void JointMjServer::run(mjData * d)
 {
+    _logger->add("time", d->time);
+
     for(auto& j : _joints)
     {
         int qi = _m->jnt_qposadr[j->get_id()];
@@ -70,16 +75,26 @@ void JointMjServer::run(mjData * d)
         j->sense();
     }
 
+    _logger->add("q", Eigen::Map<Eigen::VectorXd>(d->qpos, _m->nq));
+
     _srv->send();
 
     _srv->run();
+
+    Eigen::VectorXd qref(_m->nv);
 
     for(auto& j : _joints)
     {
         int vi = _m->jnt_dofadr[j->get_id()];
         d->ctrl[vi] = j->rx().torque;
+        qref[vi] = j->tx().pos_ref;
         j->move();
     }
+
+    _logger->add("qref", qref);
+
+    int wb = _logger->flush_available_data();
+    if(wb) printf("flushed %d bytes\n", wb);
 }
 
 JointInstanceMj::JointInstanceMj(Hal::DeviceInfo devinfo):
