@@ -40,6 +40,17 @@ class SimulatorLauncher:
             timeout=1000
         )
 
+    def quaternion_from_rotation_z(self, theta_degrees):
+        # Convert theta from degrees to radians
+        theta_radians = np.deg2rad(theta_degrees)
+
+        # Calculate the quaternion components for z-axis rotation
+        w = np.cos(theta_radians / 2.0)
+        x = 0.0
+        y = 0.0
+        z = np.sin(theta_radians / 2.0)
+        return [w, x, y, z]
+    
     def run(self):
         np.set_printoptions(precision=2, 
                             linewidth=200)
@@ -56,6 +67,20 @@ class SimulatorLauncher:
         print("\nControllable joint names: ->\n")
         print(", ".join(jnt_names))
 
+        # randomize initial pos and orientation
+        import random
+        pi = np.zeros((3))
+        qi = np.zeros((4))
+        qi[0] = 1  # Quaternion identity
+        pi[2] = self.sim.get_pi()[2]  # Initial z position
+        pi[0] += random.uniform(-1.0, 1.0)
+        pi[1] += random.uniform(-1.0, 1.0)
+        random_theta = random.uniform(-180.0, 180.0)
+        qi[:] = self.quaternion_from_rotation_z(random_theta)
+        self.sim.set_pi(pi)
+        self.sim.set_qi(qi)
+        self.sim.reset()
+        
         while self.sim.is_running():
             step_start = time.time()  # Start timing the step
             if not self.sim.step():
