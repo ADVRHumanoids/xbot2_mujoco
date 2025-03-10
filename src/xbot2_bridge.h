@@ -8,6 +8,8 @@
 #include <xbot2/ipc/pipe.h>
 #include <xbot2/executor/xbot2executor.h>
 
+#include <thread>
+
 namespace XBot {
 
 class MjWrapper
@@ -48,8 +50,6 @@ public:
             ns clock_msg = std::chrono::duration_cast<ns>(std::chrono::duration<double>(d->time));
             _clock_sender->try_send(clock_msg);
         };
-
-        
         
         if(!_xbot2){
 
@@ -64,21 +64,32 @@ public:
             });
             
             _xbot2 = std::make_unique<XBot2Executor>(
-                "/home/alaurenzi/code/ros2_ws/src/iit-centauro-ros-pkg/centauro_config/centauro_basic.yaml",
+                "/home/iit.local/alaurenzi/code/ros2_ws/src/iit-centauro-ros-pkg/centauro_config/centauro_basic.yaml",
                 "sim", 
                 true,
                 true, 
                 false
             );
 
+
             xbot2_init_in_progress = false;
 
             t.join();
         }
 
+        // say we're at iter k
+
+        // send telemetry to xbot (t[k], y[k] -> this also contains u[k-1])
+        // recv commands from xbot u[k]
+        // set commands
         do_run();
 
-        _xbot2->run(false);
+        // recv telemetry from sim (t[k], y[k])
+        // run user plugins
+        // send commands to sim for next iteration u[k+1] = g(y[k], t[k])
+        _xbot2->run(false, true);
+
+        // advance state to x[k+1] = f(x[k], u[k])
 
         
     }

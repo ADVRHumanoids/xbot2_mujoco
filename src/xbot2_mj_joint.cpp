@@ -55,13 +55,13 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
 
     _srv = std::make_unique<ServerManager>(devs, "sock", "joint_gz");
 
-    _logger = MatLogger2::MakeLogger("/tmp/joint_mj_server_log");
+    // _logger = MatLogger2::MakeLogger("/tmp/joint_mj_server_log");
     // _logger->set_buffer_mode(VariableBuffer::Mode::circular_buffer);
 }
 
 void JointMjServer::run(mjData * d)
 {
-    _logger->add("time", d->time);
+    // _logger->add("time", d->time);
 
     for(auto& j : _joints)
     {
@@ -75,10 +75,14 @@ void JointMjServer::run(mjData * d)
         j->sense();
     }
 
-    _logger->add("q", Eigen::Map<Eigen::VectorXd>(d->qpos, _m->nq));
+    // _logger->add("q", Eigen::Map<Eigen::VectorXd>(d->qpos, _m->nq));
 
+    // send rx data (telemetry)
+    // it also contains tx feedback, i.e. the tx that generated
+    // the last ctrl (at prev iteration)
     _srv->send();
 
+    // receive tx data (commands)
     _srv->run();
 
     Eigen::VectorXd qref(_m->nv);
@@ -91,10 +95,10 @@ void JointMjServer::run(mjData * d)
         j->move();
     }
 
-    _logger->add("qref", qref);
+    // _logger->add("qref", qref);
 
-    int wb = _logger->flush_available_data();
-    if(wb) printf("flushed %d bytes\n", wb);
+    // int wb = _logger->flush_available_data();
+    // if(wb) printf("flushed %d bytes\n", wb);
 }
 
 JointInstanceMj::JointInstanceMj(Hal::DeviceInfo devinfo):
