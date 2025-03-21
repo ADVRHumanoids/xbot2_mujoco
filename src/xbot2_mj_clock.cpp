@@ -15,6 +15,7 @@ ClockServer::ClockServer() {
                                         10,
                                         sizeof(std::chrono::nanoseconds));
 
+    printf( "[XBot][ClockServer]: created clock server\n");
 }
 
 ClockServer::~ClockServer()

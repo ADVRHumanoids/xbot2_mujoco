@@ -36,10 +36,11 @@ PYBIND11_MODULE(PyXbotMjSim, m) {
 
     py::class_<XBotMjSim>(m, "XBotMjSim")
         // Bind the constructor
-        .def(py::init<const std::string, const std::string, bool, bool, int, int>(),
+        .def(py::init<const std::string, const std::string, bool, bool, int, int, const std::string>(),
              py::arg("model_fname"), py::arg("xbot2_config_path") = "",
              py::arg("headless") = false, py::arg("manual_stepping") = true,
-             py::arg("init_steps") = 1, py::arg("timeout") = 10)
+             py::arg("init_steps") = 1, py::arg("timeout") = 10,
+             py::arg("base_link_name") = "base_link")
 
         // Bind the public methods
         .def("reset", &XBotMjSim::reset, "Reset the simulation environment")

@@ -27,7 +27,8 @@ public:
         bool headless = false,
         bool manual_stepping = false,
         int init_steps = 1,
-        int timeout = 10);
+        int timeout = 10,
+        const std::string base_link_name = "base_link");
     ~XBotMjSim();
 
     bool is_running();

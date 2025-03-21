@@ -12,12 +12,14 @@ XBotMjSim::XBotMjSim(
     bool headless,
     bool manual_stepping,
     int init_steps,
-    int timeout)
+    int timeout,
+    const std::string base_link_name)
     :xbot2_config_path(xbot2_config_path),model_fname(model_fname),
-    headless(headless),manual_stepping(manual_stepping), timeout(timeout) {
-
-    printf("[xbot2_mujoco][XBotMjSim]: initializing sim. enviroment with MuJoCo xml file at %s and XBot2 config at %s\n", 
-        model_fname.c_str(), xbot2_config_path.c_str());
+    headless(headless),manual_stepping(manual_stepping), timeout(timeout),
+    base_link_name(base_link_name) {
+    
+    printf("[xbot2_mujoco][XBotMjSim]: initializing sim. enviroment with MuJoCo xml file at %s and XBot2 config at %s, base link name %s\n", 
+        model_fname.c_str(), xbot2_config_path.c_str(), base_link_name.c_str());
 
     if (!run()) {
         fprintf(stderr, "[xbot2_mujoco][XBotMjSim]: failed to run environment!");
