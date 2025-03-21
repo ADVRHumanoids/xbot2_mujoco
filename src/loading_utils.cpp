@@ -294,7 +294,7 @@ std::string LoadingUtils::remove_comments(const std::string& xml) {
     pugi::xml_node robot = doc.child("robot");
     pugi::xml_node mujoco = robot.append_child("mujoco");
     pugi::xml_node compiler = mujoco.append_child("compiler");
-    compiler.append_attribute("fusestatic").set_value("false");
+    // compiler.append_attribute("fusestatic").set_value("false");
 
     std::ostringstream oss;
     doc.save(oss);
