@@ -75,10 +75,11 @@ private:
         const std::vector<std::string>& subdir_names);
 
     std::string add_mesh_simlink_bfix(const std::string& urdf);
-    void process_urdf();
-    void compile_mujoco_xml();
+    void preprocess_urdf();
+    void compile_urdf_for_mj(std::string xml, std::string outpath);
+    void add_compiler_opts();
     void merg_xml_trees(pugi::xml_node& parent, pugi::xml_node child);
-    void merge_xml();
+    void merge_xml(std::string to_be_added, std::string into, std::string out);
     void add_sites();
 };
 

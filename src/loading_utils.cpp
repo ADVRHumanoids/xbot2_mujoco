@@ -291,11 +291,6 @@ std::string LoadingUtils::remove_comments(const std::string& xml) {
         }
     }
 
-    pugi::xml_node robot = doc.child("robot");
-    pugi::xml_node mujoco = robot.append_child("mujoco");
-    pugi::xml_node compiler = mujoco.append_child("compiler");
-    // compiler.append_attribute("fusestatic").set_value("false");
-
     std::ostringstream oss;
     doc.save(oss);
     return oss.str();
@@ -409,7 +404,7 @@ std::string LoadingUtils::add_mesh_simlink_bfix(const std::string& urdf) {
     return processedUrdf;
 }
 
-void LoadingUtils::process_urdf() {
+void LoadingUtils::preprocess_urdf() {
     std::string urdf;
     if (!urdf_path.empty()) {
         std::ifstream urdfFile(urdf_path);
@@ -446,17 +441,16 @@ void LoadingUtils::process_urdf() {
     outFile.close();
 }
 
-void LoadingUtils::compile_mujoco_xml() {
+void LoadingUtils::compile_urdf_for_mj(std::string xml, std::string outpath) {
     printf( "[LoadingUtils][mergeXML]: compiling URDF using mujoco_compile...\n");
     std::string cmd = "mujoco_compile " + mjurdf_path + " " + mjxml_path_orig;
     auto ret = std::system(cmd.c_str());
     if (ret != 0) {
         // If the return value is non-zero, there was an error
-        printf( "[LoadingUtils][compile_mujoco_xml]: Error occurred during mujoco_compile. Return code: %d\n", ret);
+        printf( "[LoadingUtils][compile_urdf_for_mj]: Error occurred during mujoco_compile. Return code: %d\n", ret);
     } else {
         printf( "[LoadingUtils][mergeXML]: done. Return code: %d\n", ret);
     }
-
 }
 
 void LoadingUtils::merg_xml_trees(pugi::xml_node& parent, pugi::xml_node child) {
@@ -478,29 +472,25 @@ void LoadingUtils::merg_xml_trees(pugi::xml_node& parent, pugi::xml_node child) 
     }
 }
 
-void LoadingUtils::merge_xml() {
+void LoadingUtils::merge_xml(std::string to_be_added, std::string into, std::string out) {
     // Load the MuJoCo XML, simulator options XML, and world XML documents
-    pugi::xml_document mjXmlDoc;
-    pugi::xml_document simOptDoc;
-    pugi::xml_document worldDoc;
+    pugi::xml_document inTo;
+    pugi::xml_document toBeAdded;
 
-    mjXmlDoc.load_file(mjxml_path_orig.c_str());
-    simOptDoc.load_file(simopt_path.c_str());
-    printf( "[LoadingUtils][mergeXML]: loaded xml at %s \n", simopt_path.c_str());
-    worldDoc.load_file(world_path.c_str());
-    printf( "[LoadingUtils][mergeXML]: loaded xml at %s \n", world_path.c_str());
+    inTo.load_file(into.c_str());
+    toBeAdded.load_file(to_be_added.c_str());
+    printf( "[LoadingUtils][mergeXML]: loaded xml at %s \n", to_be_added.c_str());
 
     // Remove specific nodes from the MuJoCo XML
-    pugi::xml_node mujocoNode = mjXmlDoc.child("mujoco");
-    mujocoNode.remove_child("compiler");
-    mujocoNode.remove_child("size");
+    pugi::xml_node mujocoNode = inTo.child("mujoco");
+    // mujocoNode.remove_child("compiler");
+    // mujocoNode.remove_child("size");
 
     // Merge the simulator options and world XML into the main MuJoCo XML
-    merg_xml_trees(mujocoNode, simOptDoc.child("mujoco"));
-    merg_xml_trees(mujocoNode, worldDoc.child("mujoco"));
+    merg_xml_trees(mujocoNode, toBeAdded.child("mujoco"));
 
     // Save the merged XML back to a file
-    mjXmlDoc.save_file(mjxml_path.c_str());
+    inTo.save_file(out.c_str());
 }
 
 // Function to find a <body> node with a specific name attribute using XPath
@@ -560,10 +550,37 @@ void LoadingUtils::add_sites() {
     }
 }
 
+void LoadingUtils::add_compiler_opts() {
+    printf( "[LoadingUtils][mergeXML]: Adding compiler opts to URDF's xml...\n");
+    pugi::xml_document preprocessed_urdf;
+    preprocessed_urdf.load_file(mjurdf_path.c_str());
+    pugi::xml_node root = preprocessed_urdf.document_element();
+    pugi::xml_node robot = preprocessed_urdf.child("robot");
+    pugi::xml_node mujoco = robot.append_child("mujoco");
+    pugi::xml_node compiler = mujoco.append_child("compiler");
+    compiler.append_attribute("discardvisual").set_value("false");
+    compiler.append_attribute("strippath").set_value("false");
+    compiler.append_attribute("angle").set_value("radian");
+    compiler.append_attribute("boundmass").set_value(0.001);
+    compiler.append_attribute("boundinertia").set_value(0.0001);
+    compiler.append_attribute("balanceinertia").set_value(true);
+    compiler.append_attribute("fusestatic").set_value("false");
+    // Save the modified XML back to the file
+    if (!preprocessed_urdf.save_file(mjurdf_path.c_str())) {
+        printf("[Error] Failed to save modified URDF file: %s\n", mjurdf_path.c_str());
+    } else {
+        printf("[LoadingUtils][mergeXML]: Compiler opts added successfully.\n");
+    }
+}
+
 void LoadingUtils::generate() {
-    process_urdf();
-    compile_mujoco_xml();
-    merge_xml();
+    preprocess_urdf(); // removed comments + some bfixes + adds compiler opts
+    add_compiler_opts(); // load modified URDF and add compiler options, then dump
+    compile_urdf_for_mj(mjurdf_path, mjxml_path_orig); // compile urdf
+    merge_xml(simopt_path, mjxml_path_orig, 
+        mjxml_path); // merge sim opts 
+    merge_xml(world_path, mjxml_path, 
+        mjxml_path); // merge world
     add_sites();
     generated=true;
 }
