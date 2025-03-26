@@ -21,11 +21,14 @@ class SimulatorLauncher:
         self.loader = LoadingUtils("XMjEnvPy")
         files_dir = self.args.files_dir or "/root/ibrido_ws/src/xbot2_mujoco/tests/files"
 
-        self.loader.set_urdf_path(self.args.urdf_path or f"{files_dir}/centauro.urdf")
-        self.loader.set_simopt_path(self.args.simopt_path or f"{files_dir}/sim_opt.xml")
-        self.loader.set_world_path(self.args.world_path or f"{files_dir}/world.xml")
-        self.loader.set_sites_path(self.args.sites_path or f"{files_dir}/sites.xml")
-        self.loader.set_xbot_config_path(self.args.xbot_config_path or f"{files_dir}/xbot2_basic.yaml")
+        base_link = self.args.blink_name
+
+        # default to use centauro
+        self.loader.set_urdf_path(self.args.urdf_path or f"{files_dir}/centauro/centauro.urdf")
+        self.loader.set_simopt_path(self.args.simopt_path or f"{files_dir}/centauro/sim_opt.xml")
+        self.loader.set_world_path(self.args.world_path or f"{files_dir}/centauro/world.xml")
+        self.loader.set_sites_path(self.args.sites_path or f"{files_dir}/centauro/sites.xml")
+        self.loader.set_xbot_config_path(self.args.xbot_config_path or f"{files_dir}/centauro/xbot2_basic.yaml")
         self.loader.generate()
 
         mj_xml_path = self.loader.xml_path()
@@ -33,11 +36,12 @@ class SimulatorLauncher:
         # Initialize the XBotMjSim environment
         self.sim = XBotMjSim(
             model_fname=mj_xml_path,
-            xbot2_config_path=self.args.xbot_config_path or f"{files_dir}/xbot2_basic.yaml",
+            xbot2_config_path=self.args.xbot_config_path or f"{files_dir}/centauro/xbot2_basic.yaml",
             headless=self.args.headless,
             manual_stepping=True,
             init_steps=100,
-            timeout=1000
+            timeout=1000,
+            base_link_name=base_link
         )
 
     def quaternion_from_rotation_z(self, theta_degrees):
@@ -58,7 +62,7 @@ class SimulatorLauncher:
         start_time = time.time()  # Track total time
         stepping_time = 0.0       # Track only time spent stepping
         n_steps_done = 0
-        db_stepfreq = 1000  # Frequency to print and update RT factor
+        db_stepfreq = 5000  # Frequency to print and update RT factor
         initial_step_counter = self.sim.step_counter
         
         ros_clock_freq=1
@@ -124,17 +128,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Launch XBotMjSimEnv simulation.')
 
     # File paths
-    parser.add_argument('--files_dir', type=str, help='Base directory for simulation files.')
-    parser.add_argument('--urdf_path', type=str, help='Path to the URDF file.')
-    parser.add_argument('--simopt_path', type=str, help='Path to the simulation options file.')
-    parser.add_argument('--world_path', type=str, help='Path to the world file.')
-    parser.add_argument('--sites_path', type=str, help='Path to the sites file.')
+    parser.add_argument('--files_dir', type=str, help='Base directory for simulation files')
+    parser.add_argument('--urdf_path', type=str, help='Full path to the URDF file to be compiled and loaded.')
+    parser.add_argument('--simopt_path', type=str, help='Path to the simulation options file ')
+    parser.add_argument('--world_path', type=str, help='Path to the world file ')
+    parser.add_argument('--sites_path', type=str, help='Path to the sites file ')
     parser.add_argument('--xbot_config_path', type=str, help='Path to the XBot2 configuration file.')
 
     # Simulation parameters
     parser.add_argument('--headless', action='store_true', help='Run the simulation in headless mode.')
     parser.add_argument('--pub_rostime', action='store_true', help='Publish simulation time to the /clock topic.')
-    parser.add_argument('--physics_dt', type=float, default=1e-3, help='Physics time step.')
+    parser.add_argument('--blink_name', type=str, default="base_link", 
+        help='root link name (will be used for getting measurements and teleportation)')
 
     args = parser.parse_args()
 
