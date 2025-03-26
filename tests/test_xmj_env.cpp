@@ -31,15 +31,15 @@ protected:
 
         std::string outfname="XMjEnvTest";
         std::string files_dir(FILES_DIR);
-        std::string xbot2_cfg_path=files_dir+"/xbot2_basic.yaml";
+        std::string xbot2_cfg_path=files_dir+"/centauro/xbot2_basic.yaml";
 
         LoadingUtils loader(outfname);
         loader.set_mesh_rootdir(mesh_root_directory);
         loader.set_mesh_rootdir_subdirs(subdirs);
-        loader.set_urdf_path(files_dir + "/centauro.urdf");
-        loader.set_simopt_path(files_dir + "/sim_opt.xml");
-        loader.set_world_path(files_dir + "/world.xml");
-        loader.set_sites_path(files_dir + "/sites.xml");
+        loader.set_urdf_path(files_dir + "/centauro/centauro.urdf");
+        loader.set_simopt_path(files_dir + "/centauro/sim_opt.xml");
+        loader.set_world_path(files_dir + "/centauro/world.xml");
+        loader.set_sites_path(files_dir + "/centauro/sites.xml");
         loader.set_xbot_config_path(xbot2_cfg_path);
         loader.generate();
 
