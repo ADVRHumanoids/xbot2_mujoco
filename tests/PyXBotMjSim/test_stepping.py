@@ -22,26 +22,29 @@ class TestSimStepping(unittest.TestCase):
 
     def setUp(self):
         robot_name = self.args.robot_name  # Get robot name from arguments
-        self.loader = LoadingUtils("XMjEnvPyTest")
-        files_dir = "/root/ibrido_ws/src/xbot2_mujoco/tests/files"
-        files_dir=files_dir+"/"+robot_name
+        blink_name = self.args.blink_name
 
-        self.loader.set_urdf_path(f"{files_dir}/{robot_name}.urdf")
-        self.loader.set_simopt_path(f"{files_dir}/sim_opt.xml")
-        self.loader.set_world_path(f"{files_dir}/world.xml")
-        self.loader.set_sites_path(f"{files_dir}/sites.xml")
-        self.loader.set_xbot_config_path(f"{files_dir}/xbot2_basic.yaml")
+        self.loader = LoadingUtils("XMjEnvPyTest")
+        FILES_DIR = "/root/ibrido_ws/src/xbot2_mujoco/tests/files"
+        FILES_DIR=FILES_DIR+"/"+robot_name
+
+        self.loader.set_urdf_path(f"{FILES_DIR}/{robot_name}.urdf")
+        self.loader.set_simopt_path(f"{FILES_DIR}/sim_opt.xml")
+        self.loader.set_world_path(f"{FILES_DIR}/world.xml")
+        self.loader.set_sites_path(f"{FILES_DIR}/sites.xml")
+        self.loader.set_xbot_config_path(f"{FILES_DIR}/xbot2_basic.yaml")
         self.loader.generate()
 
         mj_xml_path = self.loader.xml_path()
 
         self._xmj_sim = XBotMjSim(
             model_fname=mj_xml_path,
-            xbot2_config_path=f"{files_dir}/xbot2_basic.yaml",
+            xbot2_config_path=f"{FILES_DIR}/xbot2_basic.yaml",
             headless=False,
             manual_stepping=True,
             init_steps=100,
-            timeout=1000
+            timeout=1000,
+            base_link_name=blink_name
         )
 
     def tearDown(self):
@@ -113,7 +116,11 @@ class TestSimStepping(unittest.TestCase):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run XBotMjSim tests with specified parameters.')
     parser.add_argument('--robot_name', type=str, default='centauro', help='Specify the robot name')
-    args = parser.parse_args()
-    
+    parser.add_argument('--blink_name', type=str, default='base_link', help='robot root link (used to move the robot around)')
+
+    args, unknown = parser.parse_known_args()  # Allow unknown arguments for unittest
+
+    # Bind arguments to the test case
     TestSimStepping.args = args
-    unittest.main()
+
+    unittest.main(argv=['first-arg-is-ignored'], exit=False)
