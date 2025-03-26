@@ -1,0 +1,48 @@
+XBotInterface:
+  urdf_path: $PWD/unitree_b2w.urdf
+  srdf_path: $PWD/unitree_b2w.srdf
+
+ModelInterface:
+  model_type: RBDL
+  is_model_floating_base: true
+
+# defaults
+motor_pd:
+  "*hip_joint": [200, 60]
+  "*thigh_joint": [200, 60]
+  "*calf_joint": [200, 60]
+  "*foot_joint": [0, 30]
+
+# startup pd config
+startup_motor_pd:
+  "*hip_joint": [200, 60]
+  "*thigh_joint": [200, 60]
+  "*calf_joint": [200, 60]
+  "*foot_joint": [0, 30]
+  
+# hal
+xbotcore_device_configs:
+    sim: $PWD/hal/b2w_gz.yaml
+    dummy: $PWD/hal/b2w_dummy.yaml
+
+# threads
+xbotcore_threads:
+    rt_main:  {sched: fifo , prio: 60, period: 0.001}
+    nrt_main: {sched: other, prio: 0 , period: 0.005}
+
+# plugins
+xbotcore_plugins:
+
+    homing:
+        thread: rt_main
+        type: homing
+
+    ros_io: {thread: nrt_main, type: ros_io}
+
+    ros_control: {thread: nrt_main, type: ros_control, params: {autostart: {type: bool, value: true}}}
+
+# global parameters
+xbotcore_param:
+  /xbot/hal/joint_safety/filter_autostart: {value: true, type: bool}
+  /xbot/hal/joint_safety/filter_cutoff_hz: {value: 2.0, type: double}
+  /xbot/hal/enable_safety: {value: false, type: bool}
