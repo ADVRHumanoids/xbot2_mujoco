@@ -23,11 +23,13 @@ class TestSimStepping(unittest.TestCase):
     def setUp(self):
         robot_name = self.args.robot_name  # Get robot name from arguments
         blink_name = self.args.blink_name
+        headless= self.args.headless
+        manual_stepping= not self.args.auto_stepping
 
         self.loader = LoadingUtils("XMjEnvPyTest")
         FILES_DIR = "/root/ibrido_ws/src/xbot2_mujoco/tests/files"
         FILES_DIR=FILES_DIR+"/"+robot_name
-
+        
         self.loader.set_urdf_path(f"{FILES_DIR}/{robot_name}.urdf")
         self.loader.set_simopt_path(f"{FILES_DIR}/sim_opt.xml")
         self.loader.set_world_path(f"{FILES_DIR}/world.xml")
@@ -40,8 +42,8 @@ class TestSimStepping(unittest.TestCase):
         self._xmj_sim = XBotMjSim(
             model_fname=mj_xml_path,
             xbot2_config_path=f"{FILES_DIR}/xbot2_basic.yaml",
-            headless=False,
-            manual_stepping=True,
+            headless=headless,
+            manual_stepping=manual_stepping,
             init_steps=100,
             timeout=1000,
             base_link_name=blink_name
@@ -117,6 +119,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run XBotMjSim tests with specified parameters.')
     parser.add_argument('--robot_name', type=str, default='centauro', help='Specify the robot name')
     parser.add_argument('--blink_name', type=str, default='base_link', help='robot root link (used to move the robot around)')
+    parser.add_argument('--headless', action="store_true")
+    parser.add_argument('--auto_stepping', action="store_true")
 
     args, unknown = parser.parse_known_args()  # Allow unknown arguments for unittest
 
