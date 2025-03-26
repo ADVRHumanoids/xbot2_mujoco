@@ -790,14 +790,6 @@
     <child link="D435i_camera_link"/>
   </joint>
   <link name="D435i_camera_link">
-    <visual>
-      <origin rpy="1.570796326795 0 1.570796326795" xyz="0.053 -0.0 0"/>
-      <geometry>
-        <!-- <box size="${d435_cam_width} ${d435_cam_height} ${d435_cam_depth}"/> -->
-        <mesh filename="/root/ibrido_ws/src/iit-centauro-ros-pkg/centauro_urdf/meshes/realsense/d435.dae"/>
-      </geometry>
-      <material name="D435i_camera_aluminum"/>
-    </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 -0.0 0"/>
       <geometry>
