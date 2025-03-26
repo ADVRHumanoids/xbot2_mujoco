@@ -117,7 +117,7 @@ class TestSimStepping(unittest.TestCase):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run XBotMjSim tests with specified parameters.')
-    parser.add_argument('--robot_name', type=str, default='centauro', help='Specify the robot name')
+    parser.add_argument('--robot_name', type=str, default='centauro', help='Specify the robot name (either "centauro" or "unitree_b2w")')
     parser.add_argument('--blink_name', type=str, default='base_link', help='robot root link (used to move the robot around)')
     parser.add_argument('--headless', action="store_true")
     parser.add_argument('--auto_stepping', action="store_true")
