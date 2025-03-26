@@ -76,7 +76,6 @@ const double syncMisalign = 0.1;        // maximum mis-alignment before re-sync 
 const double simRefreshFraction = 0.7;  // fraction of refresh available for simulation
 const int kErrorLength = 1024;          // load error string length
 
-
 // xbot2
 void xbotmj_control_callback(const mjModel* m, mjData* d);
 
@@ -98,7 +97,8 @@ void DoStep(mj::Simulate& sim,
     std::chrono::time_point<mj::Simulate::Clock> syncCPU,
     mjtNum syncSim); // single sim step
 void PhysicsLoop(mj::Simulate& sim);
-void InitSimulation(mj::Simulate* sim, const char* mj_filename, const char* xbot_config_path);
+void InitSimulation(mj::Simulate* sim, const char* mj_filename, const char* xbot_config_path,
+  bool align_rt_factor = true);
 void ClearSimulation();
 void SimulationLoop(mj::Simulate* sim, const char* mj_filename, const char* xbot_config_path);
 void RenderingLoop(mj::Simulate* sim);

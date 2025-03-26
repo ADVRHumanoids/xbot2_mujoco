@@ -13,13 +13,21 @@ XBotMjSim::XBotMjSim(
     bool manual_stepping,
     int init_steps,
     int timeout,
-    const std::string base_link_name)
+    const std::string base_link_name,
+    bool match_rt_factor,
+    float rt_factor_trgt)
     :xbot2_config_path(xbot2_config_path),model_fname(model_fname),
     headless(headless),manual_stepping(manual_stepping), timeout(timeout),
-    base_link_name(base_link_name) {
+    base_link_name(base_link_name),
+    match_rt_factor(match_rt_factor),
+    rt_factor_trgt(rt_factor_trgt) {
     
-    printf("[xbot2_mujoco][XBotMjSim]: initializing sim. enviroment with MuJoCo xml file at %s and XBot2 config at %s, base link name %s\n", 
-        model_fname.c_str(), xbot2_config_path.c_str(), base_link_name.c_str());
+    printf("[xbot2_mujoco][XBotMjSim]: initializing sim. enviroment with MuJoCo xml file at %s and XBot2 config at %s, base link name %s, match_rt_factor %d, rt_factor_trgt: %f\n", 
+        model_fname.c_str(), xbot2_config_path.c_str(), base_link_name.c_str(), match_rt_factor, rt_factor_trgt);
+
+    if (!manual_stepping && match_rt_factor) {
+        printf("[xbot2_mujoco][XBotMjSim]: won't be able to match desired rt since manual_stepping is set to false!");
+    }
 
     if (!run()) {
         fprintf(stderr, "[xbot2_mujoco][XBotMjSim]: failed to run environment!");
@@ -142,9 +150,13 @@ void XBotMjSim::physics_loop() {
 
     std::unique_lock<std::mutex> lock(mtx);
 
-    xbot_mujoco::InitSimulation(xbot_mujoco::sim.get(),model_fname.c_str(),xbot2_config_path.c_str());
+    xbot_mujoco::InitSimulation(xbot_mujoco::sim.get(),model_fname.c_str(),xbot2_config_path.c_str(),
+        match_rt_factor // disable automatic rt factor alignment inside mujoco to allow handling it at this level
+        );
     reset();
+
     physics_dt=xbot_mujoco::m->opt.timestep;
+    step_dt_trgt_walltime=physics_dt/rt_factor_trgt;
 
     n_dofs = n_jnts();
     jnts_q.resize(n_dofs);
@@ -171,11 +183,14 @@ void XBotMjSim::physics_loop_manual() {
 
     std::unique_lock<std::mutex> lock(mtx);
 
-    xbot_mujoco::InitSimulation(xbot_mujoco::sim.get(),model_fname.c_str(),xbot2_config_path.c_str());
+    xbot_mujoco::InitSimulation(xbot_mujoco::sim.get(),model_fname.c_str(),xbot2_config_path.c_str(),
+        !match_rt_factor // disable rt factor alignment within mujoco to allow handling it at this level
+    );
 
     reset();
     physics_dt=xbot_mujoco::m->opt.timestep;
-
+    step_dt_trgt_walltime=physics_dt/rt_factor_trgt; // compute desired walltime sim dt
+        
     initialized.store(true);
 
     n_dofs = n_jnts();
@@ -188,7 +203,8 @@ void XBotMjSim::physics_loop_manual() {
     dof_names=jnt_names();
 
     lock.unlock();
-
+    
+    auto start = clock::now();
     while (!(xbot_mujoco::sim->exitrequest.load())) {
 
         std::unique_lock<std::mutex> lock(mtx); 
@@ -202,6 +218,16 @@ void XBotMjSim::physics_loop_manual() {
         step_req=false;
         step_done=true; // signal that simulation has stepped
         sim_step_res_cv.notify_all();
+        if (match_rt_factor) {
+            
+            auto elapsed = std::chrono::duration<double>(clock::now() - start).count();
+            double remaining = step_dt_trgt_walltime - elapsed;
+            if (remaining>0) {
+                
+                std::this_thread::sleep_for(std::chrono::duration<double>(remaining));
+            }
+            start = clock::now();
+        }
     }
     
 }
@@ -311,6 +337,7 @@ bool XBotMjSim::run() {
                 }
             }
         } 
+        
 
         return true;
 

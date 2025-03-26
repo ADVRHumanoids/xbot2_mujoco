@@ -41,7 +41,9 @@ class SimulatorLauncher:
             manual_stepping=True,
             init_steps=100,
             timeout=1000,
-            base_link_name=base_link
+            base_link_name=base_link,
+            match_rt_factor=not self.args.fullspeed,
+            rt_factor_trgt=self.args.rt_factor,
         )
 
     def quaternion_from_rotation_z(self, theta_degrees):
@@ -140,6 +142,8 @@ if __name__ == "__main__":
     parser.add_argument('--pub_rostime', action='store_true', help='Publish simulation time to the /clock topic.')
     parser.add_argument('--blink_name', type=str, default="base_link", 
         help='root link name (will be used for getting measurements and teleportation)')
+    parser.add_argument('--fullspeed', action='store_true', help='Do NOT try to match desired rt factor')
+    parser.add_argument('--rt_factor', type=float, help='target rt factor', default=1.0)
 
     args = parser.parse_args()
 
