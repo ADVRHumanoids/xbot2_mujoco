@@ -40,12 +40,12 @@ TEST_F(ParsingTest, GenerateURDFWithRootDir) {
 
     loader.set_mesh_rootdir(mesh_root_directory);
     loader.set_mesh_rootdir_subdirs(subdirs);
-    loader.set_urdf_path(files_dir + "/centauro.urdf");
-    loader.set_simopt_path(files_dir + "/sim_opt.xml");
-    loader.set_world_path(files_dir + "/world.xml");
-    loader.set_sites_path(files_dir + "/sites.xml");
+    loader.set_urdf_path(files_dir + "/centauro/centauro.urdf");
+    loader.set_simopt_path(files_dir + "/centauro/sim_opt.xml");
+    loader.set_world_path(files_dir + "/centauro/world.xml");
+    loader.set_sites_path(files_dir + "/centauro/sites.xml");
     
-    loader.set_xbot_config_path(files_dir+ "/xbot2_basic.yaml");
+    loader.set_xbot_config_path(files_dir+ "/centauro/xbot2_basic.yaml");
 
     std::string srdf_xbot_path = loader.get_srdf_path_fromxbotconfig(loader.get_xbot_config_path());
     std::vector<std::string> other_jnt_list = {"knee_pitch_2", "ankle_pitch_3", "j_arm1_4",
@@ -79,7 +79,7 @@ TEST_F(ParsingTest, TestHomingParsing) {
 
     printf( "[ParsingTest][GenerateURDF]: loading test files from base dir at %s \n", files_dir.c_str());
     
-    loader.set_xbot_config_path(files_dir+ "/xbot2_basic.yaml");
+    loader.set_xbot_config_path(files_dir+ "/centauro/xbot2_basic.yaml");
 
     std::string srdf_xbot_path = loader.get_srdf_path_fromxbotconfig(loader.get_xbot_config_path());
     std::vector<std::string> other_jnt_list = {"knee_pitch_2", "ankle_pitch_3", "j_arm1_4",
