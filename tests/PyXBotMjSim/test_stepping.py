@@ -55,8 +55,8 @@ class TestSimStepping(unittest.TestCase):
     def test_sim_stepping(self):
         np.set_printoptions(precision=2, linewidth=200)
 
-        n_steps = 20000
-        reset_freq = 1000
+        n_steps = 50000
+        reset_freq = 3000
         state_print_freq = 400
         start_time = time.time()
         stepping_time = 0.0
