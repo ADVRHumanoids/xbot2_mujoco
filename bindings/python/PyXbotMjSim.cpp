@@ -36,7 +36,7 @@ PYBIND11_MODULE(PyXbotMjSim, m) {
 
     py::class_<XBotMjSim>(m, "XBotMjSim")
         // Bind the constructor
-        .def(py::init<const std::string, const std::string, bool, bool, int, int, const std::string, bool, float>(),
+        .def(py::init<const std::string, const std::string, bool, bool, int, int, const std::string, bool, double>(),
              py::arg("model_fname"), py::arg("xbot2_config_path") = "",
              py::arg("headless") = false, py::arg("manual_stepping") = true,
              py::arg("init_steps") = 1, py::arg("timeout") = 10,

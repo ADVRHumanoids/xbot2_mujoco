@@ -21,7 +21,7 @@ public:
 
     typedef std::unique_ptr<XBotMjSim> UniquePtr;
     
-    using clock = std::chrono::steady_clock;
+    using clock = std::chrono::high_resolution_clock;
 
     XBotMjSim(
         const std::string model_fname,
@@ -32,7 +32,7 @@ public:
         int timeout = 10,
         const std::string base_link_name = "base_link",
         bool match_rt_factor = false,
-        float rt_factor_trgt = 1.0);
+        double rt_factor_trgt = 1.0);
     ~XBotMjSim();
 
     bool is_running();
@@ -63,7 +63,7 @@ public:
     int step_counter=0;
     double physics_dt=-1.0;
     
-    float rt_factor_trgt;
+    double rt_factor_trgt;
     double step_dt_trgt_walltime;
 
 private:
@@ -72,6 +72,7 @@ private:
     bool manual_stepping;
 
     bool match_rt_factor;
+    double rt_factor_dt = 0.01; // [s]
 
     std::atomic_bool running=false;
     std::atomic_bool initialized = false;
