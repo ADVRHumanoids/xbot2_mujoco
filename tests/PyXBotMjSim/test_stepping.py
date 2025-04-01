@@ -46,7 +46,9 @@ class TestSimStepping(unittest.TestCase):
             manual_stepping=manual_stepping,
             init_steps=100,
             timeout=1000,
-            base_link_name=blink_name
+            base_link_name=blink_name,
+            match_rt_factor=not self.args.fullspeed,
+            rt_factor_trgt=self.args.rt_factor
         )
 
     def tearDown(self):
@@ -121,6 +123,8 @@ if __name__ == "__main__":
     parser.add_argument('--blink_name', type=str, default='base_link', help='robot root link (used to move the robot around)')
     parser.add_argument('--headless', action="store_true")
     parser.add_argument('--auto_stepping', action="store_true")
+    parser.add_argument('--fullspeed', action='store_true', help='Do NOT try to match desired rt factor')
+    parser.add_argument('--rt_factor', type=float, help='target rt factor', default=1.0)
 
     args, unknown = parser.parse_known_args()  # Allow unknown arguments for unittest
 

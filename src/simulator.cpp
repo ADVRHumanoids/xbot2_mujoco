@@ -341,58 +341,59 @@ void xbot_mujoco::DoStep(mj::Simulate& sim,
                 }
             }
 
-            // requested slow-down factor
-            double slowdown = 100 / sim.percentRealTime[sim.real_time_index];
+            // // requested slow-down factor
+            // double slowdown = 100 / sim.percentRealTime[sim.real_time_index];
             
-            if (match_rt_factor) {
-              // misalignment condition: distance from target sim time is bigger than syncmisalign
-              bool misaligned =
-                  mju_abs(Seconds(elapsedCPU).count()/slowdown - elapsedSim) > syncMisalign;
+            // if (match_rt_factor) {
 
-              // out-of-sync (for any reason): reset sync times, step
-              if (elapsedSim < 0 || elapsedCPU.count() < 0 || syncCPU.time_since_epoch().count() == 0 ||
-                  misaligned || sim.speed_changed) {
-                  // re-sync
-                  syncCPU = startCPU;
-                  syncSim = d->time;
-                  sim.speed_changed = false;
+            //   // misalignment condition: distance from target sim time is bigger than syncmisalign
+            //   bool misaligned =
+            //       mju_abs(Seconds(elapsedCPU).count()/slowdown - elapsedSim) > syncMisalign;
 
-                  // run single step, let next iteration deal with timing
-                  mj_step(m, d);
-                  stepped = true;
-              }
+            //   // out-of-sync (for any reason): reset sync times, step
+            //   if (elapsedSim < 0 || elapsedCPU.count() < 0 || syncCPU.time_since_epoch().count() == 0 ||
+            //       misaligned || sim.speed_changed) {
+            //       // re-sync
+            //       syncCPU = startCPU;
+            //       syncSim = d->time;
+            //       sim.speed_changed = false;
 
-              // in-sync: step until ahead of cpu
-              else {
-                  bool measured = false;
-                  mjtNum prevSim = d->time;
+            //       // run single step, let next iteration deal with timing
+            //       mj_step(m, d);
+            //       stepped = true;
+            //   }
 
-                  double refreshTime = simRefreshFraction/sim.refresh_rate;
+            //   // in-sync: step until ahead of cpu
+            //   else {
+            //       bool measured = false;
+            //       mjtNum prevSim = d->time;
 
-                  // step while sim lags behind cpu and within refreshTime
-                  while (Seconds((d->time - syncSim)*slowdown) < mj::Simulate::Clock::now() - syncCPU &&
-                          mj::Simulate::Clock::now() - startCPU < Seconds(refreshTime)) {
-                      // measure slowdown before first step
-                      if (!measured && elapsedSim) {
-                      sim.measured_slowdown =
-                          std::chrono::duration<double>(elapsedCPU).count() / elapsedSim;
-                      measured = true;
-                      }
+            //       double refreshTime = simRefreshFraction/sim.refresh_rate;
 
-                      // call mj_step
-                      mj_step(m, d);
-                      stepped = true;
+            //       // step while sim lags behind cpu and within refreshTime
+            //       while (Seconds((d->time - syncSim)*slowdown) < mj::Simulate::Clock::now() - syncCPU &&
+            //               mj::Simulate::Clock::now() - startCPU < Seconds(refreshTime)) {
+            //           // measure slowdown before first step
+            //           if (!measured && elapsedSim) {
+            //           sim.measured_slowdown =
+            //               std::chrono::duration<double>(elapsedCPU).count() / elapsedSim;
+            //           measured = true;
+            //           }
 
-                      // break if reset
-                      if (d->time < prevSim) {
-                      break;
-                      }
-                  }
-              }
-            } else { // just step (rt factor can be handled at higher level)
-              mj_step(m, d);
-              stepped = true;
-            }
+            //           // call mj_step
+            //           mj_step(m, d);
+            //           stepped = true;
+
+            //           // break if reset
+            //           if (d->time < prevSim) {
+            //           break;
+            //           }
+            //       }
+            //   }
+            // } else { // just step (rt factor can be handled at higher level)
+            mj_step(m, d);
+            stepped = true;
+            // }
             
             // save current state to history buffer
             if (stepped) {
@@ -402,9 +403,9 @@ void xbot_mujoco::DoStep(mj::Simulate& sim,
             step_counter++;
 
         }
-
         // paused
         else {
+
           // run mj_forward, to update rendering and joint sliders
           mj_forward(m, d);
           sim.speed_changed = true;
@@ -500,7 +501,7 @@ void xbot_mujoco::PhysicsLoop(mj::Simulate& sim) {
 
 void xbot_mujoco::InitSimulation(mj::Simulate* sim, const char* mj_filename, const char* xbot_config_path,
   bool align_rt_factor) {
-
+  
   match_rt_factor=align_rt_factor;
 
   // request loadmodel if file given (otherwise drag-and-drop)

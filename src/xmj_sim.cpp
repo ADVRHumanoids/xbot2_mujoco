@@ -184,7 +184,7 @@ void XBotMjSim::physics_loop_manual() {
     std::unique_lock<std::mutex> lock(mtx);
 
     xbot_mujoco::InitSimulation(xbot_mujoco::sim.get(),model_fname.c_str(),xbot2_config_path.c_str(),
-        !match_rt_factor // disable rt factor alignment within mujoco to allow handling it at this level
+        match_rt_factor // disable rt factor alignment within mujoco to allow handling it at this level
     );
 
     reset();
@@ -219,7 +219,6 @@ void XBotMjSim::physics_loop_manual() {
         step_done=true; // signal that simulation has stepped
         sim_step_res_cv.notify_all();
         if (match_rt_factor) {
-            
             auto elapsed = std::chrono::duration<double>(clock::now() - start).count();
             double remaining = step_dt_trgt_walltime - elapsed;
             if (remaining>0) {

@@ -43,7 +43,7 @@ class SimulatorLauncher:
             timeout=1000,
             base_link_name=base_link,
             match_rt_factor=not self.args.fullspeed,
-            rt_factor_trgt=self.args.rt_factor,
+            rt_factor_trgt=self.args.rt_factor
         )
 
     def quaternion_from_rotation_z(self, theta_degrees):
