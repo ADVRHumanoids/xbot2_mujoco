@@ -176,6 +176,11 @@ try:
 except:
     print(f'{args.sdf} not found, no collision geom susbstitution done.')
 
+# add default joint configuration to pelvis
+# for elem in mj_xml_tree.iter():
+#     if elem.attrib.get('name') == 'pelvis':
+#         elem.set('childclass', 'kyon_all')
+
 # add compiler attr
 
 
