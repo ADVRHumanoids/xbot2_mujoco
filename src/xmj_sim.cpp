@@ -2,6 +2,8 @@
 #include <csignal>  // For signal handling
 #include <cmath>
 #include <time.h>
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 void highResolutionSleep(std::chrono::nanoseconds sleepDuration) {
     struct timespec ts;
@@ -27,12 +29,20 @@ XBotMjSim::XBotMjSim(
     int timeout,
     const std::string base_link_name,
     bool match_rt_factor,
-    double rt_factor_trgt)
+    double rt_factor_trgt,
+    bool render_to_file,
+    std::string custom_camera_name,
+    std::string render_base_path,
+    float render_fps)
     :xbot2_config_path(xbot2_config_path),model_fname(model_fname),
     headless(headless),manual_stepping(manual_stepping), timeout(timeout),
     base_link_name(base_link_name),
     match_rt_factor(match_rt_factor),
-    rt_factor_trgt(rt_factor_trgt) {
+    rt_factor_trgt(rt_factor_trgt),
+    render_to_file(render_to_file),
+    custom_camera_name(custom_camera_name),
+    render_base_path(render_base_path),
+    render_fps(render_fps) {
     
     printf("[xbot2_mujoco][XBotMjSim]: initializing sim. enviroment with MuJoCo xml file at %s and XBot2 config at %s, base link name %s, match_rt_factor %d, rt_factor_trgt: %f\n", 
         model_fname.c_str(), xbot2_config_path.c_str(), base_link_name.c_str(), match_rt_factor, rt_factor_trgt);
@@ -154,6 +164,8 @@ bool XBotMjSim::reset() {
 void XBotMjSim::clear_sim() {
     xbot_mujoco::ClearSimulation();
     xbot_mujoco::xbot2_wrapper.reset();
+    delete[] rgb;
+    delete[] depth;
 }
 
 void XBotMjSim::physics_loop() {
@@ -175,6 +187,10 @@ void XBotMjSim::physics_loop() {
     } 
     step_dt_trgt_walltime = rt_factor_freq * physics_dt / rt_factor_trgt; // compute desired walltime sim dt
 
+    if (render_to_file) {
+        init_custom_camera();
+    }
+
     initialized.store(true);
 
     n_dofs = n_jnts();
@@ -194,6 +210,10 @@ void XBotMjSim::physics_loop() {
     while (!((*xbot_mujoco::sim).exitrequest.load())) {
         step_sim();
         steps_counter += 1;
+        if (render_to_file && (steps_counter % render_phstepfreq == 0)) {
+            std::cout << "AAAAAAAAAAAAAAAAAAAA" << std::endl;
+        }
+
         if (match_rt_factor && (steps_counter % rt_factor_freq == 0)) {
             clock_gettime(CLOCK_MONOTONIC, &end_time);
 
@@ -217,6 +237,8 @@ void XBotMjSim::physics_loop() {
     
 }
 
+
+
 void XBotMjSim::physics_loop_manual() {
     // InitSimulation has to be called here since it will wait for the render thread to finish loading
 
@@ -235,6 +257,10 @@ void XBotMjSim::physics_loop_manual() {
         rt_factor_freq = 1;
     } 
     step_dt_trgt_walltime = rt_factor_freq * physics_dt / rt_factor_trgt; // compute desired walltime sim dt
+
+    if (render_to_file) {
+        init_custom_camera();
+    }
 
     initialized.store(true);
 
@@ -338,8 +364,8 @@ void XBotMjSim::initialize(bool headless) {
 
     mjcb_control = xbot_mujoco::xbotmj_control_callback; // register control callback to mujoco
     
-    assign_init_root_state();
-    
+    assign_init_root_state();    
+
     // Install the signal handler for SIGINT (Ctrl+C)
     std::signal(SIGINT, handle_sigint);
     // physics_thread = std::thread(&xbot_mujoco::SimulationLoop, xbot_mujoco::sim.get(), 
@@ -353,6 +379,7 @@ void XBotMjSim::initialize(bool headless) {
     }
 
     xbot_mujoco::RenderingLoop(xbot_mujoco::sim.get()); // render in this thread 
+    
     // (if headlees no actual rendering is performed)
     if (physics_thread.joinable()) {
         physics_thread.join();
@@ -361,6 +388,41 @@ void XBotMjSim::initialize(bool headless) {
 
     clear_sim();
 
+}
+
+void XBotMjSim::init_custom_camera(){
+    int cam_id = mj_name2id(xbot_mujoco::m, mjOBJ_CAMERA, custom_camera_name.c_str());
+    // use custom camera
+    mjv_defaultCamera(&custom_mj_cam); 
+    rgb = new unsigned char[custom_cam_width * custom_cam_height * 3];
+    // depth = new float[custom_cam_width * custom_cam_height];
+    custom_cam_rect= {0, 0, custom_cam_width, custom_cam_height};
+    float physics_fps = 1.0/physics_dt;
+    render_phstepfreq = std::round(physics_fps/render_fps);
+    std::cout << "uuuuuuuuuuuuuuuu" << render_phstepfreq  << std::endl;
+
+}
+
+void XBotMjSim::render_png(){
+    // Update the scene using the offscreen camera
+    mjv_updateScene(xbot_mujoco::m, xbot_mujoco::d, 
+        &xbot_mujoco::sim->opt,
+        &xbot_mujoco::sim->pert,
+        &custom_mj_cam, 
+        mjCAT_ALL, 
+        &xbot_mujoco::sim->scn);
+
+    // Render to the offscreen buffer
+    mjr_setBuffer(mjFB_OFFSCREEN, &xbot_mujoco::sim->platform_ui->mjr_context());
+    mjr_render(custom_cam_rect, &xbot_mujoco::sim->scn, &xbot_mujoco::sim->platform_ui->mjr_context());
+
+    // Read pixels
+    mjr_readPixels(rgb, nullptr, custom_cam_rect, &xbot_mujoco::sim->platform_ui->mjr_context());
+
+    render_path=render_base_path+"/"+custom_camera_name;
+
+    std::string render_path_now=render_path+"0.png";
+    stbi_write_png(render_path_now.c_str(), custom_cam_width, custom_cam_height, 3, rgb, custom_cam_width * 3);
 }
 
 bool XBotMjSim::is_running() {

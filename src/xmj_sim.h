@@ -32,7 +32,11 @@ public:
         int timeout = 10,
         const std::string base_link_name = "base_link",
         bool match_rt_factor = false,
-        double rt_factor_trgt = 1.0);
+        double rt_factor_trgt = 1.0,
+        bool render_to_file = true,
+        std::string custom_camera_name = "custom_camera",
+        std::string render_base_path = "/tmp",
+        float render_fps = 60.0);
     ~XBotMjSim();
 
     bool is_running();
@@ -86,6 +90,19 @@ private:
     std::string model_fname; 
     std::string xbot2_config_path;
 
+    bool render_to_file;
+    std::string custom_camera_name;
+    mjvCamera custom_mj_cam;
+    int custom_cam_width = 1920;
+    int custom_cam_height = 1080;
+    std::string render_base_path, render_path;
+    unsigned char* rgb = nullptr;
+    float* depth = nullptr;
+    // Define the rectangle to read pixels from
+    mjrRect custom_cam_rect;
+    float render_fps;
+    int render_phstepfreq;
+
     std::thread physics_thread;
     std::thread simulator_thread;
 
@@ -107,6 +124,9 @@ private:
     bool run();
     void read_dofs();
     void read_root();
+    
+    void init_custom_camera();
+    void render_png();
 
 };
 
