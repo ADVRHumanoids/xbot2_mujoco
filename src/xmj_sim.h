@@ -33,7 +33,7 @@ public:
         const std::string base_link_name = "base_link",
         bool match_rt_factor = false,
         double rt_factor_trgt = 1.0,
-        bool render_to_file = true,
+        bool render_to_file = false,
         std::string custom_camera_name = "custom_camera",
         std::string render_base_path = "/tmp",
         float render_fps = 60.0);
@@ -96,7 +96,8 @@ private:
     int custom_cam_width = 1920;
     int custom_cam_height = 1080;
     std::string render_base_path, render_path;
-    unsigned char* rgb = nullptr;
+    std::unique_ptr<unsigned char[]> rgb;
+
     float* depth = nullptr;
     // Define the rectangle to read pixels from
     mjrRect custom_cam_rect;
@@ -126,7 +127,7 @@ private:
     void read_root();
     
     void init_custom_camera();
-    void render_png();
+    void render_png(int frame_idx = 0);
 
 };
 

@@ -164,8 +164,6 @@ bool XBotMjSim::reset() {
 void XBotMjSim::clear_sim() {
     xbot_mujoco::ClearSimulation();
     xbot_mujoco::xbot2_wrapper.reset();
-    delete[] rgb;
-    delete[] depth;
 }
 
 void XBotMjSim::physics_loop() {
@@ -211,7 +209,7 @@ void XBotMjSim::physics_loop() {
         step_sim();
         steps_counter += 1;
         if (render_to_file && (steps_counter % render_phstepfreq == 0)) {
-            std::cout << "AAAAAAAAAAAAAAAAAAAA" << std::endl;
+            render_png(steps_counter);
         }
 
         if (match_rt_factor && (steps_counter % rt_factor_freq == 0)) {
@@ -236,8 +234,6 @@ void XBotMjSim::physics_loop() {
     }
     
 }
-
-
 
 void XBotMjSim::physics_loop_manual() {
     // InitSimulation has to be called here since it will wait for the render thread to finish loading
@@ -292,6 +288,9 @@ void XBotMjSim::physics_loop_manual() {
         steps_counter += 1;
         step_req = false;
         step_done = true; // signal that simulation has stepped
+        if (render_to_file && (steps_counter % render_phstepfreq == 0) && (steps_counter>40000)) {
+            render_png(steps_counter);
+        }
         sim_step_res_cv.notify_all();
 
         if (match_rt_factor && (steps_counter % rt_factor_freq == 0)) {
@@ -394,16 +393,18 @@ void XBotMjSim::init_custom_camera(){
     int cam_id = mj_name2id(xbot_mujoco::m, mjOBJ_CAMERA, custom_camera_name.c_str());
     // use custom camera
     mjv_defaultCamera(&custom_mj_cam); 
-    rgb = new unsigned char[custom_cam_width * custom_cam_height * 3];
+    rgb = std::make_unique<unsigned char[]>(3 * custom_cam_width * custom_cam_height);
+    if (!rgb) {
+      mju_error("could not allocate buffer for screenshot");
+    }
     // depth = new float[custom_cam_width * custom_cam_height];
     custom_cam_rect= {0, 0, custom_cam_width, custom_cam_height};
     float physics_fps = 1.0/physics_dt;
     render_phstepfreq = std::round(physics_fps/render_fps);
-    std::cout << "uuuuuuuuuuuuuuuu" << render_phstepfreq  << std::endl;
 
 }
 
-void XBotMjSim::render_png(){
+void XBotMjSim::render_png(int frame_idx){
     // Update the scene using the offscreen camera
     mjv_updateScene(xbot_mujoco::m, xbot_mujoco::d, 
         &xbot_mujoco::sim->opt,
@@ -412,17 +413,22 @@ void XBotMjSim::render_png(){
         mjCAT_ALL, 
         &xbot_mujoco::sim->scn);
 
-    // Render to the offscreen buffer
-    mjr_setBuffer(mjFB_OFFSCREEN, &xbot_mujoco::sim->platform_ui->mjr_context());
-    mjr_render(custom_cam_rect, &xbot_mujoco::sim->scn, &xbot_mujoco::sim->platform_ui->mjr_context());
+    if (&xbot_mujoco::sim->platform_ui->mjr_context() && &xbot_mujoco::sim->scn ) {
+        // Render to the offscreen buffer
+        // mjr_setBuffer(mjFB_OFFSCREEN, &xbot_mujoco::sim->platform_ui->mjr_context());
 
-    // Read pixels
-    mjr_readPixels(rgb, nullptr, custom_cam_rect, &xbot_mujoco::sim->platform_ui->mjr_context());
+        // mjr_render(custom_cam_rect, &xbot_mujoco::sim->scn, &xbot_mujoco::sim->platform_ui->mjr_context());
 
-    render_path=render_base_path+"/"+custom_camera_name;
+        // Read pixels
+        // mjr_readPixels(rgb.get(), nullptr, custom_cam_rect, &xbot_mujoco::sim->platform_ui->mjr_context());
 
-    std::string render_path_now=render_path+"0.png";
-    stbi_write_png(render_path_now.c_str(), custom_cam_width, custom_cam_height, 3, rgb, custom_cam_width * 3);
+        mjr_readPixels(rgb.get(), nullptr, xbot_mujoco::sim->uistate.rect[0], &xbot_mujoco::sim->platform_ui->mjr_context());
+
+        render_path=render_base_path+"/"+custom_camera_name;
+
+        std::string render_path_now=render_path+std::to_string(frame_idx) + ".png";
+        stbi_write_png(render_path_now.c_str(), custom_cam_width, custom_cam_height, 3, rgb.get(), custom_cam_width * 3);
+    }
 }
 
 bool XBotMjSim::is_running() {
