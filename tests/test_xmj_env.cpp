@@ -92,7 +92,7 @@ TEST_P(ManualSteppingTest, TestSim) {
     }
     printf( "]:\n");
 
-    int n_steps = 20000;
+    int n_steps = 100000;
     auto start = std::chrono::high_resolution_clock::now();
     int reset_freq = n_steps/8;
     for (int i = 0; i < n_steps; ++i) {
@@ -131,7 +131,7 @@ INSTANTIATE_TEST_SUITE_P(
         std::make_tuple(false, // headless
             true, // manual stepping 
             100, // n of initial steps
-            1000 // timeout [ms]
+            3000 // timeout [ms]
             )
     )
 );

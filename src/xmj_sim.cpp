@@ -2,8 +2,8 @@
 #include <csignal>  // For signal handling
 #include <cmath>
 #include <time.h>
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
+#include "lodepng.h"
+#include <filesystem>
 
 void highResolutionSleep(std::chrono::nanoseconds sleepDuration) {
     struct timespec ts;
@@ -18,6 +18,20 @@ void highResolutionSleep(std::chrono::nanoseconds sleepDuration) {
 void handle_sigint(int signal_num) {
   std::printf("[xbot2_mujoco][XBotMjSim]: detected SIGINT -> exiting gracefully \n");
   xbot_mujoco::sim->exitrequest.store(1); // signal sim ad rendering loop to exit gracefully
+}
+
+std::string get_current_time_as_string() {
+    // Get current time as time_t
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_time_t = std::chrono::system_clock::to_time_t(now);
+    
+    // Convert to tm structure
+    std::tm tm = *std::localtime(&now_time_t);
+
+    // Create a string stream to format the date and time
+    std::ostringstream oss;
+    oss << std::put_time(&tm, "%H_%M_%S_%d_%m_%Y");  // Format: hh_mm_ss_DD_MM_YYYY
+    return oss.str();
 }
 
 XBotMjSim::XBotMjSim(
@@ -82,7 +96,7 @@ void XBotMjSim::close() {
 bool XBotMjSim::step() {
 
     if (manual_stepping && running.load()) {
-        std::unique_lock<std::mutex> lock(mtx);
+        std::unique_lock<std::mutex> lock(ph_step_mtx);
         step_req = true;  
         step_done=false;  
         sim_step_req_cv.notify_all(); // send step request
@@ -170,7 +184,7 @@ void XBotMjSim::physics_loop() {
     // InitSimulation has to be called here since it will wait for the render thread to
     // finish loading
 
-    std::unique_lock<std::mutex> lock(mtx);
+    std::unique_lock<std::mutex> lock(ph_step_mtx);
 
     xbot_mujoco::InitSimulation(xbot_mujoco::sim.get(),model_fname.c_str(),xbot2_config_path.c_str(),
         match_rt_factor // disable automatic rt factor alignment inside mujoco to allow handling it at this level
@@ -178,7 +192,7 @@ void XBotMjSim::physics_loop() {
     reset();
 
     physics_dt=xbot_mujoco::m->opt.timestep;
-    int steps_counter = 0;
+
     int rt_factor_freq = std::round(rt_factor_dt / physics_dt);
     if (rt_factor_freq <= 0) { // in case physics_dt is bigger than rt_factor_dt
         rt_factor_freq = 1;
@@ -187,6 +201,7 @@ void XBotMjSim::physics_loop() {
 
     if (render_to_file) {
         init_custom_camera();
+        custom_camera_ready.store(true);
     }
 
     initialized.store(true);
@@ -207,11 +222,19 @@ void XBotMjSim::physics_loop() {
 
     while (!((*xbot_mujoco::sim).exitrequest.load())) {
         step_sim();
-        steps_counter += 1;
-        if (render_to_file && (steps_counter % render_phstepfreq == 0)) {
-            render_png(steps_counter);
-        }
+        steps_counter++;
 
+        if (render_to_file && (steps_counter%render_phstepfreq==0)){
+            std::unique_lock<std::mutex> render_lock(render_mtx);
+            render_req=true;
+            render_done=false;
+            render_step_req_cv.notify_all(); // send render request
+            if (!render_step_res_cv.wait_for(render_lock, std::chrono::milliseconds(timeout), [this] { return render_done; })) {
+                fprintf(stderr,"[xbot2_mujoco][XBotMjSim][physics_loop_manual]: no render acknowledgement received within timeout of %i ms\n", timeout);
+                return;
+            }
+        }
+        
         if (match_rt_factor && (steps_counter % rt_factor_freq == 0)) {
             clock_gettime(CLOCK_MONOTONIC, &end_time);
 
@@ -238,7 +261,7 @@ void XBotMjSim::physics_loop() {
 void XBotMjSim::physics_loop_manual() {
     // InitSimulation has to be called here since it will wait for the render thread to finish loading
 
-    std::unique_lock<std::mutex> lock(mtx);
+    std::unique_lock<std::mutex> lock(ph_step_mtx);
 
     xbot_mujoco::InitSimulation(xbot_mujoco::sim.get(), model_fname.c_str(), xbot2_config_path.c_str(),
         match_rt_factor // disable rt factor alignment within Mujoco to allow handling it at this level
@@ -247,7 +270,7 @@ void XBotMjSim::physics_loop_manual() {
     reset();
     
     physics_dt = xbot_mujoco::m->opt.timestep;
-    int steps_counter = 0;
+    
     int rt_factor_freq = std::round(rt_factor_dt / physics_dt);
     if (rt_factor_freq <= 0) { // in case physics_dt is bigger than rt_factor_dt
         rt_factor_freq = 1;
@@ -256,6 +279,7 @@ void XBotMjSim::physics_loop_manual() {
 
     if (render_to_file) {
         init_custom_camera();
+        custom_camera_ready.store(true);
     }
 
     initialized.store(true);
@@ -276,7 +300,7 @@ void XBotMjSim::physics_loop_manual() {
 
     while (!(xbot_mujoco::sim->exitrequest.load())) {
 
-        std::unique_lock<std::mutex> lock(mtx);
+        std::unique_lock<std::mutex> lock(ph_step_mtx);
         
         if (!sim_step_req_cv.wait_for(lock, std::chrono::milliseconds(timeout), [this] { return step_req; })) {
             printf("[xbot2_mujoco][XBotMjSim][physics_loop_manual]: no step request received within timeout of %i ms\n", timeout);
@@ -285,12 +309,21 @@ void XBotMjSim::physics_loop_manual() {
         } 
 
         step_sim();
-        steps_counter += 1;
+        steps_counter++;
         step_req = false;
         step_done = true; // signal that simulation has stepped
-        if (render_to_file && (steps_counter % render_phstepfreq == 0) && (steps_counter>40000)) {
-            render_png(steps_counter);
+        
+        if (render_to_file && (steps_counter%render_phstepfreq==0)){
+            std::unique_lock<std::mutex> render_lock(render_mtx);
+            render_req=true;
+            render_done=false;
+            render_step_req_cv.notify_all(); // send render request
+            if (!render_step_res_cv.wait_for(render_lock, std::chrono::milliseconds(timeout), [this] { return render_done; })) {
+                fprintf(stderr,"[xbot2_mujoco][XBotMjSim][physics_loop_manual]: no render acknowledgement received within timeout of %i ms\n", timeout);
+                return;
+            }
         }
+
         sim_step_res_cv.notify_all();
 
         if (match_rt_factor && (steps_counter % rt_factor_freq == 0)) {
@@ -313,6 +346,103 @@ void XBotMjSim::physics_loop_manual() {
             clock_gettime(CLOCK_MONOTONIC, &start_time);
         }
     }
+}
+
+void XBotMjSim::rendering_loop() {
+    
+    xbot_mujoco::sim->RenderLoopSetup();
+
+    xbot_mujoco::sim->frames_ = 0;
+    xbot_mujoco::sim->last_fps_update_ = mj::Simulate::Clock::now();
+
+    // run event loop
+    while (!xbot_mujoco::sim->platform_ui->ShouldCloseWindow() && !xbot_mujoco::sim->exitrequest.load()) {
+    {
+        const mj::MutexLock lock(xbot_mujoco::sim->mtx);
+
+        // load model (not on first pass, to show "loading" label)
+        if (xbot_mujoco::sim->loadrequest==1) {
+        xbot_mujoco::sim->LoadOnRenderThread();
+        } else if (xbot_mujoco::sim->loadrequest == 2) {
+        xbot_mujoco::sim->loadrequest = 1;
+        }
+
+        // poll and handle events
+        if (!headless) {
+        xbot_mujoco::sim->platform_ui->PollEvents();
+        }
+
+        // upload assets if requested
+        bool upload_notify = false;
+        if (xbot_mujoco::sim->hfield_upload_ != -1) {
+        mjr_uploadHField(xbot_mujoco::m, &xbot_mujoco::sim->platform_ui->mjr_context(), xbot_mujoco::sim->hfield_upload_);
+        xbot_mujoco::sim->hfield_upload_ = -1;
+        upload_notify = true;
+        }
+        if (xbot_mujoco::sim->mesh_upload_ != -1) {
+        mjr_uploadMesh(xbot_mujoco::m, &xbot_mujoco::sim->platform_ui->mjr_context(), xbot_mujoco::sim->mesh_upload_);
+        xbot_mujoco::sim->mesh_upload_ = -1;
+        upload_notify = true;
+        }
+        if (xbot_mujoco::sim->texture_upload_ != -1) {
+        mjr_uploadTexture(xbot_mujoco::m, &xbot_mujoco::sim->platform_ui->mjr_context(), xbot_mujoco::sim->texture_upload_);
+        xbot_mujoco::sim->texture_upload_ = -1;
+        upload_notify = true;
+        }
+        if (upload_notify) {
+        xbot_mujoco::sim->cond_upload_.notify_all();
+        }
+
+        // update scene, doing a full sync if in fully managed mode
+        if (!xbot_mujoco::sim->is_passive_) {
+        xbot_mujoco::sim->Sync();
+        } else {
+        xbot_mujoco::sim->scnstate_.data.warning[mjWARN_VGEOMFULL].number += mjv_updateSceneFromState(
+            &xbot_mujoco::sim->scnstate_, &xbot_mujoco::sim->opt, &xbot_mujoco::sim->pert, &xbot_mujoco::sim->cam, mjCAT_ALL, &xbot_mujoco::sim->scn);
+        }
+
+    }  // MutexLock (unblocks simulation thread)
+
+    // render while simulation is running
+    if (!headless) {
+        
+        if (render_to_file && custom_camera_ready.load()) {
+            // synchronous rendering (triggered by physycs loop at contant freq)
+            std::unique_lock<std::mutex> render_lock(render_mtx);
+            if (!render_step_req_cv.wait_for(render_lock, std::chrono::milliseconds(timeout), [this] { return render_req; })) {
+                printf("[xbot2_mujoco][XBotMjSim][rendering_loop]: no step request received within timeout of %i ms\n", timeout);
+                return;
+            }
+            xbot_mujoco::sim->Render();
+            render_png(steps_counter);
+            render_req=false;
+            render_done=true; 
+            render_step_res_cv.notify_all();
+    
+        } else { // asynch rendering
+            xbot_mujoco::sim->Render();
+        }
+        // update FPS stat, at most 5 times per second
+        auto now = mj::Simulate::Clock::now();
+        double interval = std::chrono::duration<double>(now - xbot_mujoco::sim->last_fps_update_).count();
+        ++xbot_mujoco::sim->frames_;
+        if (interval > 0.2) {
+        xbot_mujoco::sim->last_fps_update_ = now;
+        xbot_mujoco::sim->fps_ = xbot_mujoco::sim->frames_ / interval;
+        xbot_mujoco::sim->frames_ = 0;
+        }
+    } else { // avoid busy loop
+        std::this_thread::sleep_for(std::chrono::microseconds(1));
+    }
+    }
+
+    const mj::MutexLock lock(xbot_mujoco::sim->mtx);
+    mjv_freeScene(&xbot_mujoco::sim->scn);
+    if (xbot_mujoco::sim->is_passive_) {
+    mjv_freeSceneState(&xbot_mujoco::sim->scnstate_);
+    }
+
+    xbot_mujoco::sim->exitrequest.store(2);
 }
 
 void XBotMjSim::step_sim() {
@@ -377,7 +507,7 @@ void XBotMjSim::initialize(bool headless) {
         physics_thread = std::thread(&XBotMjSim::physics_loop_manual, this);
     }
 
-    xbot_mujoco::RenderingLoop(xbot_mujoco::sim.get()); // render in this thread 
+    rendering_loop(); // render in this thread 
     
     // (if headlees no actual rendering is performed)
     if (physics_thread.joinable()) {
@@ -391,43 +521,63 @@ void XBotMjSim::initialize(bool headless) {
 
 void XBotMjSim::init_custom_camera(){
     int cam_id = mj_name2id(xbot_mujoco::m, mjOBJ_CAMERA, custom_camera_name.c_str());
-    // use custom camera
+
+    // use custom camera options
     mjv_defaultCamera(&custom_mj_cam); 
-    rgb = std::make_unique<unsigned char[]>(3 * custom_cam_width * custom_cam_height);
-    if (!rgb) {
-      mju_error("could not allocate buffer for screenshot");
-    }
+
     // depth = new float[custom_cam_width * custom_cam_height];
     custom_cam_rect= {0, 0, custom_cam_width, custom_cam_height};
     float physics_fps = 1.0/physics_dt;
     render_phstepfreq = std::round(physics_fps/render_fps);
 
+    std::string unique_id = get_current_time_as_string();
+    
+    std::filesystem::create_directory(render_base_path+"/XBotMjSimRenderings");
+    std::filesystem::create_directory(render_base_path+"/XBotMjSimRenderings/"+ unique_id);
+
+    render_path=render_base_path+"/XBotMjSimRenderings/"+ unique_id+"/"+custom_camera_name;
+
 }
 
 void XBotMjSim::render_png(int frame_idx){
-    // Update the scene using the offscreen camera
-    mjv_updateScene(xbot_mujoco::m, xbot_mujoco::d, 
-        &xbot_mujoco::sim->opt,
-        &xbot_mujoco::sim->pert,
-        &custom_mj_cam, 
-        mjCAT_ALL, 
-        &xbot_mujoco::sim->scn);
+    
+    if (&xbot_mujoco::sim->platform_ui->mjr_context() && &xbot_mujoco::sim->scn) {
+        // Update the scene using the offscreen camera
+        // mjv_updateScene(xbot_mujoco::m, xbot_mujoco::d, 
+        //     &xbot_mujoco::sim->opt,
+        //     &xbot_mujoco::sim->pert,
+        //     &custom_mj_cam, 
+        //     mjCAT_ALL, 
+        //     &xbot_mujoco::sim->scn);
 
-    if (&xbot_mujoco::sim->platform_ui->mjr_context() && &xbot_mujoco::sim->scn ) {
         // Render to the offscreen buffer
         // mjr_setBuffer(mjFB_OFFSCREEN, &xbot_mujoco::sim->platform_ui->mjr_context());
 
         // mjr_render(custom_cam_rect, &xbot_mujoco::sim->scn, &xbot_mujoco::sim->platform_ui->mjr_context());
 
-        // Read pixels
-        // mjr_readPixels(rgb.get(), nullptr, custom_cam_rect, &xbot_mujoco::sim->platform_ui->mjr_context());
+        static std::unique_ptr<unsigned char[]> rgb_data(new unsigned char[3*custom_cam_width*custom_cam_height]);
 
-        mjr_readPixels(rgb.get(), nullptr, xbot_mujoco::sim->uistate.rect[0], &xbot_mujoco::sim->platform_ui->mjr_context());
+        mjr_readPixels(rgb_data.get(), nullptr, xbot_mujoco::sim->uistate.rect[0], &xbot_mujoco::sim->platform_ui->mjr_context());
+        // flip up-down
+        for (int r = 0; r < custom_cam_height/2; ++r) {
+            unsigned char* top_row = &rgb_data[3*custom_cam_width*r];
+            unsigned char* bottom_row = &rgb_data[3*custom_cam_width*(custom_cam_height-1-r)];
+            std::swap_ranges(top_row, top_row+3*custom_cam_width, bottom_row);
+        }
 
-        render_path=render_base_path+"/"+custom_camera_name;
+        std::string render_path_now=render_path+std::to_string(frame_idx) + ".png"; 
 
-        std::string render_path_now=render_path+std::to_string(frame_idx) + ".png";
-        stbi_write_png(render_path_now.c_str(), custom_cam_width, custom_cam_height, 3, rgb.get(), custom_cam_width * 3);
+        // save as PNG
+        // TODO(b/241577466): Parse the stem of the filename and use a .PNG extension.
+        // Unfortunately, if we just yank ".xml"/".mjb" from the filename and append .PNG, the macOS
+        // file dialog does not automatically open that location. Thus, we defer to a default
+        // "screenshot.png" for now.
+
+        if (!render_path_now.empty()) {
+        if (lodepng::encode(render_path_now, rgb_data.get(), custom_cam_width, custom_cam_height, LCT_RGB)) {
+            mju_error("could not save screenshot");
+        }
+        }
     }
 }
 

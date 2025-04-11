@@ -18,6 +18,7 @@
 
   <worldbody>
     <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
+    <camera name="custom_camera" pos="4.377 2.686 1.066" xyaxes="-0.523 0.852 0.000 -0.126 -0.077 0.989" mode="fixed" resolution="1920 1080"/>
     <geom name="floor" size="0 0 0.05" type="plane" material="groundplane" friction="1.0 0.005 0.0001"
       solref="0.02 1"
       solimp="0.9 0.95 0.001 0.5 2"

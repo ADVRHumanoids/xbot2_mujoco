@@ -86,6 +86,8 @@ class Simulate {
   // loop to render the UI (must be called from main thread because of MacOS)
   // void RenderLoop(ros::NodeHandle nh);
   void RenderLoop();
+  void RenderLoopSetup();
+  void RenderLoopRun();
 
   // add state to history buffer
   void AddToHistory();

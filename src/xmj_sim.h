@@ -33,7 +33,7 @@ public:
         const std::string base_link_name = "base_link",
         bool match_rt_factor = false,
         double rt_factor_trgt = 1.0,
-        bool render_to_file = false,
+        bool render_to_file = true,
         std::string custom_camera_name = "custom_camera",
         std::string render_base_path = "/tmp",
         float render_fps = 60.0);
@@ -80,6 +80,7 @@ private:
 
     std::atomic_bool running=false;
     std::atomic_bool initialized = false;
+    int steps_counter = 0;
 
     int init_steps = 1;
 
@@ -96,7 +97,7 @@ private:
     int custom_cam_width = 1920;
     int custom_cam_height = 1080;
     std::string render_base_path, render_path;
-    std::unique_ptr<unsigned char[]> rgb;
+    std::atomic_bool custom_camera_ready=false;
 
     float* depth = nullptr;
     // Define the rectangle to read pixels from
@@ -110,9 +111,14 @@ private:
     std::condition_variable sim_step_req_cv, sim_step_res_cv;
     bool step_req = false;
     bool step_done = true;
-    std::mutex mtx; 
-    int timeout = 1; // [s]
+    std::mutex ph_step_mtx; 
+    int timeout = 5; // [s]
     
+    std::condition_variable render_step_req_cv, render_step_res_cv;
+    std::mutex render_mtx; 
+    bool render_req = false;
+    bool render_done = false;
+
     std::chrono::time_point<mj::Simulate::Clock> syncCPU;
     mjtNum syncSim = 0;
 
@@ -128,6 +134,8 @@ private:
     
     void init_custom_camera();
     void render_png(int frame_idx = 0);
+
+    void rendering_loop();
 
 };
 

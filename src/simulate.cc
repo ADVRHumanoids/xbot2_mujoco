@@ -2598,9 +2598,7 @@ void Simulate::Render() {
   this->platform_ui->SwapBuffers();
 }
 
-
-
-void Simulate::RenderLoop() {
+void Simulate::RenderLoopSetup() {
   // Set timer callback (milliseconds)
   mjcb_time = Timer;
 
@@ -2667,6 +2665,10 @@ void Simulate::RenderLoop() {
 
   // set VSync to initial value
   this->platform_ui->SetVSync(this->vsync);
+
+}
+
+void Simulate::RenderLoopRun() {
 
   frames_ = 0;
   last_fps_update_ = mj::Simulate::Clock::now();
@@ -2745,6 +2747,11 @@ void Simulate::RenderLoop() {
   }
 
   this->exitrequest.store(2);
+}
+
+void Simulate::RenderLoop() {
+  RenderLoopSetup();
+  RenderLoopRun();
 }
 
 // add state to history buffer
