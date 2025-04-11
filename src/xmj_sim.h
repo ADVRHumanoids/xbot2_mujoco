@@ -33,7 +33,7 @@ public:
         const std::string base_link_name = "base_link",
         bool match_rt_factor = false,
         double rt_factor_trgt = 1.0,
-        bool render_to_file = true,
+        bool render_to_file = false,
         std::string custom_camera_name = "custom_camera",
         std::string render_base_path = "/tmp",
         float render_fps = 60.0);
