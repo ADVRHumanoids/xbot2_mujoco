@@ -36,13 +36,17 @@ PYBIND11_MODULE(PyXbotMjSim, m) {
 
     py::class_<XBotMjSim>(m, "XBotMjSim")
         // Bind the constructor
-        .def(py::init<const std::string, const std::string, bool, bool, int, int, const std::string, bool, double>(),
+        .def(py::init<const std::string, const std::string, bool, bool, int, int, const std::string, bool, double, bool, std::string, std::string, double>(),
              py::arg("model_fname"), py::arg("xbot2_config_path") = "",
              py::arg("headless") = false, py::arg("manual_stepping") = true,
              py::arg("init_steps") = 1, py::arg("timeout") = 10,
              py::arg("base_link_name") = "base_link",
              py::arg("match_rt_factor") = true,
-             py::arg("rt_factor_trgt") = 1.0)
+             py::arg("rt_factor_trgt") = 1.0,
+             py::arg("render_to_file") = false,
+             py::arg("custom_camera_name") = "custom_camera",
+             py::arg("render_base_path") = "/tmp",
+             py::arg("render_fps") =  60.0)
 
         // Bind the public methods
         .def("reset", &XBotMjSim::reset, "Reset the simulation environment")
