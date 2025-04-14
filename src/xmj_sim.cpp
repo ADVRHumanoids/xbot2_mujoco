@@ -355,6 +355,7 @@ void XBotMjSim::rendering_loop() {
     xbot_mujoco::sim->frames_ = 0;
     xbot_mujoco::sim->last_fps_update_ = mj::Simulate::Clock::now();
 
+    int render_counter=0;
     // run event loop
     while (!xbot_mujoco::sim->platform_ui->ShouldCloseWindow() && !xbot_mujoco::sim->exitrequest.load()) {
     {
@@ -414,7 +415,8 @@ void XBotMjSim::rendering_loop() {
                 return;
             }
             xbot_mujoco::sim->Render();
-            render_png(steps_counter);
+            render_png(render_counter);
+            render_counter+=1;
             render_req=false;
             render_done=true; 
             render_step_res_cv.notify_all();
