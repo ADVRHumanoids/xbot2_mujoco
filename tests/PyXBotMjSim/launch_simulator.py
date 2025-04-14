@@ -43,7 +43,11 @@ class SimulatorLauncher:
             timeout=1000,
             base_link_name=base_link,
             match_rt_factor=not self.args.fullspeed,
-            rt_factor_trgt=self.args.rt_factor
+            rt_factor_trgt=self.args.rt_factor,
+            render_to_file = self.args.render_to_file,
+            custom_camera_name = "custom_camera",
+            render_base_path = "/tmp",
+            render_fps = 60.0
         )
 
     def quaternion_from_rotation_z(self, theta_degrees):
@@ -127,7 +131,7 @@ class SimulatorLauncher:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Launch XBotMjSimEnv simulation.')
+    parser = argparse.ArgumentParser(description='Launch XBotMjSim simulation.')
 
     # File paths
     parser.add_argument('--files_dir', type=str, help='Base directory for simulation files')
@@ -144,6 +148,7 @@ if __name__ == "__main__":
         help='root link name (will be used for getting measurements and teleportation)')
     parser.add_argument('--fullspeed', action='store_true', help='Do NOT try to match desired rt factor')
     parser.add_argument('--rt_factor', type=float, help='target rt factor', default=1.0)
+    parser.add_argument('--render_to_file', action='store_true', help='')
 
     args = parser.parse_args()
 

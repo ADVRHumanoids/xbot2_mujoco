@@ -48,7 +48,11 @@ class TestSimStepping(unittest.TestCase):
             timeout=1000,
             base_link_name=blink_name,
             match_rt_factor=not self.args.fullspeed,
-            rt_factor_trgt=self.args.rt_factor
+            rt_factor_trgt=self.args.rt_factor,
+            render_to_file = self.args.render_to_file,
+            custom_camera_name = "custom_camera",
+            render_base_path = "/tmp",
+            render_fps = 60.0
         )
 
     def tearDown(self):
@@ -125,6 +129,7 @@ if __name__ == "__main__":
     parser.add_argument('--auto_stepping', action="store_true")
     parser.add_argument('--fullspeed', action='store_true', help='Do NOT try to match desired rt factor')
     parser.add_argument('--rt_factor', type=float, help='target rt factor', default=1.0)
+    parser.add_argument('--render_to_file', action='store_true', help='')
 
     args, unknown = parser.parse_known_args()  # Allow unknown arguments for unittest
 
