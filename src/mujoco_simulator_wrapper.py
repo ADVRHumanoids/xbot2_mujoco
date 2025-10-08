@@ -9,6 +9,7 @@ import rospkg
 from lxml import etree
 from copy import deepcopy
 import sys
+import yaml
 
 print(sys.argv)
 
@@ -27,6 +28,7 @@ parser.add_argument('--urdf-command', required=False, help='The shell command to
 parser.add_argument('--simopt', help='The path to an XML file containing simulator options')
 parser.add_argument('--world', help='The path to an XML file containing the world description')
 parser.add_argument('--ctrlcfg', help='The path to a YAML file containing decentralized control configuration')
+parser.add_argument('--sdf', help='The path to a YAML file containing links with sdf collision models')
 parser.add_argument('--sites', help='The path to an XML file containing additional sites for the model')
 parser.add_argument('--actuators', help='The path to an XML file containing actuators for the model')
 parser.add_argument('--name', help='Unique robot name')
@@ -61,7 +63,10 @@ def treeMerge(a, b):
             print(f'..processing {bchild.tag}')
             achild = aparent.xpath('./' + bchild.tag)
             if achild and bchild.getchildren():
-                inner(achild[0], bchild)
+                if len(achild[0].attrib) == 0:
+                    inner(achild[0], bchild)
+                else:
+                    aparent.append(bchild)
             else:
                 aparent.append(bchild)
 
@@ -148,8 +153,34 @@ with open(mj_xml_path_orig, 'r') as file:
     mj_xml_tree = etree.fromstring(mj_xml)
     mujoco = mj_xml_tree.xpath('/mujoco')[0]
     etree.strip_tags(mj_xml_tree, etree.Comment)
-    
 
+try: 
+    with open(args.sdf, 'r') as file:
+        sdf_yaml = yaml.safe_load(file)
+        worldbody = mj_xml_tree.findall('worldbody')[0]
+
+        for elem in worldbody.iter():
+            if elem.attrib.get('name') in sdf_yaml.keys():
+                for child in list(elem):
+                    if child.tag == 'geom' and 'contype' not in child.attrib.keys():  # remove collision geometry (the one withoud contype attrib)
+                        elem.remove(child)
+
+                sdf_geom = etree.Element('geom')  # add sdf geompetry in place of mesh collision
+                sdf_geom.set('name', f"{elem.attrib.get('name')}_sdf")
+                sdf_geom.set('type', 'sdf')
+                sdf_geom.set('mesh', sdf_yaml[elem.attrib.get('name')])
+                sdf_geom.set('type', 'sdf')
+                sdf = etree.SubElement(sdf_geom, 'plugin')
+                sdf.set('instance', sdf_yaml[elem.attrib.get('name')])
+                elem.append(sdf_geom)
+except:
+    print(f'{args.sdf} not found, no collision geom susbstitution done.')
+
+# add default joint configuration to pelvis
+for elem in mj_xml_tree.iter():
+    if elem.attrib.get('name') == 'pelvis':
+        elem.set('childclass', 'kyon_all')
+        # elem.set('childclass', 'no_collision')
 
 # add compiler attr
 
@@ -164,6 +195,47 @@ with open(args.world, 'r') as file:
     mj_world = file.read()
     mj_world_tree = etree.fromstring(mj_world)
     etree.strip_tags(mj_world_tree, etree.Comment)
+
+    # Process all file="..." references in the world XML (e.g., hfield PNGs)
+    import re  # make sure this is at the top of your file
+
+    seq_id_world = 1000  # separate from URDF asset IDs
+
+    for elem in mj_world_tree.iter():
+        if 'file' in elem.attrib:
+            uri = elem.attrib['file']
+            abs_path = None
+
+            if uri.startswith('package://'):
+                pkg_start = len('package://')
+                pkg_end = uri.find('/', pkg_start)
+                pkg_name = uri[pkg_start:pkg_end]
+                abs_path = rospack.get_path(pkg_name) + uri[pkg_end:]
+            elif os.path.isabs(uri):
+                abs_path = uri
+            else:
+                abs_path = os.path.abspath(uri)
+
+            if not os.path.exists(abs_path):
+                print(f"[WARNING] File not found: {abs_path}")
+                continue
+
+            filename = os.path.basename(abs_path)
+            dst_file = os.path.join(mj_assetsdir, f"{seq_id_world}_{filename}")
+            seq_id_world += 1
+
+            try:
+                os.remove(dst_file)
+            except FileNotFoundError:
+                pass
+
+            if args.copy_assets:
+                shutil.copy(abs_path, dst_file)
+            else:
+                os.symlink(abs_path, dst_file)
+
+            # Update the XML to reference the local path
+            elem.attrib['file'] = './assets/' + os.path.basename(dst_file)
 
 with open(args.sites, 'r') as file:
     mj_sites = file.read()
