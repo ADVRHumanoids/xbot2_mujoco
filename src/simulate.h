@@ -30,6 +30,12 @@
 #include <mujoco/mujoco.h>
 #include "platform_ui_adapter.h"
 
+#if mjVERSION_HEADER >= 3010000
+#define XBOT2_MJ_HAS_SCENESTATE 1
+#else
+#define XBOT2_MJ_HAS_SCENESTATE 0
+#endif
+
 namespace mujoco {
 
 // The viewer itself doesn't require a reentrant mutex, however we use it in
@@ -129,7 +135,9 @@ public:
     std::vector<mjtNum> ctrl_;
     std::vector<mjtNum> ctrl_prev_;
 
+#if XBOT2_MJ_HAS_SCENESTATE
     mjvSceneState scnstate_;
+#endif
     mjOption mjopt_prev_;
     mjvOption opt_prev_;
     mjvCamera cam_prev_;
