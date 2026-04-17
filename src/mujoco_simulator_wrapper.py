@@ -30,6 +30,7 @@ parser.add_argument('--world', help='The path to an XML file containing the worl
 parser.add_argument('--ctrlcfg', help='The path to a YAML file containing decentralized control configuration')
 parser.add_argument('--sdf', help='The path to a YAML file containing links with sdf collision models')
 parser.add_argument('--sites', help='The path to an XML file containing additional sites for the model')
+parser.add_argument('--sensors', help='The path to an XML file containing sensor definitions for the model')
 parser.add_argument('--actuators', help='The path to an XML file containing actuators for the model')
 parser.add_argument('--name', help='Unique robot name')
 parser.add_argument('--output-dir', '-o', help='Output directory')
@@ -242,6 +243,11 @@ with open(args.sites, 'r') as file:
     mj_sites_tree = etree.fromstring(mj_sites)
     etree.strip_tags(mj_sites_tree, etree.Comment)
 
+with open(args.sensors, 'r') as file:
+    mj_sensors = file.read()
+    mj_sensors_tree = etree.fromstring(mj_sensors)
+    etree.strip_tags(mj_sensors_tree, etree.Comment)
+
 mj_act = None 
 if args.actuators:
     with open(args.actuators, 'r') as file:
@@ -278,6 +284,27 @@ for sb in site_bodies:
     site = etree.Element('site')
     site.attrib['name'] = sb.xpath('./site')[0].get('name')
     body.append(site)
+
+# add sensors: attach body-level elements (e.g. cameras) to the corresponding bodies,
+# and append top-level sensor definitions to the mujoco root
+sensor_bodies = mj_sensors_tree.xpath('./worldbody/body')
+for sb in sensor_bodies:
+    sname = sb.get('name')
+    body = xml_merged.findall(f".//body[@name='{sname}']")[0]
+    for child in sb:
+        existing = list(body)
+        if existing:
+            last = existing[-1]
+            if not (last.tail or '').endswith('\n'):
+                last.tail = (last.tail or '') + '\n    '
+        else:
+            if not (body.text or '').endswith('\n'):
+                body.text = (body.text or '') + '\n    '
+        body.append(deepcopy(child))
+
+sensor_block = mj_sensors_tree.find('sensor')
+if sensor_block is not None:
+    xml_merged.append(deepcopy(sensor_block))
 
 open(mj_xml_path, 'w').write(etree.tostring(xml_merged, pretty_print=True).decode())
 
