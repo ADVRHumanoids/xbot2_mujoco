@@ -201,10 +201,15 @@ with open(args.sites, 'r') as file:
     mj_sites_tree = etree.fromstring(mj_sites)
     etree.strip_tags(mj_sites_tree, etree.Comment)
 
-with open(args.sensors, 'r') as file:
-    mj_sensors = file.read()
-    mj_sensors_tree = etree.fromstring(mj_sensors)
-    etree.strip_tags(mj_sensors_tree, etree.Comment)
+sensors = False
+try:
+    with open(args.sensors, 'r') as file:
+        mj_sensors = file.read()
+        mj_sensors_tree = etree.fromstring(mj_sensors)
+        etree.strip_tags(mj_sensors_tree, etree.Comment)
+    sensors = True
+except:
+    print(f'{args.sensors} not found, no sensors added.')
 
 mj_act = None 
 if args.actuators:
@@ -245,24 +250,25 @@ for sb in site_bodies:
 
 # add sensors: attach body-level elements (e.g. cameras) to the corresponding bodies,
 # and append top-level sensor definitions to the mujoco root
-sensor_bodies = mj_sensors_tree.xpath('./worldbody/body')
-for sb in sensor_bodies:
-    sname = sb.get('name')
-    body = xml_merged.findall(f".//body[@name='{sname}']")[0]
-    for child in sb:
-        existing = list(body)
-        if existing:
-            last = existing[-1]
-            if not (last.tail or '').endswith('\n'):
-                last.tail = (last.tail or '') + '\n    '
-        else:
-            if not (body.text or '').endswith('\n'):
-                body.text = (body.text or '') + '\n    '
-        body.append(deepcopy(child))
+if sensors:
+    sensor_bodies = mj_sensors_tree.xpath('./worldbody/body')
+    for sb in sensor_bodies:
+        sname = sb.get('name')
+        body = xml_merged.findall(f".//body[@name='{sname}']")[0]
+        for child in sb:
+            existing = list(body)
+            if existing:
+                last = existing[-1]
+                if not (last.tail or '').endswith('\n'):
+                    last.tail = (last.tail or '') + '\n    '
+            else:
+                if not (body.text or '').endswith('\n'):
+                    body.text = (body.text or '') + '\n    '
+            body.append(deepcopy(child))
 
-sensor_block = mj_sensors_tree.find('sensor')
-if sensor_block is not None:
-    xml_merged.append(deepcopy(sensor_block))
+    sensor_block = mj_sensors_tree.find('sensor')
+    if sensor_block is not None:
+        xml_merged.append(deepcopy(sensor_block))
 
 open(mj_xml_path, 'w').write(etree.tostring(xml_merged, pretty_print=True).decode())
 
