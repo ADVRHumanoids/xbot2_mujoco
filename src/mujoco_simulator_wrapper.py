@@ -58,23 +58,21 @@ def preprocess_urdf(XML):
 
 def treeMerge(a, b):
 
-    def inner(aparent, bparent):
-        print(f'processing {aparent.tag} vs {bparent.tag}')
+    def inner(aparent, bparent, depth=0):
+        indent = '  '*depth
+        print(indent+f'Merging {aparent.tag} {aparent.attrib.get('name','') } vs {bparent.tag} {bparent.attrib.get('name','')}')
         for bchild in bparent:
-            print(f'..processing {bchild.tag}')
+            print(indent+f'-processing {bchild.tag} '+str(bchild.attrib.get('name','')))
             achild = aparent.xpath('./' + bchild.tag)
-            if achild and bchild.getchildren():
-                if len(achild[0].attrib) == 0:
-                    inner(achild[0], bchild)
-                else:
-                    aparent.append(bchild)
+            if achild and bchild.getchildren() and  bchild.attrib.get("name","bc")==achild[0].attrib.get("name","ac"):
+                # if there is are children with the same tag and name, merge them recursively
+                inner(achild[0], bchild, depth=depth+1)
             else:
                 aparent.append(bchild)
-
-
     res = deepcopy(a)
     inner(res, b)
     return res
+
 
 
 # useful paths
