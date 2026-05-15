@@ -4,7 +4,7 @@ import functools
 from typing import Callable
 
 import mujoco
-from mujoco.viewer import launch_passive
+from mujoco.viewer import launch_passive, Handle
 from xbot2_py_mujoco.mj_xbot2_bridge import MjXbot2Bridge
 
 class SimulatorWrapper:
@@ -42,7 +42,7 @@ class SimulatorWrapper:
             send_state_decimation = 1
 
         if sync_interval is None:
-            sync_interval = 0.001
+            sync_interval = 0.0
 
         if target_rtf is None:
             target_rtf = 1.0
@@ -53,10 +53,10 @@ class SimulatorWrapper:
 
         # create viewer if requested
         if viewer:
-            self.viewer = launch_passive(model, self.data, key_callback=viewer_key_callback)
+            self.viewer : Handle = launch_passive(model, self.data, key_callback=viewer_key_callback)
             self.viewer_fps = viewer_fps
         else:
-            self.viewer = None
+            self.viewer : Handle = None
 
         # ros setup, urdf and srdf publishing
         if ros:
@@ -146,6 +146,10 @@ class SimulatorWrapper:
         if self.viewer is not None and self.frames < self.viewer_fps*wall_elapsed_time:
             self.viewer.sync(state_only=True)
             self.frames += 1
+            
+        # exit if viewer window is closed
+        if self.viewer is not None and not self.viewer.is_running():
+            self.running = False
 
         # print RTF at specified interval
         now = time.perf_counter()
@@ -167,6 +171,12 @@ class SimulatorWrapper:
                 time.sleep(sync_time)
             self.last_sync_wall = now
             self.last_sync_sim = self.data.time
+            
+            
+    def run(self):
+        self.pre_step()
+        self.step()
+        self.post_step()
 
 
     def _set_initial_position(self, data: mujoco.MjData):

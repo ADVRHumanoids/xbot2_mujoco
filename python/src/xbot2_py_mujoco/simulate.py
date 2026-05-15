@@ -14,18 +14,19 @@ def parse_args():
     # --- MjcfGenerator args ---
     g = p.add_argument_group('MjcfGenerator')
     g.add_argument('--urdf',       metavar='PATH', help='Path to robot URDF file')
-    g.add_argument('--urdf-cmd',   metavar='CMD',  help='Command whose stdout is the URDF')
+    g.add_argument('--urdf-cmd',   metavar='CMD',  help='Command that generates the URDF')
     g.add_argument('--name',       default='robot', metavar='NAME', help='Robot name (default: robot)')
     g.add_argument('--xml',        action='append', default=[], metavar='PATH',
                    help='Extra MJCF XML file to merge (repeatable, in order)')
-    g.add_argument('--config',     metavar='PATH', help='Path to config YAML (q_init, childclass, sites)')
+    g.add_argument('--xml-cmd',        action='append', default=[], metavar='PATH',
+                   help='Command that generates extra MJCF XML file to merge (repeatable, in order)')
     g.add_argument('--output-dir', metavar='DIR',  help='MjcfGenerator output directory')
     g.add_argument('--copy-assets', action='store_true', help='Copy assets instead of symlinking')
 
     # --- SimulatorWrapper args ---
     s = p.add_argument_group('SimulatorWrapper')
     s.add_argument('--srdf',       metavar='PATH', help='Path to robot SRDF file')
-    s.add_argument('--srdf-cmd',   metavar='CMD',  help='Command whose stdout is the SRDF')
+    s.add_argument('--srdf-cmd',   metavar='CMD',  help='Command that generates the SRDF')
     s.add_argument('--headless',              action='store_true', help='Disable MuJoCo viewer')
     s.add_argument('--viewer-fps',            type=int,   default=60,    metavar='N',   help='Viewer render fps (default: 60)')
     s.add_argument('--disable-ros',           action='store_true', help='Disable ROS2 publishing')
@@ -45,7 +46,11 @@ def _read_or_run(path_arg, cmd_arg, label):
     if path_arg:
         return Path(path_arg).read_text()
     if cmd_arg:
-        result = subprocess.run(cmd_arg, shell=True, capture_output=True, text=True, check=True)
+        try:
+            result = subprocess.run(cmd_arg, shell=True, capture_output=True, text=True, check=True)
+        except subprocess.CalledProcessError as e:
+            print(e.stderr)
+            raise
         return result.stdout
     return None
 
@@ -60,9 +65,6 @@ def main():
         raise ValueError('Provide either --urdf or --urdf-cmd')
     srdf = _read_or_run(args.srdf, args.srdf_cmd, 'srdf')
 
-    # load config yaml if provided
-    cfg = yaml.safe_load(Path(args.config).read_text()) if args.config else {}
-
     # create the mjcf file (xml) from the urdf, merging extra xml files and 
     # finally patching the result with information from the config yaml file
     gen = MjcfGenerator(name=args.name,
@@ -72,8 +74,10 @@ def main():
 
     for xml_path in args.xml:
         gen.merge_xml(Path(xml_path))
-
-    gen.load_config(cfg)
+        
+    for xml_cmd in args.xml_cmd:
+        xml_str = _read_or_run(None, xml_cmd, 'xml')
+        gen.merge_xml(xml_str)
 
     # create mujoco model from the generated mjcf xml string
     model = mujoco.MjModel.from_xml_string(gen.generate_mjcf_string())

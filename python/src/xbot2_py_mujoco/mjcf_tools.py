@@ -1,4 +1,3 @@
-import subprocess
 import os 
 import shutil
 import rospkg
@@ -41,9 +40,9 @@ class MjcfGenerator:
         with open(self.mj_urdf_path, 'w') as f:
             f.write(self.urdf_processed)
 
-        # produce mujoco's xml
-        cmd = f'mujoco_compile {self.mj_urdf_path} {self.mj_xml_path_orig}'
-        subprocess.run(cmd.split())
+        # produce mujoco's xml via the Python API (loads URDF, saves as MJCF)
+        _model = mujoco.MjModel.from_xml_path(str(self.mj_urdf_path))
+        mujoco.mj_saveLastXML(str(self.mj_xml_path_orig), _model)
 
         # load the produced xml, add compiler directives, and write final xml
         with open(self.mj_xml_path_orig, 'r') as file:
@@ -65,44 +64,15 @@ class MjcfGenerator:
         etree.strip_tags(mj_opt_tree, etree.Comment)
         self.mj_xml_tree = MjcfGenerator._tree_merge(self.mj_xml_tree, mj_opt_tree)
 
-    
-    def load_config(self, config: dict):
-
-        childclass = config.get('childclass')
-        sites = config.get('sites')
-        self.q_init = config.get('q_init', {})
-        
-        # patch xml to add site tags
-        if sites is not None:
-            for site in sites:
-                body = site['body']
-                site_name = site['site']
-                # find body in mj_xml_tree and add the site
-                body_elem = self.mj_xml_tree.xpath(f'//body[@name="{body}"]')
-                if body_elem:
-                    site_elem = etree.Element('site')
-                    site_elem.attrib['name'] = site_name
-                    body_elem[0].append(site_elem)
-                else:
-                    print(f'Warning: body {body} not found in mj_xml_tree')
-
-        # patch xml to add childclass attributes
-        if childclass is not None:
-            for body, cc in childclass.items():
-                # find body in mj_xml_tree and add the childclass attribute
-                body_elem = self.mj_xml_tree.xpath(f'//body[@name="{body}"]')
-                if body_elem:
-                    body_elem[0].attrib['childclass'] = cc
-                else:
-                    print(f'Warning: body {body} not found in mj_xml_tree')
-
 
     def generate_mjcf_string(self):
+        self._finalize_xml()
         mjcf_str = etree.tostring(self.mj_xml_tree).decode()
         with open(self.mj_xml_path, 'w') as f:
-            print(f'writing final mjcf to {self.mj_xml_path}')
+            print(f'[MjcfGenerator] writing final mjcf to {self.mj_xml_path}')
             f.write(mjcf_str)
         return mjcf_str
+
 
     def create_mj_model_data(self):
         mjcf_str = self.generate_mjcf_string()
@@ -115,11 +85,7 @@ class MjcfGenerator:
             data.actuator(joint).ctrl = q
 
         return model, data
-    
-    def set_initial_position(self, data: mujoco.MjData):
-        for joint, q in self.q_init.items():
-            data.joint(joint).qpos = q
-            data.actuator(joint).ctrl = q
+
 
     def _preprocess_urdf(XML):
         tree = etree.fromstring(XML)
@@ -134,6 +100,7 @@ class MjcfGenerator:
         mujoco.append(compiler)
         robot.append(mujoco)
         return etree.tostring(tree).decode()
+    
     
     def _resolve_ros_package_uri_and_copy_assets(self, urdf: str):
         rospack = rospkg.RosPack()
@@ -172,16 +139,82 @@ class MjcfGenerator:
         urdf_processed = urdf_processed + urdf[last_pos:]
         return urdf_processed
     
+    
     def _tree_merge(a, b):
 
         def inner(aparent, bparent):
             for bchild in bparent:
-                achild = aparent.xpath('./' + bchild.tag)
-                if achild and bchild.getchildren():
+                name = bchild.get('name')
+                if name is not None:
+                    achild = aparent.xpath(f'./{bchild.tag}[@name="{name}"]')
+                else:
+                    achild = aparent.xpath('./' + bchild.tag)
+                if achild and list(bchild):
                     inner(achild[0], bchild)
                 else:
-                    aparent.append(bchild)
+                    aparent.append(deepcopy(bchild))
 
         res = deepcopy(a)
         inner(res, b)
         return res
+    
+    
+    def _finalize_xml(self):
+        # process <reference> tags by inserting their body content in place 
+        # and removing the <reference> tag itself
+        mujoco_root = self.mj_xml_tree.xpath('/mujoco')[0]
+        for ref in mujoco_root.findall('reference'):
+            elem_tag = ref.get('element')
+            elem_name = ref.get('name')
+            if elem_tag is None or elem_name is None:
+                print(f'Warning: <reference> tag missing "element" or "name" attribute, skipping')
+                mujoco_root.remove(ref)
+                continue
+            targets = self.mj_xml_tree.xpath(f'//{elem_tag}[@name="{elem_name}"]')
+            if not targets:
+                print(f'Warning: <reference> target <{elem_tag} name="{elem_name}"> not found, skipping')
+                mujoco_root.remove(ref)
+                continue
+            target = targets[0]
+            for child in ref:
+                target.append(deepcopy(child))
+            mujoco_root.remove(ref)
+            
+        # process <setattribute> tags by setting the specified attribute in the target element
+        # and removing the <setattribute> tag itself
+        for setattr_elem in mujoco_root.findall('setattribute'):
+            elem_tag = setattr_elem.get('element')
+            elem_name = setattr_elem.get('name')
+            if elem_tag is None or elem_name is None:
+                print(f'Warning: <setattribute> tag missing "element" or "name" attribute, skipping')
+                mujoco_root.remove(setattr_elem)
+                continue
+            targets = self.mj_xml_tree.xpath(f'//{elem_tag}[@name="{elem_name}"]')
+            if not targets:
+                print(f'Warning: <setattribute> target <{elem_tag} name="{elem_name}"> not found, skipping')
+                mujoco_root.remove(setattr_elem)
+                continue
+            target = targets[0]
+            for attr in setattr_elem.findall('attribute'):
+                attr_name = attr.get('name')
+                attr_value = attr.get('value')
+                if attr_name is not None and attr_value is not None:
+                    target.attrib[attr_name] = attr_value
+            mujoco_root.remove(setattr_elem)
+            
+        # parse <q_init> tags to fill self.q_init dict and remove the tags from the xml
+        for q_init_elem in mujoco_root.findall('q_init'):
+            for joint in q_init_elem.findall('joint'):
+                joint_name = joint.get('name')
+                joint_value = joint.get('value')
+                if joint_name is None or joint_value is None:
+                    print(f'Warning: <joint> inside <q_init> missing "name" or "value" attribute, skipping')
+                    continue
+                try:
+                    self.q_init[joint_name] = float(joint_value)
+                except ValueError:
+                    print(f'Warning: <q_init> joint "{joint_name}" has non-numeric value "{joint_value}", skipping')
+            mujoco_root.remove(q_init_elem)
+        
+        
+        

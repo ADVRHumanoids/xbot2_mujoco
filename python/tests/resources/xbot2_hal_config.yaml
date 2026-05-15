@@ -1,0 +1,9 @@
+xbotcore_devices:
+  py_bridge_hal:
+    names: []
+    thread: main
+    params:
+      remote_sock_addr: /tmp/mj_simulator_server.sock
+      enable_sim_time: false
+
+
