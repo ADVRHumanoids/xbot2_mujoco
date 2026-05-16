@@ -6,5 +6,5 @@ source /opt/ros/jazzy/setup.bash
 source ~/test_ws/setup.bash 
 
 # run tests
-cd ~/test_ws/build/xbot2_interface
+cd ~/test_ws/build/xbot2_mujoco
 ctest --output-on-failure

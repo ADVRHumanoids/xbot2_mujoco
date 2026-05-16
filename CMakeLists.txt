@@ -43,6 +43,18 @@ install(PROGRAMS src/mujoco_simulator_wrapper.py
     DESTINATION bin)
 
 add_custom_target(install_python_pkg ALL
-    COMMAND python -m pip install -e ${CMAKE_CURRENT_SOURCE_DIR}/python
+    COMMAND python -m pip show xbot2_mujoco || python -m pip install -e ${CMAKE_CURRENT_SOURCE_DIR}/python
     COMMENT "Installing Python package in editable mode"
+)
+
+# tests
+enable_testing()
+
+add_test(
+    NAME pytest
+    COMMAND python -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/python/tests -v
+)
+
+set_tests_properties(pytest PROPERTIES
+    DEPENDS install_python_pkg
 )
