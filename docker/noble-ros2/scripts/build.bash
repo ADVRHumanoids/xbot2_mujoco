@@ -2,7 +2,7 @@
 set -e
 
 # chown to user (needed after mounting volumes)
-sudo chown user:user ~/test_ws ~/test_ws/src
+sudo chown -R user:user ~/test_ws
 
 # pip deps
 source env/bin/activate
