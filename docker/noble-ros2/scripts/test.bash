@@ -3,6 +3,7 @@ set -e
 
 # setup env
 source /opt/ros/jazzy/setup.bash
+source /opt/xbot/setup.sh
 source ~/test_ws/setup.bash 
 
 # run tests

@@ -16,6 +16,7 @@ forest init
 
 # setup env
 source /opt/ros/jazzy/setup.bash
+source /opt/xbot/setup.sh
 source setup.bash
 
 # add recipes
