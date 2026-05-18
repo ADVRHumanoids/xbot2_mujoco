@@ -5,6 +5,8 @@ on:
     branches: [ "al_devel" ]
   pull_request:
     branches: [ "al_devel" ]
+  schedule:
+    - cron: "0 0 * * *"
 
 jobs:
 
