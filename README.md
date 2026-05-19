@@ -3,8 +3,96 @@
 
 # xbot2_mujoco
 The MuJoCo simulator interfaced with Xbot2. The design is based around two main components:
- - The `MjcfGenerator`: turns a URDF into an MJCF file suitable for MuJoCo
- - The `MjXbot2Bridge`: connects the simulation to an instance of Xbot2 running in a separate executable
+ - The `MjcfGenerator`: turns a URDF into an MJCF file suitable for MuJoCo, by
+   - converting the URDF into an MJCF file
+   - merging it with user-defined XML files (e.g. to add a world, actuators, defaults, ...)
+   - manipulating the resulting XML with the custom `<reference>` and `<setattribute>` tags
+ - The `MjXbot2Bridge`: connects the simulation to an instance of Xbot2 running in a separate executable; communication happens via a UNIX socket, and uses JSON for serialization
+
+
+# Custom tags
+
+Custom tags are XML elements that are **not** valid MuJoCo MJCF — they are processed and removed by `_finalize_xml()` before the tree is handed to MuJoCo.  They must be direct children of the root `<mujoco>` element and are typically injected via `merge_xml()`.
+
+---
+
+### `<reference element="E" name="N">`
+
+Appends every child of the `<reference>` element into the first `<E name="N">` element found anywhere in the tree, then removes the `<reference>` tag.  
+Use this to attach children (e.g. `<site>`, `<camera>`) to bodies or other elements that originate from the URDF and cannot be edited directly.
+
+**Input (merged via `merge_xml`):**
+```xml
+<mujoco>
+  <reference element="body" name="base_link">
+    <site name="base_link" pos="0 0 0" size="0.01" />
+  </reference>
+</mujoco>
+```
+
+**Processed output:**
+```xml
+<body name="base_link" pos="0 0 0.5">
+  <inertial .../>
+  <geom .../>
+  <site name="base_link" pos="0 0 0" size="0.01"/>  <!-- injected -->
+</body>
+<!-- <reference> element removed -->
+```
+
+---
+
+### `<setattribute element="E" name="N">`
+
+Sets one or more attributes on the first `<E name="N">` element found in the tree, using nested `<attribute name="..." value="..."/>` children.  The `<setattribute>` tag is then removed.  
+Use this to assign MuJoCo attributes (e.g. `childclass`) to bodies that come from the URDF.
+
+**Input (merged via `merge_xml`):**
+```xml
+<mujoco>
+  <setattribute element="body" name="fl_hip_link">
+    <attribute name="childclass" value="robot_leg" />
+  </setattribute>
+</mujoco>
+```
+
+**Processed output:**
+```xml
+<body name="fl_hip_link" pos="..." childclass="robot_leg">  <!-- attribute injected -->
+  ...
+</body>
+<!-- <setattribute> element removed -->
+```
+
+---
+
+### `<q_init>`
+
+Declares the initial joint configuration.  Each `<joint name="..." value="..."/>` child sets `gen.q_init[name] = float(value)`.  The tag is removed entirely from the MJCF output (it is not a valid MuJoCo element).  
+`create_mj_model_data()` applies these values to `data.joint(name).qpos` and `data.actuator(name).ctrl` after creating the model.
+
+**Input (merged via `merge_xml`):**
+```xml
+<mujoco>
+  <q_init>
+    <joint name="fl_hip"  value="0.15" />
+    <joint name="fl_knee" value="-0.4" />
+  </q_init>
+</mujoco>
+```
+
+**Processed output:**
+```python
+gen.q_init == {"fl_hip": 0.15, "fl_knee": -0.4}
+# <q_init> element removed from the final MJCF
+```
+`create_mj_model_data()` then applies:
+```python
+data.joint("fl_hip").qpos  = 0.15;  data.actuator("fl_hip").ctrl  = 0.15
+data.joint("fl_knee").qpos = -0.4;  data.actuator("fl_knee").ctrl = -0.4
+```
+
+---
 
 # MJCF (XML) generation
 
