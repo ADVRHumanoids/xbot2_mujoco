@@ -181,5 +181,8 @@ class SimulatorWrapper:
 
     def _set_initial_position(self, data: mujoco.MjData):
         for joint, q in self.q_init.items():
-            data.joint(joint).qpos = q
-            data.actuator(joint).ctrl = q
+            try:
+                data.joint(joint).qpos = q
+                data.actuator(joint).ctrl = q
+            except KeyError as e:
+                print(f"[Simulator] Warning: joint '{joint}' not found in model, cannot set initial position.")
