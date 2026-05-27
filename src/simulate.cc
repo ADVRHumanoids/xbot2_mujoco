@@ -342,7 +342,7 @@ void UpdateProfiler(mj::Simulate* sim, const mjModel* m, const mjData* d) {
             }
 #else
             if (nisland != 1) {
-                nefc = d->island_nefc[k];
+                nefc = d->island_efcnum[k];
             }
 #endif
             sim->figconstraint.linedata[start + 0][2*i+1] = nefc;
