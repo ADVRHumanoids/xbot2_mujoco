@@ -27,7 +27,10 @@ public:
 
     double pid_torque();
 
+    double _tau_max;
+
 private:
+
 
 
 };

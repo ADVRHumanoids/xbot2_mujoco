@@ -1,6 +1,7 @@
 #include "xbot2_mj_joint.h"
 #include <fnmatch.h>
 #include <yaml-cpp/yaml.h>
+#include <limits>
 
 using namespace XBot;
 
@@ -29,6 +30,10 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
                      Hal::DeviceInfo{jname, "joint_mj", i}
                      );
 
+        // fill torque limits
+        j->_tau_max = _m->jnt_actfrcrange[2*i+1];
+        
+        // initialize pose ref and gains
         j->rx().pos_ref = j->rx().link_pos;
         j->rx().gain_kp = 100;
         j->rx().gain_kd = 5;
@@ -58,26 +63,32 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
 
 void JointMjServer::run(mjData * d)
 {
+    // fill rx
     for(auto& j : _joints)
     {
-        int qi = _m->jnt_qposadr[j->get_id()];
-        int vi = _m->jnt_dofadr[j->get_id()];
+        int ji = j->get_id();
+        int qi = _m->jnt_qposadr[ji];
+        int vi = _m->jnt_dofadr[ji];
         j->rx().link_pos = d->qpos[qi];
         j->rx().link_vel = d->qvel[vi];
         j->rx().motor_pos = d->qpos[qi];
         j->rx().motor_vel = d->qvel[vi];
-        j->rx().torque = j->pid_torque();
+        j->rx().torque = d->qfrc_applied[vi];
         j->sense();
     }
 
+    // send to client
     _srv->send();
 
+    // receive tx
     _srv->run();
 
+    // fill ctrl
     for(auto& j : _joints)
     {
-        int vi = _m->jnt_dofadr[j->get_id()];
-        d->ctrl[vi] = j->rx().torque;
+        int ji = j->get_id();
+        int vi = _m->jnt_dofadr[ji];
+        d->qfrc_applied[vi] = j->pid_torque();
         j->move();
     }
 }
@@ -85,7 +96,7 @@ void JointMjServer::run(mjData * d)
 JointInstanceMj::JointInstanceMj(Hal::DeviceInfo devinfo):
     BaseType(devinfo)
 {
-
+    _tau_max = std::numeric_limits<double>::infinity();
 }
 
 bool JointInstanceMj::sense()
@@ -112,6 +123,7 @@ double JointInstanceMj::pid_torque()
     double qerr = _tx.pos_ref - _rx.link_pos;
     double dqerr = _tx.vel_ref - _rx.link_vel;
 
-    return _tx.gain_kp*qerr + _tx.gain_kd*dqerr + _tx.tor_ref;
+    double tau = _tx.gain_kp*qerr + _tx.gain_kd*dqerr + _tx.tor_ref;
+    return std::max(-_tau_max, std::min(tau, _tau_max));
 }
 
