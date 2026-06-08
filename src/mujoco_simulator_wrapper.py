@@ -183,9 +183,9 @@ except:
 
 for elem in mj_xml_tree.iter():
     if elem.attrib.get('name') == 'pelvis':
-        elem.set('childclass', 'kyon_all')
-    elif elem.attrib.get('name') == "wheel_1" or elem.attrib.get('name') == "wheel_2" or elem.attrib.get('name') == "wheel_3" or elem.attrib.get('name') == "wheel_4":
-        elem.set('childclass', 'kyon_wheel')
+        elem.set('childclass', 'default_class')
+    # elif elem.attrib.get('name') == "wheel_1" or elem.attrib.get('name') == "wheel_2" or elem.attrib.get('name') == "wheel_3" or elem.attrib.get('name') == "wheel_4":
+    #     elem.set('childclass', 'kyon_wheel')
 # add compiler attr
 
 
