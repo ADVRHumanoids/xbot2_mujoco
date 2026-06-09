@@ -1,7 +1,7 @@
 from xbot2_py_bridge.bridge_server import BridgeServer, RobotCommand, JointCommand, RobotState, JointState, ImuState
 import mujoco
 import numpy as np
-import time
+import time, struct
 
 class MjXbot2Bridge:
 
@@ -35,7 +35,30 @@ class MjXbot2Bridge:
         # create bridge server
         self.bridge_server = BridgeServer(name, socket_path, self.joint_names, self.imu_names)
 
+        # diagnostics
+        self._last_stamp_us = 0.
+
+    def _encode_timestamp(self, link_pos: float, stamp_us: int) -> float:
+        """Patch 20 LSBs of link_pos with current monotonic microseconds."""
+        bits = struct.unpack('<Q', struct.pack('<d', link_pos))[0]
+        bits = (bits & ~0xFFFFF) | stamp_us
+        return struct.unpack('<d', struct.pack('<Q', bits))[0]
+
+    def _decode_comm_delay_us(self, link_pos: float, now: float) -> tuple[int, int]:
+        """Extract hidden microsecond timestamp from 20 LSBs of link_pos and return comm delay in µs."""
+        bits = struct.unpack('<Q', struct.pack('<d', link_pos))[0]
+        stamp_us = bits & 0xFFFFF
+        now_us = int(now * 1e6) & 0xFFFFF
+        delay_us = (now_us - stamp_us) & 0xFFFFF
+        if delay_us > (1 << 19):
+            delay_us -= (1 << 20)  # signed wraparound correction
+        return delay_us, stamp_us
+
     def send_state(self):
+
+        now = time.monotonic()
+        now_us = int(now * 1e6) & 0xFFFFF
+
         joint_state = JointState(
             q=[float(jh.qpos[0]) for jh in self.joint_handles],
             dq=[float(jh.qvel[0]) for jh in self.joint_handles],
@@ -46,6 +69,12 @@ class MjXbot2Bridge:
             vref=self.vref,
             tauref=self.tauref
         )
+
+        ## diagnostics 
+        # patch last 20 bits of each q with current time's microseconds 
+        for i, _ in enumerate(self.joint_handles):
+            joint_state.q[i] = self._encode_timestamp(joint_state.q[i], now_us)
+
 
         robot_state = RobotState(
             time=self.data.time,
@@ -63,6 +92,17 @@ class MjXbot2Bridge:
             return False
 
         joint_cmd: JointCommand = cmd.joint_command
+
+        ## diagnostics
+        # decode communication delay from q values and print it
+        now = time.monotonic()
+        for i, _ in enumerate(self.joint_handles):
+            if self.joint_names[i] == 'hip_roll_1':
+                delay_us, stamp_us = self._decode_comm_delay_us(joint_cmd.q[i], now)
+                if stamp_us != self._last_stamp_us:
+                    self._last_stamp_us = stamp_us
+                    print(f"Joint {self.joint_names[i]}: Comm delay = {delay_us} µs (timestamp {stamp_us} µs)")
+
 
         self.qref = joint_cmd.q
         self.vref = joint_cmd.dq
