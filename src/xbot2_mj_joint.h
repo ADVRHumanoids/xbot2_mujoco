@@ -5,6 +5,10 @@
 #include <xbot2/client_server/server_manager.h>
 #include <mujoco/mujoco.h>
 
+#ifdef ENABLE_DIAGNOSTICS
+#include <xbot2_diagnostics/publisher.h>
+#endif
+
 namespace XBot
 {
 
@@ -29,7 +33,10 @@ public:
 
     double _tau_max;
 
+    int _last_stamp = -1;
+
 private:
+
 
 
 
@@ -52,6 +59,14 @@ private:
     ServerManager::UniquePtr _srv;
     mjModel * _m;
     std::vector<JointInstanceMj::Ptr> _joints;
+
+#ifdef ENABLE_DIAGNOSTICS
+    using Clock = std::chrono::steady_clock;
+    diagnostics::DiagPublisher _diag_pub;
+    diagnostics::StatAccumulator _rtt_acc;
+    int _last_recv_stamp = -1;
+    Clock::time_point _last_pub_time;
+#endif
 
 };
 

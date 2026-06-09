@@ -1,12 +1,18 @@
 #include "xbot2_mj_joint.h"
+#include "xbot2_utils.h"
+
 #include <fnmatch.h>
 #include <yaml-cpp/yaml.h>
 #include <limits>
+#include <chrono>
+#include <cstdint>
+#include <cstring>
 
 using namespace XBot;
 
 JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
-    _m(mj_model)
+    _m(mj_model),
+    _diag_pub("joint_mj/rtt", "xbot2_mujoco")
 {
     YAML::Node cfg;
     if(!cfg_path.empty())
@@ -63,13 +69,27 @@ JointMjServer::JointMjServer(mjModel * mj_model, std::string cfg_path):
 
 void JointMjServer::run(mjData * d)
 {
+    // get microseconds of current time, first 20 bits
+    uint64_t now_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                Clock::now().time_since_epoch()).count() & 0xFFFFFu;
+
     // fill rx
     for(auto& j : _joints)
     {
         int ji = j->get_id();
         int qi = _m->jnt_qposadr[ji];
         int vi = _m->jnt_dofadr[ji];
-        j->rx().link_pos = d->qpos[qi];
+
+        
+        double link_pos_patched = d->qpos[qi];
+#ifdef ENABLE_DIAGNOSTICS
+        // patch link_pos with current timestamp (in microseconds, modulo 2^20) in the least significant bits, 
+        // to measure round trip time 
+        // this reduces precision from ~16 to ~10 significant digits (plenty for joint positions)
+        utils::patch_double(link_pos_patched, now_us);
+#endif
+        j->rx().stamp = d->time * 1e6;
+        j->rx().link_pos = link_pos_patched;
         j->rx().link_vel = d->qvel[vi];
         j->rx().motor_pos = d->qpos[qi];
         j->rx().motor_vel = d->qvel[vi];
@@ -88,9 +108,34 @@ void JointMjServer::run(mjData * d)
     {
         int ji = j->get_id();
         int vi = _m->jnt_dofadr[ji];
+
+#ifdef ENABLE_DIAGNOSTICS
+        // measure round trip delay (note: needs filters OFF on xbot2!)
+        if(j->get_name() == "hip_roll_1")
+        {
+            double pos_ref = j->tx().pos_ref; 
+            auto [stamp_us, delay_us] = utils::decode_stamp_and_delay(pos_ref, now_us);
+            if(stamp_us != _last_recv_stamp)
+            {
+                _rtt_acc.update(delay_us);
+                _last_recv_stamp = stamp_us;
+            }
+        }
+#endif
+        
         d->qfrc_applied[vi] = j->pid_torque();
         j->move();
     }
+
+#ifdef ENABLE_DIAGNOSTICS
+    // publish diagnostics every 1 second
+    auto now = Clock::now();
+    if(now - _last_pub_time > 1s)
+    {
+        _diag_pub.publish_stats("rtt", _rtt_acc);
+        _last_pub_time = now;   
+    }
+#endif
 }
 
 JointInstanceMj::JointInstanceMj(Hal::DeviceInfo devinfo):

@@ -5,7 +5,9 @@ find_package(mujoco_cmake REQUIRED)
 find_package(glfw3 REQUIRED)
 find_package(xbot2 REQUIRED)
 find_package(matlogger2 REQUIRED)
+find_package(xbot2_diagnostics QUIET)
 
+option(ENABLE_DIAGNOSTICS "Enable diagnostics" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -20,6 +22,12 @@ target_link_libraries(xbot2_mujoco
     mujoco_cmake::mujoco
     xbot2::xbot2
     matlogger2::matlogger2)
+
+if(ENABLE_DIAGNOSTICS)
+    find_package(xbot2_diagnostics REQUIRED)
+    target_link_libraries(xbot2_mujoco PUBLIC xbot2_diagnostics::xbot2_diagnostics)
+    target_compile_definitions(xbot2_mujoco PUBLIC ENABLE_DIAGNOSTICS=1)
+endif()
 
 add_executable(mujoco_simulator
     src/simulator.cpp
