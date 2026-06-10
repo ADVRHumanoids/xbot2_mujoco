@@ -2,8 +2,22 @@ from xbot2_py_bridge.bridge_server import BridgeServer, RobotCommand, JointComma
 import mujoco
 import numpy as np
 import time, struct
-from pyxbot2_diagnostics.stats_accumulator import StatAccumulator
-from pyxbot2_diagnostics.publisher import DiagPublisher
+
+try:
+    from pyxbot2_diagnostics.stats_accumulator import StatAccumulator
+    from pyxbot2_diagnostics.publisher import DiagPublisher
+except ImportError:
+    # dummy diagnostics if pyxbot2_diagnostics is not available
+    class StatAccumulator:
+        def update(self, value):
+            pass
+
+    class DiagPublisher:
+        def __init__(self, *args, **kwargs):
+            pass
+        def publish_stats(self, *args, **kwargs):
+            pass
+
 
 class MjXbot2Bridge:
 
