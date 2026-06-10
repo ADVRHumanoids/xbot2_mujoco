@@ -54,7 +54,7 @@ class MjXbot2Bridge:
         # diagnostics
         self._last_stamp_us = 0.
         self._rtt_acc = StatAccumulator()
-        self._diag_pub = DiagPublisher(node_name='joint_mj', hw_id='xbot2_mujoco', throttle_publish_interval_sec=1.0)
+        self._diag_pub = DiagPublisher(node_name='joint_mj/rtt', hw_id='xbot2_mujoco', throttle_publish_interval_sec=1.0)
 
     def _encode_timestamp(self, link_pos: float, stamp_us: int) -> float:
         """Patch 20 LSBs of link_pos with current monotonic microseconds."""

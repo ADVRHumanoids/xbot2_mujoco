@@ -151,6 +151,21 @@ class SimulatorWrapper:
         if self.viewer is not None and not self.viewer.is_running():
             self.running = False
 
+        # sync to target RTF at specified interval
+        now = time.perf_counter()
+        if now - self.last_sync_wall >= self.sync_interval:
+            wall_delta = now - self.last_sync_wall
+            sim_delta = self.data.time - self.last_sync_sim
+            sync_time = sim_delta/self.target_rtf - wall_delta
+            if sync_time > 0:
+                time.sleep(sync_time)
+
+            # Mark the sync point after sleeping. If we kept the pre-sleep
+            # timestamp, the next cycle would count this sleep again and skip
+            # throttling, producing an RTF above the target.
+            self.last_sync_wall = time.perf_counter()
+            self.last_sync_sim = self.data.time
+
         # print RTF at specified interval
         now = time.perf_counter()
 
@@ -161,16 +176,6 @@ class SimulatorWrapper:
             print(f'RTF: {rtf:.3f}')
             self.last_print_wall = now
             self.last_print_sim = self.data.time
-
-        # sync to target RTF at specified interval
-        if now - self.last_sync_wall >= self.sync_interval:
-            wall_delta = now - self.last_sync_wall
-            sim_delta = self.data.time - self.last_sync_sim
-            sync_time = sim_delta/self.target_rtf - wall_delta 
-            if sync_time > 0:
-                time.sleep(sync_time)
-            self.last_sync_wall = now
-            self.last_sync_sim = self.data.time
             
             
     def run(self):
