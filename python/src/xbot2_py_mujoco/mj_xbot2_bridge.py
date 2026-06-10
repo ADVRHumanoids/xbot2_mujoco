@@ -2,6 +2,8 @@ from xbot2_py_bridge.bridge_server import BridgeServer, RobotCommand, JointComma
 import mujoco
 import numpy as np
 import time, struct
+from pyxbot2_diagnostics.stats_accumulator import StatAccumulator
+from pyxbot2_diagnostics.publisher import DiagPublisher
 
 class MjXbot2Bridge:
 
@@ -37,6 +39,8 @@ class MjXbot2Bridge:
 
         # diagnostics
         self._last_stamp_us = 0.
+        self._rtt_acc = StatAccumulator()
+        self._diag_pub = DiagPublisher(node_name='joint_mj', hw_id='xbot2_mujoco', throttle_publish_interval_sec=1.0)
 
     def _encode_timestamp(self, link_pos: float, stamp_us: int) -> float:
         """Patch 20 LSBs of link_pos with current monotonic microseconds."""
@@ -86,12 +90,18 @@ class MjXbot2Bridge:
 
     def receive(self):
 
-        cmd : RobotCommand =  self.bridge_server.receive()
+        cmd = self.bridge_server.receive()
 
-        if cmd is None:
+        if not cmd:
             return False
 
-        joint_cmd: JointCommand = cmd.joint_command
+        if isinstance(cmd, bool):
+            # Shared-memory mode: receive() only reports whether a fresh command
+            # exists; the command arrays are exposed as zero-copy NumPy views.
+            joint_cmd = self.bridge_server.command.joints
+        else:
+            # Legacy JSON mode: receive() returns a RobotCommand dataclass.
+            joint_cmd: JointCommand = cmd.joint_command
 
         ## diagnostics
         # decode communication delay from q values and print it
@@ -101,7 +111,8 @@ class MjXbot2Bridge:
                 delay_us, stamp_us = self._decode_comm_delay_us(joint_cmd.q[i], now)
                 if stamp_us != self._last_stamp_us:
                     self._last_stamp_us = stamp_us
-                    print(f"Joint {self.joint_names[i]}: Comm delay = {delay_us} µs (timestamp {stamp_us} µs)")
+                    self._rtt_acc.update(delay_us)
+                    self._diag_pub.publish_stats('rtt', self._rtt_acc)
 
 
         self.qref = joint_cmd.q
@@ -116,6 +127,8 @@ class MjXbot2Bridge:
 
         # apply v, tau, k and d as actuator model parameters 
         # see https://mujoco.readthedocs.io/en/stable/XMLreference.html#actuator-position
+        # we want to achieve tau = tau_ff +k*(qref - q) + d*(vref - dq) => 
+        #   biasprm[0] = d*dq + tau, gainprm[0] = k, biasprm[1] = -k, biasprm[2] = -d
         for i, model_act in enumerate(self.model_act_handles):
             if model_act is None:
                 continue
@@ -139,6 +152,8 @@ class MjXbot2Bridge:
 
         quat_w = np.empty(4)
         mujoco.mju_mat2Quat(quat_w, self.data.site(site_id).xmat)
+        # wxyz to xyzw
+        quat_w = np.roll(quat_w, -1)
         lin_acc_b = self.data.sensordata[acc_id*3:(acc_id+1)*3]
         ang_vel_b = self.data.sensordata[gyro_id*3:(gyro_id+1)*3]
 
