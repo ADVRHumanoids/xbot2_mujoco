@@ -53,6 +53,7 @@ class MjXbot2Bridge:
 
         # diagnostics
         self._last_stamp_us = 0.
+        self._last_stamp_rx_feedback = 0
         self._rtt_acc = StatAccumulator()
         self._diag_pub = DiagPublisher(node_name='joint_mj/rtt', hw_id='xbot2_mujoco', throttle_publish_interval_sec=1.0)
 
@@ -74,9 +75,6 @@ class MjXbot2Bridge:
 
     def send_state(self):
 
-        now = time.monotonic()
-        now_us = int(now * 1e6) & 0xFFFFF
-
         joint_state = JointState(
             q=[float(jh.qpos[0]) for jh in self.joint_handles],
             dq=[float(jh.qvel[0]) for jh in self.joint_handles],
@@ -87,12 +85,6 @@ class MjXbot2Bridge:
             vref=self.vref,
             tauref=self.tauref
         )
-
-        ## diagnostics 
-        # patch last 20 bits of each q with current time's microseconds 
-        for i, _ in enumerate(self.joint_handles):
-            joint_state.q[i] = self._encode_timestamp(joint_state.q[i], now_us)
-
 
         robot_state = RobotState(
             time=self.data.time,
@@ -117,16 +109,17 @@ class MjXbot2Bridge:
             # Legacy JSON mode: receive() returns a RobotCommand dataclass.
             joint_cmd: JointCommand = cmd.joint_command
 
-        ## diagnostics
-        # decode communication delay from q values and print it
-        now = time.monotonic()
-        for i, _ in enumerate(self.joint_handles):
-            if self.joint_names[i] == 'hip_roll_1':
-                delay_us, stamp_us = self._decode_comm_delay_us(joint_cmd.q[i], now)
-                if stamp_us != self._last_stamp_us:
-                    self._last_stamp_us = stamp_us
-                    self._rtt_acc.update(delay_us)
-                    self._diag_pub.publish_stats('rtt', self._rtt_acc)
+        # Diagnostics: stamp_rx_feedback is the rx timestamp that the command
+        # was computed from. Compare it with current sim time to estimate the
+        # feedback-to-command roundtrip delay without perturbing joint values.
+        stamp_rx_feedback = int(self.bridge_server.command.stamp_rx_feedback)
+        if stamp_rx_feedback != 0:
+            if stamp_rx_feedback != self._last_stamp_rx_feedback:
+                self._last_stamp_rx_feedback = stamp_rx_feedback
+                now_ns = int(self.data.time * 1e9)
+                delay_us = (now_ns - stamp_rx_feedback) / 1e3
+                self._rtt_acc.update(delay_us)
+                self._diag_pub.publish_stats('rtt', self._rtt_acc)
 
 
         self.qref = joint_cmd.q
