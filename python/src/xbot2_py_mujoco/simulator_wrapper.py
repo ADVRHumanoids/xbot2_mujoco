@@ -93,6 +93,7 @@ class SimulatorWrapper:
         self.last_print_wall = self.time_start
         self.last_print_sim = self.data.time
         self.last_sim_time = self.data.time
+        self.sync_error_integral = .0
 
         # running flag
         self.running = True
@@ -156,7 +157,7 @@ class SimulatorWrapper:
         if now - self.last_sync_wall >= self.sync_interval:
             wall_delta = now - self.last_sync_wall
             sim_delta = self.data.time - self.last_sync_sim
-            sync_time = sim_delta/self.target_rtf - wall_delta
+            sync_time = sim_delta/self.target_rtf - wall_delta + self.sync_error_integral
             if sync_time > 0:
                 time.sleep(sync_time)
 
@@ -170,10 +171,19 @@ class SimulatorWrapper:
         now = time.perf_counter()
 
         if now - self.last_print_wall >= self.rtf_print_interval:
+            # 
             wall_delta = now - self.last_print_wall
             sim_delta = self.data.time - self.last_print_sim
+
+            # closed loop rtf correction
+            sync_error = sim_delta/self.target_rtf - wall_delta
+            self.sync_error_integral += 0.5*sync_error * (self.model.opt.timestep / self.rtf_print_interval) 
+            # clamp integral to avoid windup
+            self.sync_error_integral = max(min(self.sync_error_integral, 0.1), -0.1)
+
+            # print rtf
             rtf = sim_delta / wall_delta if wall_delta > 0 else 0.0
-            print(f'RTF: {rtf:.3f}')
+            print(f'RTF: {rtf:.3f} (Sync error: {1000*sync_error:.3f} ms, Correction: {1000*self.sync_error_integral:.3f} ms)')
             self.last_print_wall = now
             self.last_print_sim = self.data.time
             
