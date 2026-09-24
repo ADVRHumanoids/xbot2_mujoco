@@ -142,11 +142,16 @@ class MjcfGenerator:
     
     def _tree_merge(a, b):
 
+        def merge_key(elem):
+            if elem.tag == 'default':
+                return 'class', elem.get('class')
+            return 'name', elem.get('name')
+
         def inner(aparent, bparent):
             for bchild in bparent:
-                name = bchild.get('name')
-                if name is not None:
-                    achild = aparent.xpath(f'./{bchild.tag}[@name="{name}"]')
+                attr_name, attr_value = merge_key(bchild)
+                if attr_value is not None:
+                    achild = aparent.xpath(f'./{bchild.tag}[@{attr_name}="{attr_value}"]')
                 else:
                     achild = aparent.xpath('./' + bchild.tag)
                 if achild and list(bchild):

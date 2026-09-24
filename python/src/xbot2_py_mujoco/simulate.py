@@ -8,7 +8,18 @@ from xbot2_py_mujoco.mjcf_tools import MjcfGenerator
 from xbot2_py_mujoco.simulator_wrapper import SimulatorWrapper
 
 
-def parse_args():
+class _AppendXmlMerge(argparse.Action):
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        xml_merges = getattr(namespace, self.dest, None)
+        if xml_merges is None:
+            xml_merges = []
+        kind = 'cmd' if option_string == '--xml-cmd' else 'path'
+        xml_merges.append((kind, values))
+        setattr(namespace, self.dest, xml_merges)
+
+
+def parse_args(argv=None):
     p = argparse.ArgumentParser(description='MuJoCo xbot2 simulator')
 
     # --- MjcfGenerator args ---
@@ -16,10 +27,10 @@ def parse_args():
     g.add_argument('--urdf',       metavar='PATH', help='Path to robot URDF file')
     g.add_argument('--urdf-cmd',   metavar='CMD',  help='Command that generates the URDF')
     g.add_argument('--name',       default='robot', metavar='NAME', help='Robot name (default: robot)')
-    g.add_argument('--xml',        action='append', default=[], metavar='PATH',
-                   help='Extra MJCF XML file to merge (repeatable, in order)')
-    g.add_argument('--xml-cmd',        action='append', default=[], metavar='PATH',
-                   help='Command that generates extra MJCF XML file to merge (repeatable, in order)')
+    g.add_argument('--xml', dest='xml_merges', action=_AppendXmlMerge, default=None, metavar='PATH',
+                   help='Extra MJCF XML file to merge (repeatable, in command-line order)')
+    g.add_argument('--xml-cmd', dest='xml_merges', action=_AppendXmlMerge, default=None, metavar='CMD',
+                   help='Command that generates extra MJCF XML file to merge (repeatable, in command-line order)')
     g.add_argument('--output-dir', metavar='DIR',  help='MjcfGenerator output directory')
     g.add_argument('--copy-assets', action='store_true', help='Copy assets instead of symlinking')
 
@@ -37,7 +48,7 @@ def parse_args():
     s.add_argument('--target-rtf',            type=float, metavar='RTF', help='Target real-time factor (default: 1.0)')
     s.add_argument('--socket-path',           metavar='PATH', help='Unix socket path for xbot2 bridge')
 
-    return p.parse_args()
+    return p.parse_args(argv)
 
 
 def _read_or_run(path_arg, cmd_arg, label):
@@ -72,12 +83,12 @@ def main():
                         output_dir=args.output_dir,
                         copy_assets=args.copy_assets)
 
-    for xml_path in args.xml:
-        gen.merge_xml(Path(xml_path))
-        
-    for xml_cmd in args.xml_cmd:
-        xml_str = _read_or_run(None, xml_cmd, 'xml')
-        gen.merge_xml(xml_str)
+    for xml_kind, xml_value in args.xml_merges or []:
+        if xml_kind == 'path':
+            gen.merge_xml(Path(xml_value))
+        else:
+            xml_str = _read_or_run(None, xml_value, 'xml')
+            gen.merge_xml(xml_str)
 
     # create mujoco model from the generated mjcf xml string
     model = mujoco.MjModel.from_xml_string(gen.generate_mjcf_string())

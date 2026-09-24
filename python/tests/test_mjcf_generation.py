@@ -10,6 +10,16 @@ URDF_PATH = RESOURCES / 'nice_robot.urdf'
 CONFIG_XML_PATH = RESOURCES / 'config.xml'
 WORLD_XML_PATH = RESOURCES / 'world.xml'
 
+WORLD_DEFAULT_XML = """
+<mujoco>
+    <default>
+        <default class="terrain">
+            <geom solref="0.004 1.2" friction="0.7 0.005 0.001" />
+        </default>
+    </default>
+</mujoco>
+"""
+
 
 @pytest.fixture(scope='module')
 def urdf_str():
@@ -75,6 +85,24 @@ def test_generator_root_body_present(gen):
 def test_merge_xml_adds_default_class(gen_with_config):
     default_leg = gen_with_config.mj_xml_tree.xpath('//default[@class="robot_leg"]')
     assert default_leg, '<default class="robot_leg"> should be present after merge'
+
+
+def test_merge_xml_preserves_default_classes_from_multiple_sources(urdf_str, config_xml_str):
+    g = MjcfGenerator(name='quadruped_defaults_test', urdf_str=urdf_str)
+    g.merge_xml(config_xml_str)
+    g.merge_xml(WORLD_DEFAULT_XML)
+
+    classes = g.mj_xml_tree.xpath('/mujoco/default/default/@class')
+    assert classes == ['robot_leg', 'terrain']
+
+
+def test_merge_xml_preserves_default_classes_when_world_merged_first(urdf_str, config_xml_str):
+    g = MjcfGenerator(name='quadruped_defaults_reverse_test', urdf_str=urdf_str)
+    g.merge_xml(WORLD_DEFAULT_XML)
+    g.merge_xml(config_xml_str)
+
+    classes = g.mj_xml_tree.xpath('/mujoco/default/default/@class')
+    assert classes == ['terrain', 'robot_leg']
 
 
 def test_merge_xml_adds_actuators(gen_with_config):
@@ -233,5 +261,4 @@ def test_sensor_types(mj_model):
     # accelerometer = 7, gyro = 8 in mjtSensor
     assert mj_model.sensor_type[0] == mujoco.mjtSensor.mjSENS_ACCELEROMETER
     assert mj_model.sensor_type[1] == mujoco.mjtSensor.mjSENS_GYRO
-
 
