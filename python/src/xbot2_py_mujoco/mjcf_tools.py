@@ -58,10 +58,22 @@ class MjcfGenerator:
 
 
     def merge_xml(self, xml_str: str | Path):
+        source_dir = None
         if isinstance(xml_str, Path):
+            source_dir = xml_str.parent.resolve()
             xml_str = xml_str.read_text()
         mj_opt_tree = etree.fromstring(xml_str)
         etree.strip_tags(mj_opt_tree, etree.Comment)
+        if source_dir is not None:
+            for asset in mj_opt_tree.xpath('//asset//*[@file]'):
+                source = Path(asset.get('file'))
+                if not source.is_absolute():
+                    source = source_dir / source
+                if not source.is_file():
+                    continue
+                destination = Path(self.mj_assetsdir) / source.name
+                shutil.copy2(source, destination)
+                asset.set('file', f'./assets/{destination.name}')
         self.mj_xml_tree = MjcfGenerator._tree_merge(self.mj_xml_tree, mj_opt_tree)
 
 

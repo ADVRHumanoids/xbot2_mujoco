@@ -1,9 +1,12 @@
 
 import time
 import functools
+import random
+import threading
 from typing import Callable
 
 import mujoco
+import numpy as np
 from mujoco.viewer import launch_passive, Handle
 from xbot2_py_mujoco.mj_xbot2_bridge import MjXbot2Bridge
 
@@ -23,7 +26,8 @@ class SimulatorWrapper:
                  send_state_decimation: int = None,
                  sync_interval: float = None,
                  target_rtf: float = None,
-                 socket_path: str = None):
+                 socket_path: str = None,
+                 spawn_locations: list[tuple[float, float, float]] = None):
 
         # define default values
         if q_init is None:
@@ -46,13 +50,21 @@ class SimulatorWrapper:
 
         if target_rtf is None:
             target_rtf = 1.0
+
+        if spawn_locations is None:
+            spawn_locations = [(0.0, 0.0, 0.0)]
     
         # save model and create data
         self.model = model
         self.data = mujoco.MjData(model)
+        self.spawn_locations = [tuple(location) for location in spawn_locations]
+        self._respawn_lock = threading.Lock()
+        self._respawn_requested = False
 
         # create viewer if requested
         if viewer:
+            if viewer_key_callback is None:
+                viewer_key_callback = self._viewer_key_callback
             self.viewer : Handle = launch_passive(model, self.data, key_callback=viewer_key_callback)
             self.viewer_fps = viewer_fps
         else:
@@ -98,6 +110,36 @@ class SimulatorWrapper:
         # running flag
         self.running = True
 
+    def _viewer_key_callback(self, key):
+        if key in (ord('r'), ord('R')):
+            with self._respawn_lock:
+                self._respawn_requested = True
+
+    def _handle_respawn_request(self):
+        with self._respawn_lock:
+            if not self._respawn_requested:
+                return
+            self._respawn_requested = False
+        self._respawn()
+
+    def _respawn(self):
+        free_joints = np.flatnonzero(
+            self.model.jnt_type == mujoco.mjtJoint.mjJNT_FREE
+        )
+        if not len(free_joints):
+            print("[Simulator] Warning: No free joint found in the model, cannot respawn.")
+            return
+        joint_id = int(free_joints[0])
+        qpos_start = self.model.jnt_qposadr[joint_id]
+        dof_start = self.model.jnt_dofadr[joint_id]
+        x, y, z = random.choice(self.spawn_locations)
+        print(f"[Simulator] Respawning asset to location ({x}, {y}, {z}).")
+        self.data.qpos[qpos_start:qpos_start + 3] = (x, y, z)
+        self.data.qpos[qpos_start + 3:qpos_start + 7] = (1.0, 0.0, 0.0, 0.0)
+        self.data.qvel[dof_start:dof_start + 6] = 0.0
+        self._set_initial_position(self.data)
+        mujoco.mj_forward(self.model, self.data)
+
     def _catch_interrupt(fn):
         """Decorator: catch KeyboardInterrupt, set running=False and close viewer."""
         @functools.wraps(fn)
@@ -112,6 +154,7 @@ class SimulatorWrapper:
 
     @_catch_interrupt
     def pre_step(self):
+        self._handle_respawn_request()
         
         # set initial position if sim time is 0 (first step or after reset)
         if self.data.time == 0.0:

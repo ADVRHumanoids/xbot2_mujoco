@@ -47,6 +47,9 @@ def parse_args(argv=None):
     s.add_argument('--sync-interval',         type=float, metavar='SEC', help='Real-time sync interval in seconds')
     s.add_argument('--target-rtf',            type=float, metavar='RTF', help='Target real-time factor (default: 1.0)')
     s.add_argument('--socket-path',           metavar='PATH', help='Unix socket path for xbot2 bridge')
+    s.add_argument('--spawn-file',            metavar='PATH', help='YAML file with spawn locations')
+    s.add_argument('--detect-spawn-locations', action='store_true',
+                   help='Load spawn_locations.yaml beside a merged XML file')
 
     return p.parse_args(argv)
 
@@ -65,6 +68,32 @@ def _read_or_run(path_arg, cmd_arg, label):
         return result.stdout
     return None
 
+def _load_spawn_locations(path):
+    if path is None:
+        return [(0.0, 0.0, 0.0)]
+    locations = yaml.safe_load(Path(path).read_text())
+    if isinstance(locations, dict):
+        locations = locations.get('spawn_locations')
+    if not locations:
+        raise ValueError('Spawn file must contain at least one spawn location')
+    try:
+        locations = [tuple(float(value) for value in location) for location in locations]
+    except (TypeError, ValueError) as exc:
+        raise ValueError('Spawn locations must be [x, y, z] values') from exc
+    if any(len(location) != 3 for location in locations):
+        raise ValueError('Spawn locations must be [x, y, z] values')
+    return locations
+
+
+def _detect_spawn_file(xml_merges):
+    for kind, xml_value in xml_merges or []:
+        if kind != 'path':
+            continue
+        candidate = Path(xml_value).expanduser().parent / 'spawn_locations.yaml'
+        if candidate.is_file():
+            return candidate
+    return None
+
 
 def main():
 
@@ -75,6 +104,10 @@ def main():
     if urdf is None:
         raise ValueError('Provide either --urdf or --urdf-cmd')
     srdf = _read_or_run(args.srdf, args.srdf_cmd, 'srdf')
+    spawn_file = args.spawn_file
+    if spawn_file is None and args.detect_spawn_locations:
+        spawn_file = _detect_spawn_file(args.xml_merges)
+    spawn_locations = _load_spawn_locations(spawn_file)
 
     # create the mjcf file (xml) from the urdf, merging extra xml files and 
     # finally patching the result with information from the config yaml file
@@ -108,6 +141,7 @@ def main():
         sync_interval=args.sync_interval,
         target_rtf=args.target_rtf,
         socket_path=args.socket_path,
+        spawn_locations=spawn_locations,
     )
 
     # main simulation loop, which runs until the viewer window is closed (if enabled) or the process is killed
