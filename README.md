@@ -141,5 +141,85 @@ model = mujoco.MjModel.from_xml_string(mjcf_str)
   assets/            # mesh/texture files (symlinked or copied)
 ```
 
+# Remote control
 
+The Python simulator can expose an optional ZeroMQ `REP` endpoint for changing
+contact properties and applying timed external wrenches. Enable it with:
+
+```bash
+python -m xbot2_py_mujoco.simulate ... \
+  --remote-control-endpoint tcp://127.0.0.1:5555
+```
+
+The endpoint is disabled unless the option is provided. Bind to a non-loopback
+address only on a trusted network: the initial protocol has no authentication or
+encryption.
+
+Requests and responses are JSON objects. Contact properties are changed on all
+geoms directly attached to each named body (descendant bodies are not included):
+
+```json
+{
+  "id": "contact-1",
+  "command": "set_contact_parameters",
+  "bodies": ["left_foot", "right_foot"],
+  "parameters": {
+    "friction": [0.8, 0.005, 0.001],
+    "solref": [0.004, 1.2],
+    "condim": 3
+  }
+}
+```
+
+Supported properties are `friction`, `solref`, `solimp`, `margin`, `gap`,
+`condim`, and `priority`. A request is rejected without making changes if any
+body or value is invalid.
+
+Timed wrenches use force followed by torque, expressed in the world frame and
+applied at the body center of mass. Duration is measured in simulation time and
+overlapping commands add together:
+
+```json
+{
+  "id": "push-1",
+  "command": "apply_wrench",
+  "body": "base_link",
+  "force": [100.0, 0.0, 0.0],
+  "torque": [0.0, 0.0, 5.0],
+  "duration": 0.25
+}
+```
+
+Body mass and center of mass can be changed for one or more bodies. `com` is
+expressed in the body's local frame. MuJoCo derived inertial constants are
+recomputed after the change; the body's rotational inertia is not changed.
+
+```json
+{
+  "id": "payload-1",
+  "command": "set_body_properties",
+  "bodies": ["base_link"],
+  "properties": {
+    "mass": 25.0,
+    "com": [0.02, 0.0, 0.08]
+  }
+}
+```
+
+The `restore` command restores all contact and body properties managed by this
+API to the values captured when the server started. It also cancels scheduled
+wrenches and clears both Cartesian and generalized applied-force arrays. It does
+not reset simulation position, velocity, control, or time.
+
+```json
+{
+  "id": "restore-1",
+  "command": "restore"
+}
+```
+
+Successful responses contain `{"ok": true, "result": ...}`. Invalid requests
+return `{"ok": false, "error": {"code": ..., "message": ...}}`; the optional
+request `id` is echoed in either case. A command-line example is available at
+[`python/examples/remote_control_client.py`](python/examples/remote_control_client.py).
 

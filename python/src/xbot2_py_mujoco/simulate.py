@@ -47,6 +47,8 @@ def parse_args(argv=None):
     s.add_argument('--sync-interval',         type=float, metavar='SEC', help='Real-time sync interval in seconds')
     s.add_argument('--target-rtf',            type=float, metavar='RTF', help='Target real-time factor (default: 1.0)')
     s.add_argument('--socket-path',           metavar='PATH', help='Unix socket path for xbot2 bridge')
+    s.add_argument('--remote-control-endpoint', metavar='ENDPOINT',
+                   help='Enable the ZeroMQ/JSON control server (for example tcp://127.0.0.1:5555)')
     s.add_argument('--spawn-file',            metavar='PATH', help='YAML file with spawn locations')
     s.add_argument('--detect-spawn-locations', action='store_true',
                    help='Load spawn_locations.yaml beside a merged XML file')
@@ -141,14 +143,18 @@ def main():
         sync_interval=args.sync_interval,
         target_rtf=args.target_rtf,
         socket_path=args.socket_path,
+        remote_control_endpoint=args.remote_control_endpoint,
         spawn_locations=spawn_locations,
     )
 
     # main simulation loop, which runs until the viewer window is closed (if enabled) or the process is killed
-    while sim.running:
-        sim.pre_step()
-        sim.step()
-        sim.post_step()
+    try:
+        while sim.running:
+            sim.pre_step()
+            sim.step()
+            sim.post_step()
+    finally:
+        sim.close()
 
 
 if __name__ == '__main__':

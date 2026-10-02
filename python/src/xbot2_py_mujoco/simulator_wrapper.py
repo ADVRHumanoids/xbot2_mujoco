@@ -9,6 +9,7 @@ import mujoco
 import numpy as np
 from mujoco.viewer import launch_passive, Handle
 from xbot2_py_mujoco.mj_xbot2_bridge import MjXbot2Bridge
+from xbot2_py_mujoco.remote_control import RemoteControlServer
 
 class SimulatorWrapper:
 
@@ -27,6 +28,7 @@ class SimulatorWrapper:
                  sync_interval: float = None,
                  target_rtf: float = None,
                  socket_path: str = None,
+                 remote_control_endpoint: str = None,
                  spawn_locations: list[tuple[float, float, float]] = None):
 
         # define default values
@@ -90,6 +92,10 @@ class SimulatorWrapper:
 
         # create xbot2 bridge server
         self.xbot2_bridge = MjXbot2Bridge(name='mj_simulator', model=self.model, data=self.data, socket_path=socket_path)
+        self.remote_control = (
+            RemoteControlServer(self.model, self.data, remote_control_endpoint)
+            if remote_control_endpoint else None
+        )
 
         # variables
         self.q_init = q_init
@@ -123,6 +129,8 @@ class SimulatorWrapper:
         self._respawn()
 
     def _respawn(self):
+        if getattr(self, 'remote_control', None) is not None:
+            self.remote_control.clear_wrenches()
         free_joints = np.flatnonzero(
             self.model.jnt_type == mujoco.mjtJoint.mjJNT_FREE
         )
@@ -164,6 +172,12 @@ class SimulatorWrapper:
 
         # receive commands from bridge
         self.xbot2_bridge.receive()
+
+        # Apply remote commands on the simulation thread. Wrenches are refreshed
+        # every step because MuJoCo treats xfrc_applied as persistent input.
+        if self.remote_control is not None:
+            self.remote_control.process_requests()
+            self.remote_control.apply_wrenches()
 
     
     @_catch_interrupt
@@ -235,6 +249,12 @@ class SimulatorWrapper:
         self.pre_step()
         self.step()
         self.post_step()
+
+    def close(self):
+        if self.remote_control is not None:
+            self.remote_control.close()
+        if self.viewer is not None:
+            self.viewer.close()
 
 
     def _set_initial_position(self, data: mujoco.MjData):

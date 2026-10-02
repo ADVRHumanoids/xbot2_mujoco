@@ -17,6 +17,7 @@ dependencies = [
     "numpy",
     "Pillow",
     "PyYAML",
+    "pyzmq",
 ]
 
 [project.optional-dependencies]
