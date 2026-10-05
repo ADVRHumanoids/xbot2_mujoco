@@ -22,11 +22,29 @@ def main():
     wrench.add_argument("--force", nargs=3, type=float, required=True)
     wrench.add_argument("--torque", nargs=3, type=float, required=True)
     wrench.add_argument("--duration", type=float, required=True)
+    wrench.add_argument("--frame", choices=("world", "body"), default="world")
 
     body = subparsers.add_parser("body")
     body.add_argument("bodies", nargs="+")
     body.add_argument("--mass", type=float)
     body.add_argument("--com", nargs=3, type=float, metavar=("X", "Y", "Z"))
+
+    payload = subparsers.add_parser("payload")
+    payload.add_argument("body")
+    payload.add_argument("--mass", type=float, required=True)
+    payload.add_argument("--position", nargs=3, type=float, required=True,
+                         metavar=("X", "Y", "Z"))
+
+    for command_parser in (contact, wrench, body, payload):
+        command_parser.add_argument("--regex", action="store_true",
+                                    help="Match body names with full-name regular expressions")
+
+    limits = subparsers.add_parser("torque-limits")
+    limits.add_argument("joints", nargs="+", help="Joint regex patterns (full-name match)")
+    limits.add_argument("--limit", type=float, required=True,
+                        help="Symmetric torque limit in Nm (N for slide joints); zero disables output")
+    limits.add_argument("--exact", dest="regex", action="store_false", default=True,
+                        help="Treat joint selectors as exact names instead of regex patterns")
 
     subparsers.add_parser("restore")
 
@@ -44,6 +62,7 @@ def main():
             "force": args.force,
             "torque": args.torque,
             "duration": args.duration,
+            "frame": args.frame,
         }
     elif args.command == "body":
         properties = {}
@@ -58,8 +77,24 @@ def main():
             "bodies": args.bodies,
             "properties": properties,
         }
+    elif args.command == "payload":
+        request = {
+            "command": "add_payload",
+            "body": args.body,
+            "mass": args.mass,
+            "position": args.position,
+        }
+    elif args.command == "torque-limits":
+        request = {
+            "command": "set_joint_torque_limits",
+            "joints": args.joints,
+            "limit": args.limit,
+        }
     else:
         request = {"command": "restore"}
+
+    if hasattr(args, "regex"):
+        request["regex"] = args.regex
 
     socket = zmq.Context.instance().socket(zmq.REQ)
     socket.connect(args.endpoint)

@@ -10,6 +10,7 @@ import numpy as np
 from mujoco.viewer import launch_passive, Handle
 from xbot2_py_mujoco.mj_xbot2_bridge import MjXbot2Bridge
 from xbot2_py_mujoco.remote_control import RemoteControlServer
+from xbot2_py_mujoco.terrain_scan import TerrainScanner, TerrainScan
 
 class SimulatorWrapper:
 
@@ -29,7 +30,23 @@ class SimulatorWrapper:
                  target_rtf: float = None,
                  socket_path: str = None,
                  remote_control_endpoint: str = None,
-                 spawn_locations: list[tuple[float, float, float]] = None):
+                 spawn_locations: list[tuple[float, float, float]] = None,
+                 terrain_scanner: TerrainScanner = None,
+                 terrain_scan_decimation: int = 100,
+                 terrain_scan_visualization: bool = True,
+                 terrain_scan_topic: str = '/heightscan'):
+
+        if (isinstance(terrain_scan_decimation, bool)
+                or not isinstance(terrain_scan_decimation, int)
+                or terrain_scan_decimation <= 0):
+            raise ValueError("terrain_scan_decimation must be a positive integer")
+        if terrain_scanner is not None and terrain_scanner.model is not model:
+            raise ValueError("terrain_scanner must use the simulator model")
+        self.terrain_scanner = terrain_scanner
+        self.terrain_scan_decimation = terrain_scan_decimation
+        self.terrain_scan: TerrainScan | None = None
+        self.terrain_scan_visualization = terrain_scan_visualization
+        self.terrain_scan_pub = None
 
         # define default values
         if q_init is None:
@@ -89,6 +106,12 @@ class SimulatorWrapper:
             if srdf_str:
                 self.srdf_pub.publish(String(data=srdf_str))
                 print(f"[Simulator] Published SRDF to {ros_robot_description_topic + '_semantic'}")
+            if terrain_scanner is not None:
+                from sensor_msgs.msg import PointCloud2
+                from rclpy.qos import qos_profile_sensor_data
+                self.terrain_scan_pub = self.ros_node.create_publisher(
+                    PointCloud2, terrain_scan_topic, qos_profile_sensor_data,
+                )
 
         # create xbot2 bridge server
         self.xbot2_bridge = MjXbot2Bridge(name='mj_simulator', model=self.model, data=self.data, socket_path=socket_path)
@@ -194,6 +217,13 @@ class SimulatorWrapper:
 
         # send state to bridge at specified decimation
         self.iter_counter += 1
+        if (self.terrain_scanner is not None
+                and self.iter_counter % self.terrain_scan_decimation == 0):
+            self.terrain_scan = self.terrain_scanner.scan(self.data)
+            if self.terrain_scan_pub is not None:
+                from xbot2_py_mujoco.terrain_scan_ros import pointcloud_from_scan
+                frame_id = self.model.body(self.terrain_scanner.body_id).name
+                self.terrain_scan_pub.publish(pointcloud_from_scan(self.terrain_scan, frame_id))
         if self.iter_counter % self.send_state_decimation == 0:
             self.xbot2_bridge.send_state()
 
@@ -202,6 +232,9 @@ class SimulatorWrapper:
         wall_elapsed_time = now - self.time_start
 
         if self.viewer is not None and self.frames < self.viewer_fps*wall_elapsed_time:
+            if self.remote_control is not None or self.terrain_scanner is not None:
+                with self.viewer.lock():
+                    self._update_visuals(self.viewer.user_scn)
             self.viewer.sync(state_only=True)
             self.frames += 1
             
@@ -245,6 +278,14 @@ class SimulatorWrapper:
             self.last_print_sim = self.data.time
             
             
+    def _update_visuals(self, scene: mujoco.MjvScene):
+        """Rebuild all simulator overlays while holding the viewer lock."""
+        scene.ngeom = 0
+        if self.remote_control is not None:
+            self.remote_control.update_visuals(scene)
+        if self.terrain_scan_visualization and self.terrain_scan is not None:
+            self.terrain_scan.add_visuals(scene)
+
     def run(self):
         self.pre_step()
         self.step()

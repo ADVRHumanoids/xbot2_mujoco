@@ -63,6 +63,8 @@ def test_curriculum_layout_origins_and_mujoco_load(tmp_path):
     assert np.isclose(g.terrain_origins[:, :, :2].mean(axis=(0, 1)), 0).all()
     m = mujoco.MjModel.from_xml_path(str(g.save(tmp_path / "world.xml")))
     assert m.nhfield == 6 and m.ngeom > 20
+    # Heightfields, box tiles and outer borders all inherit the terrain group.
+    assert np.all(m.geom_group == 2)
 
 
 def test_saved_world_is_relocatable(tmp_path):
@@ -109,6 +111,7 @@ def test_merge_with_mjcf_generator(tmp_path):
         )
         >= 0
     )
+    assert model.geom("terrain_r0_c0_rough").group[0] == 2
 
 
 def test_cache_and_warnings(tmp_path):

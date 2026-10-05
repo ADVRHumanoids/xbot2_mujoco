@@ -400,7 +400,7 @@ class TerrainGenerator:
             ET.SubElement(root, "default"), "default", {"class": "terrain"}
         )
         ET.SubElement(
-            de, "geom", friction=".7 .005 .001", condim="3", solref=".004 1.2"
+            de, "geom", group="2", friction=".7 .005 .001", condim="3", solref=".004 1.2"
         )
         asset = ET.SubElement(root, "asset")
         ET.SubElement(

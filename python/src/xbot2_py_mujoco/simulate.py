@@ -3,9 +3,25 @@ from pathlib import Path
 import subprocess
 import yaml
 import argparse
+import math
 
 from xbot2_py_mujoco.mjcf_tools import MjcfGenerator
 from xbot2_py_mujoco.simulator_wrapper import SimulatorWrapper
+from xbot2_py_mujoco.terrain_scan import TerrainScanner
+
+
+def _positive_int(value):
+    number = int(value)
+    if number <= 0:
+        raise argparse.ArgumentTypeError('Must be a positive integer')
+    return number
+
+
+def _positive_float(value):
+    number = float(value)
+    if not math.isfinite(number) or number <= 0:
+        raise argparse.ArgumentTypeError('Must be a positive finite number')
+    return number
 
 
 class _AppendXmlMerge(argparse.Action):
@@ -52,6 +68,29 @@ def parse_args(argv=None):
     s.add_argument('--spawn-file',            metavar='PATH', help='YAML file with spawn locations')
     s.add_argument('--detect-spawn-locations', action='store_true',
                    help='Load spawn_locations.yaml beside a merged XML file')
+
+    scan = p.add_argument_group('Terrain height scan')
+    scan.add_argument('--terrain-scan-body', metavar='BODY',
+                      help='Enable terrain scanning centered on this robot root body')
+    scan.add_argument('--terrain-scan-shape', nargs=2, type=_positive_int,
+                      default=(17, 11), metavar=('N', 'M'),
+                      help='Samples along body heading and horizontal lateral axis (default: 17 11)')
+    scan.add_argument('--terrain-scan-spacing', nargs=2, type=_positive_float,
+                      default=(0.1, 0.1), metavar=('DX', 'DY'),
+                      help='Forward and lateral grid spacing in meters (default: 0.1 0.1)')
+    scan.add_argument('--terrain-scan-z-offset', type=_positive_float, default=2.0,
+                      metavar='METERS', help='Ray origin height above the robot body (default: 2)')
+    scan.add_argument('--terrain-scan-max-distance', type=_positive_float, default=5.0,
+                      metavar='METERS', help='Maximum downward ray distance (default: 5)')
+    scan.add_argument('--terrain-scan-excluded-groups', nargs='+', type=int,
+                      choices=range(6), default=(0, 1), metavar='GROUP',
+                      help='Geom groups excluded from rays (default: 0 1)')
+    scan.add_argument('--terrain-scan-decimation', type=_positive_int, default=100,
+                      metavar='STEPS', help='Scan every this many simulation steps (default: 100)')
+    scan.add_argument('--terrain-scan-topic', default='/heightscan', metavar='TOPIC',
+                      help='ROS PointCloud2 topic when ROS is enabled (default: /heightscan)')
+    scan.add_argument('--no-terrain-scan-visualization', action='store_true',
+                      help='Hide scan spheres while still computing terrain heights')
 
     return p.parse_args(argv)
 
@@ -128,6 +167,16 @@ def main():
     # create mujoco model from the generated mjcf xml string
     model = mujoco.MjModel.from_xml_string(gen.generate_mjcf_string())
 
+    terrain_scanner = None
+    if args.terrain_scan_body:
+        terrain_scanner = TerrainScanner(
+            model, robot_body=args.terrain_scan_body,
+            shape=args.terrain_scan_shape, spacing=args.terrain_scan_spacing,
+            z_offset=args.terrain_scan_z_offset,
+            max_distance=args.terrain_scan_max_distance,
+            excluded_geom_groups=args.terrain_scan_excluded_groups,
+        )
+
     # create simulator wrapper, which will handle the simulation loop, viewer, ROS publishing, and xbot2 bridge communication
     sim = SimulatorWrapper(
         model=model,
@@ -145,6 +194,10 @@ def main():
         socket_path=args.socket_path,
         remote_control_endpoint=args.remote_control_endpoint,
         spawn_locations=spawn_locations,
+        terrain_scanner=terrain_scanner,
+        terrain_scan_decimation=args.terrain_scan_decimation,
+        terrain_scan_visualization=not args.no_terrain_scan_visualization,
+        terrain_scan_topic=args.terrain_scan_topic,
     )
 
     # main simulation loop, which runs until the viewer window is closed (if enabled) or the process is killed
