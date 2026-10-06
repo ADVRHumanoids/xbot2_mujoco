@@ -47,6 +47,7 @@ class SimulatorWrapper:
         self.terrain_scan: TerrainScan | None = None
         self.terrain_scan_visualization = terrain_scan_visualization
         self.terrain_scan_pub = None
+        self.clock_pub = None
 
         # define default values
         if q_init is None:
@@ -93,10 +94,12 @@ class SimulatorWrapper:
         if ros:
             import rclpy
             from rclpy.node import Node
+            from rosgraph_msgs.msg import Clock
             from std_msgs.msg import String
             from rclpy.qos import QoSProfile, DurabilityPolicy
             rclpy.init()
             self.ros_node = Node(ros_node_name or 'simulator_wrapper_node')
+            self.clock_pub = self.ros_node.create_publisher(Clock, '/clock', 1)
             latching_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
             self.urdf_pub = self.ros_node.create_publisher(String, ros_robot_description_topic, latching_qos)
             self.srdf_pub = self.ros_node.create_publisher(String, ros_robot_description_topic + '_semantic', latching_qos)
@@ -214,6 +217,11 @@ class SimulatorWrapper:
         
         # save last sim time
         self.last_sim_time = self.data.time
+        if self.clock_pub is not None:
+            from builtin_interfaces.msg import Time
+            from rosgraph_msgs.msg import Clock
+            seconds, nanoseconds = divmod(round(self.data.time * 1e9), 1_000_000_000)
+            self.clock_pub.publish(Clock(clock=Time(sec=seconds, nanosec=nanoseconds)))
 
         # send state to bridge at specified decimation
         self.iter_counter += 1
