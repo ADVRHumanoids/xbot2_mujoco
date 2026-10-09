@@ -168,9 +168,12 @@ class MjXbot2Bridge:
 
     @staticmethod
     def _discover_joints(model: mujoco.MjModel) -> list:
-        joint_names = [model.joint(jnt).name for jnt in range(model.njnt)]
-        return [jn for jn in joint_names
-                if model.joint(jn).type[0] in (mujoco.mjtJoint.mjJNT_HINGE, mujoco.mjtJoint.mjJNT_SLIDE)]
+        # Tuple membership invokes enum.__eq__(numpy_scalar), which returns
+        # False in MuJoCo 3.15 even for matching values. Compare plain integers.
+        scalar_types = (int(mujoco.mjtJoint.mjJNT_HINGE),
+                        int(mujoco.mjtJoint.mjJNT_SLIDE))
+        return [model.joint(jnt).name for jnt in range(model.njnt)
+                if int(model.jnt_type[jnt]) in scalar_types]
 
     @staticmethod
     def _discover_imus(model: mujoco.MjModel) -> tuple:

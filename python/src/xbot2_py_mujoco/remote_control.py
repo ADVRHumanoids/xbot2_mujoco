@@ -461,8 +461,8 @@ class RemoteControlServer:
         limit = self._finite_number(request.get("limit"), "limit")
         if limit < 0.0:
             raise CommandError("invalid_parameter", "'limit' must be non-negative")
-        if any(self.model.jnt_type[joint_id] not in (
-            mujoco.mjtJoint.mjJNT_HINGE, mujoco.mjtJoint.mjJNT_SLIDE,
+        if any(int(self.model.jnt_type[joint_id]) not in (
+            int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE),
         ) for joint_id in joint_ids):
             raise CommandError("invalid_parameter", "Torque limits require hinge or slide joints")
         # Clamp the net generalized actuator force at the joint, after gearing
