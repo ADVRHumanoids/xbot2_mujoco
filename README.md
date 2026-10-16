@@ -9,6 +9,28 @@ The MuJoCo simulator interfaced with Xbot2. The design is based around two main 
    - manipulating the resulting XML with the custom `<reference>` and `<setattribute>` tags
  - The `MjXbot2Bridge`: connects the simulation to an instance of Xbot2 running in a separate executable; communication happens via a UNIX socket, and uses JSON for serialization
 
+## Velocity control with integral error
+
+For a joint controlled by velocity, use MuJoCo's built-in `intvelocity`
+actuator in the merged MJCF instead of a `position` actuator. Keep the actuator
+name equal to the joint name so the Python bridge can find it:
+
+```xml
+<actuator>
+  <intvelocity name="joint_name" joint="joint_name" kp="4" kv="2"
+               inheritrange="1" />
+</actuator>
+```
+
+The XBot command's `dq` is the velocity target, `d` is the proportional
+velocity gain, `k` is the integral gain, and `tau` is feedforward torque. The
+resulting joint torque is `tau + d*(dq - joint_velocity) +
+k*integral(dq - joint_velocity)`. MuJoCo keeps the integral state in actuator
+activation; the bridge initializes it to the current joint position on startup
+and after a respawn. `inheritrange="1"` clamps that state to the joint range to
+limit windup, so the joint must have a range. Position actuators retain the
+existing position/velocity control law.
+
 
 # Custom tags
 
@@ -69,7 +91,10 @@ Use this to assign MuJoCo attributes (e.g. `childclass`) to bodies that come fro
 ### `<q_init>`
 
 Declares the initial joint configuration.  Each `<joint name="..." value="..."/>` child sets `gen.q_init[name] = float(value)`.  The tag is removed entirely from the MJCF output (it is not a valid MuJoCo element).  
-`create_mj_model_data()` applies these values to `data.joint(name).qpos` and `data.actuator(name).ctrl` after creating the model.
+`create_mj_model_data()` applies these values to `data.joint(name).qpos`
+and the corresponding position actuator control after creating the model. For
+an `intvelocity` actuator, it initializes the actuator activation to the joint
+position and sets its velocity control to zero.
 
 **Input (merged via `merge_xml`):**
 ```xml

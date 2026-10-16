@@ -310,6 +310,12 @@ class SimulatorWrapper:
         for joint, q in self.q_init.items():
             try:
                 data.joint(joint).qpos = q
-                data.actuator(joint).ctrl = q
+                actuator = self.model.actuator(joint)
+                if actuator.dyntype[0] != mujoco.mjtDyn.mjDYN_INTEGRATOR:
+                    data.actuator(joint).ctrl = q
             except KeyError as e:
                 print(f"[Simulator] Warning: joint '{joint}' not found in model, cannot set initial position.")
+        reset_integrators = getattr(getattr(self, 'xbot2_bridge', None),
+                                    'reset_velocity_integrators', None)
+        if reset_integrators is not None:
+            reset_integrators()

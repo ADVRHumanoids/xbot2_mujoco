@@ -94,7 +94,12 @@ class MjcfGenerator:
         # set initial position
         for joint, q in self.q_init.items():
             data.joint(joint).qpos = q
-            data.actuator(joint).ctrl = q
+            actuator = model.actuator(joint)
+            if actuator.dyntype[0] == mujoco.mjtDyn.mjDYN_INTEGRATOR:
+                data.act[int(actuator.actadr[0])] = q
+                data.actuator(joint).ctrl = 0.0
+            else:
+                data.actuator(joint).ctrl = q
 
         return model, data
 

@@ -43,10 +43,16 @@ class MjXbot2Bridge:
         self.act_handles = [_or_none(self.data.actuator, jn) for jn in self.joint_names]
         self.model_act_handles = [_or_none(self.model.actuator, jn) for jn in self.joint_names]
 
-        # save last received command
-        self.qref = [float(a.ctrl[0]) for a in self.act_handles]
+        self.velocity_integral = [
+            a is not None and a.dyntype[0] == mujoco.mjtDyn.mjDYN_INTEGRATOR
+            for a in self.model_act_handles
+        ]
+
+        self.qref = [float(j.qpos[0]) if self.velocity_integral[i] else float(a.ctrl[0])
+                     for i, (j, a) in enumerate(zip(self.joint_handles, self.act_handles))]
         self.vref = [0.0] * len(self.joint_names)
         self.tauref = [0.0] * len(self.joint_names)
+        self.reset_velocity_integrators()
 
         # create bridge server
         self.bridge_server = BridgeServer(name, socket_path, self.joint_names, self.imu_names)
@@ -81,7 +87,8 @@ class MjXbot2Bridge:
             tau=[float(jh.qfrc_smooth[0]) for jh in self.joint_handles],
             k=[float(self.model_act_handles[i].gainprm[0]) for i in range(len(self.joint_names))],
             d=[float(-self.model_act_handles[i].biasprm[2]) for i in range(len(self.joint_names))],
-            qref=[float(a.ctrl[0]) for a in self.act_handles],
+            qref=[self.qref[i] if self.velocity_integral[i] else float(a.ctrl[0])
+                  for i, a in enumerate(self.act_handles)],
             vref=self.vref,
             tauref=self.tauref
         )
@@ -130,7 +137,7 @@ class MjXbot2Bridge:
         for i, act in enumerate(self.act_handles):
             if act is None:
                 continue
-            act.ctrl = joint_cmd.q[i]
+            act.ctrl = joint_cmd.dq[i] if self.velocity_integral[i] else joint_cmd.q[i]
 
         # apply v, tau, k and d as actuator model parameters 
         # see https://mujoco.readthedocs.io/en/stable/XMLreference.html#actuator-position
@@ -151,6 +158,16 @@ class MjXbot2Bridge:
 
         return True
     
+    def reset_velocity_integrators(self):
+        """Align integrated velocity targets with the current joint positions."""
+        for i, (joint, act, model_act, is_integral) in enumerate(zip(
+                self.joint_handles, self.act_handles, self.model_act_handles,
+                self.velocity_integral)):
+            if is_integral:
+                self.data.act[int(model_act.actadr[0])] = joint.qpos[0]
+                act.ctrl = 0.0
+                self.qref[i] = float(joint.qpos[0])
+
     def _get_imu_state(self, imu_name: str) -> ImuState:
         imu_ids = self.imu_map[imu_name]
         gyro_id = imu_ids['gyro_id']
