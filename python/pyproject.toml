@@ -20,6 +20,9 @@ dependencies = [
     "pyzmq",
 ]
 
+[project.scripts]
+mjctl = "xbot2_py_mujoco.mjctl:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7",

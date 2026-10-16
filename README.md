@@ -372,6 +372,61 @@ geometry and are limited by the scene's available geom capacity.
 
 # Remote control
 
+Install the Python package from the repository root to get the `mjctl` command
+(activate your Python environment first):
+
+```bash
+python -m pip install -e ./python
+mjctl --help
+mjctl wrench --help
+```
+
+Re-run the installation after updating an existing checkout to register the new
+entrypoint. The installed package also supports
+`python -m xbot2_py_mujoco.mjctl` with the same arguments.
+
+`mjctl` sends one command to a running simulator and prints the server's JSON
+reply. Start the simulator with remote control enabled as shown below, then run
+`mjctl` in another terminal. No ROS connection is needed by the client.
+
+| Command | Arguments | Effect |
+| --- | --- | --- |
+| `friction` | `BODY... --values SLIDING TORSIONAL ROLLING [--regex]` | Set friction on directly attached geoms. Sliding is dimensionless; torsional and rolling coefficients are in meters. All must be non-negative. |
+| `wrench` | `BODY --force X Y Z --torque X Y Z --duration SECONDS [--frame world\|body] [--regex]` | Apply force (N) and torque (Nm) at the COM for a positive duration in simulation time. Both vectors are required; use zeros where needed. |
+| `body` | `BODY... [--mass KG] [--com X Y Z] [--regex]` | Set positive total mass and/or COM in local meters. At least one option is required; rotational inertia stays unchanged. |
+| `payload` | `BODY --mass KG --position X Y Z [--regex]` | Attach a positive point mass at a local position in meters, replacing the previous payload relative to startup properties. |
+| `torque-limits` | `JOINT... --limit VALUE [--exact]` | Set a non-negative symmetric net actuator limit in Nm for hinges or N for slides. Zero disables output. Joint selectors are full-name regex by default. |
+| `actuator-delay` | `--seconds SEC` | Set the uniform XBot2 command delay in non-negative simulation seconds. Zero disables it. Pending commands keep their deadlines. |
+| `velocity-noise` | `JOINT... --stddev VALUE [--exact]` | Add independent Gaussian noise to joint velocity feedback sent to XBot2. Standard deviation is in rad/s for hinges and m/s for slides; zero disables it. Joint selectors are full-name regex by default. |
+| `restore` | None | Restore API-managed startup properties and actuator delay, clear velocity feedback noise, remove payloads, cancel wrenches, and clear all applied forces without resetting simulation state. |
+
+Body selectors use exact names by default; `--regex` enables Python regular
+expressions matched against the entire name. Quote shell patterns such as
+`'.*_foot'`. For `wrench` and `payload`, a pattern may select multiple bodies;
+each receives the same wrench or payload. Unmatched selectors or invalid values
+reject the request without mutation. Use model body/joint names, not geom or
+actuator names.
+
+Global options precede the command:
+
+```bash
+mjctl --endpoint tcp://127.0.0.1:5555 --timeout 10 restore
+```
+
+`--endpoint` defaults to `tcp://127.0.0.1:5555` and must target the enabled
+server. `--timeout` defaults to 5 wall-clock seconds per send/reply, independently
+of a wrench's simulation-time duration. A missing server or stalled simulation
+produces a diagnostic on stderr instead of waiting indefinitely. A timeout does
+not cancel a request already sent; it may have taken effect, so check the
+simulation before retrying (especially for additive wrenches).
+
+JSON replies go to stdout, including server error replies. Exit codes are **0**
+for success, **1** for server rejection, communication failure or an invalid
+reply, **2** for CLI usage errors, and **130** for interruption. Numeric property
+validation and name resolution are performed by the server; CLI timeout and
+wrench duration must be finite and positive. Every command has its own
+`--help`, with units, behavior and an example.
+
 The Python simulator can expose an optional ZeroMQ `REP` endpoint for changing
 contact properties and applying timed external wrenches. Enable it with:
 
@@ -395,11 +450,11 @@ or any selector with no matches reject the whole request before mutation.
 `apply_wrench` and `add_payload` accept either one `"body"` selector or a list of
 `"bodies"`; a regex can select multiple bodies, with the same force or payload
 applied independently to each match. Responses contain the resolved body names.
-The example client's `friction`, `body`, `payload`, and `wrench` commands expose
+`mjctl`'s `friction`, `body`, `payload`, and `wrench` commands expose
 regex selection through `--regex`, for example:
 
 ```bash
-python python/examples/remote_control_client.py friction '.*_foot' \
+mjctl friction '.*_foot' \
   --regex --values 0.05 0.0001 0.00001
 ```
 
@@ -439,10 +494,10 @@ Set `"frame": "body"` on an `apply_wrench` request to express both force and tor
 in the body's local axes. Their world directions are recomputed from the current
 body orientation every simulation step for the whole duration. The application
 point remains the body's center of mass. World-frame and body-frame wrenches can
-overlap and add together. The example client exposes this as `--frame body`:
+overlap and add together. `mjctl` exposes this as `--frame body`:
 
 ```bash
-python python/examples/remote_control_client.py wrench base_link \
+mjctl wrench base_link \
   --force 100 0 0 --torque 0 0 5 --duration 1.0 --frame body
 ```
 
@@ -483,10 +538,10 @@ preserved.
 }
 ```
 
-The example client supports the same operation:
+`mjctl` supports the same operation:
 
 ```bash
-python python/examples/remote_control_client.py payload base_link \
+mjctl payload base_link \
   --mass 5.0 --position 0.2 0.0 0.1
 ```
 
@@ -507,11 +562,14 @@ output at the selected joints. Free and ball joints are rejected.
 ```
 
 ```bash
-python python/examples/remote_control_client.py torque-limits '.*_knee' \
+mjctl torque-limits '.*_knee' \
   --limit 40
 ```
 
-Use `--exact` with `torque-limits` to select literal joint names. The limits take
+Use `--exact` with `torque-limits` or `velocity-noise` to select literal joint names.
+For example, `mjctl velocity-noise '.*_knee' --stddev 0.05` adds zero-mean
+noise to each selected velocity feedback sample. The simulator's true joint
+velocities and actuator calculations remain unchanged. The limits take
 effect on the next simulation step without resetting pose, velocity, controls,
 or time. Existing actuator force limits still apply and can further restrict
 output. These joint limits constrain actuator output, not external contact forces
@@ -520,7 +578,9 @@ or remotely applied wrenches.
 The `restore` command restores all contact, body, and joint torque-limit properties managed by this
 API to the values captured when the server started. It also cancels scheduled
 wrenches, removes added payloads (including their inertia changes), and clears
-both Cartesian and generalized applied-force arrays. It does
+both Cartesian and generalized applied-force arrays. It restores the startup
+actuator command delay and clears velocity feedback noise; queued commands keep
+their existing deadlines. It does
 not reset simulation position, velocity, control, or time.
 
 ```json
@@ -532,8 +592,9 @@ not reset simulation position, velocity, control, or time.
 
 Successful responses contain `{"ok": true, "result": ...}`. Invalid requests
 return `{"ok": false, "error": {"code": ..., "message": ...}}`; the optional
-request `id` is echoed in either case. A command-line example is available at
-[`python/examples/remote_control_client.py`](python/examples/remote_control_client.py).
+request `id` is echoed in either case. Use `mjctl` for the commands above; the legacy
+[`python/examples/remote_control_client.py`](python/examples/remote_control_client.py)
+script delegates to the same entrypoint.
 
 When the viewer is enabled, remote payloads appear as translucent amber spheres
 at their specified local positions, following the attached body. Sphere volume
