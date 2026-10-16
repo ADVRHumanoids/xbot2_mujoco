@@ -1,5 +1,7 @@
 
 import time
+import math
+from collections import deque
 import functools
 import random
 import threading
@@ -71,6 +73,8 @@ class SimulatorWrapper:
 
         if target_rtf is None:
             target_rtf = 1.0
+        if not math.isfinite(target_rtf) or target_rtf <= 0:
+            raise ValueError("target_rtf must be finite and positive")
 
         if spawn_locations is None:
             spawn_locations = [(0.0, 0.0, 0.0)]
@@ -81,13 +85,21 @@ class SimulatorWrapper:
         self.spawn_locations = [tuple(location) for location in spawn_locations]
         self._respawn_lock = threading.Lock()
         self._respawn_requested = False
+        # The viewer callback only changes control state, never MuJoCo data.
+        self._paused = False
+        self._advance_requests = deque()
+        self._advance_target = None
+        self._timing_reset_requested = False
+        self._pre_step_skipped = False
+        self._step_skipped = False
+        self.viewer_fps = viewer_fps
+        self.target_rtf = target_rtf
 
         # create viewer if requested
         if viewer:
             if viewer_key_callback is None:
                 viewer_key_callback = self._viewer_key_callback
             self.viewer : Handle = launch_passive(model, self.data, key_callback=viewer_key_callback)
-            self.viewer_fps = viewer_fps
         else:
             self.viewer : Handle = None
 
@@ -131,10 +143,10 @@ class SimulatorWrapper:
         # variables
         self.q_init = q_init
         self.time_start = time.perf_counter()
+        self._next_viewer_sync_wall = self.time_start
         self.send_state_decimation = send_state_decimation
         self.sync_interval = sync_interval
         self.rtf_print_interval = 1.0
-        self.target_rtf = target_rtf
         self.iter_counter = 0
         self.frames = 0
         self.last_sync_wall = self.time_start
@@ -147,17 +159,109 @@ class SimulatorWrapper:
         # running flag
         self.running = True
 
+    @property
+    def paused(self) -> bool:
+        """Whether continuous simulation updates are paused (including advances)."""
+        with self._respawn_lock:
+            return self._paused
+
+    def set_paused(self, paused: bool = True):
+        """Pause or resume; safe to call from a viewer callback or another thread."""
+        with self._respawn_lock:
+            if self._paused == paused:
+                return
+            self._paused = bool(paused)
+            self._advance_requests.clear()
+            self._advance_target = None
+            self._timing_reset_requested = True
+            if self._paused:
+                self._respawn_requested = False
+
+    def advance(self, duration_s: float = 0.1):
+        """Queue a positive simulation-time advance while paused; otherwise ignore it."""
+        if not math.isfinite(duration_s) or duration_s <= 0:
+            raise ValueError("duration_s must be finite and positive")
+        with self._respawn_lock:
+            if self._paused:
+                self._advance_requests.append(duration_s)
+
+    def set_target_rtf(self, target_rtf: float):
+        """Set a positive target RTF and rebase pacing on the simulation thread."""
+        if not math.isfinite(target_rtf) or target_rtf <= 0:
+            raise ValueError("target_rtf must be finite and positive")
+        with self._respawn_lock:
+            if self.target_rtf != target_rtf:
+                self.target_rtf = target_rtf
+                self._timing_reset_requested = True
+
     def _viewer_key_callback(self, key):
-        if key in (ord('r'), ord('R')):
+        if key == ord(' '):
+            self.set_paused(not self.paused)
+        elif key == 262:  # GLFW_KEY_RIGHT, as passed by MuJoCo's viewer
+            self.advance(duration_s=0.01666)  # ~1 frame at 60Hz
+        elif key in (ord('+'), ord('='), 334, ord('-'), 333):
+            # GLFW reports the main '+' key as EQUAL; 334/333 are keypad +/-.
+            delta = -0.1 if key in (ord('-'), 333) else 0.1
+            self.set_target_rtf(max(0.1, round(self.target_rtf + delta, 10)))
+            print(f"[Simulator] Target RTF: {self.target_rtf:g}")
+        elif key in (ord('r'), ord('R')):
             with self._respawn_lock:
-                self._respawn_requested = True
+                if not self._paused:
+                    self._respawn_requested = True
 
     def _handle_respawn_request(self):
         with self._respawn_lock:
-            if not self._respawn_requested:
+            if self._paused or not self._respawn_requested:
                 return
             self._respawn_requested = False
         self._respawn()
+
+    def _reset_timing(self):
+        """Rebase pacing on the simulation thread, excluding time spent idle."""
+        now = time.perf_counter()
+        self.time_start = now
+        self.frames = 0
+        self._next_viewer_sync_wall = now
+        self.last_sync_wall = self.last_print_wall = now
+        self.last_sync_sim = self.last_print_sim = self.data.time
+        self.sync_error_integral = 0.0
+
+    def _can_update(self, start_advance=False):
+        with self._respawn_lock:
+            if (self._paused and start_advance and self._advance_target is None
+                    and self._advance_requests):
+                self._advance_target = self.data.time + self._advance_requests.popleft()
+            enabled = not self._paused or self._advance_target is not None
+            reset_timing = enabled and self._timing_reset_requested
+            if reset_timing:
+                self._timing_reset_requested = False
+        if reset_timing:
+            self._reset_timing()
+        return enabled
+
+    def _sync_viewer(self, idle=False):
+        """Keep the viewer interactive even when no simulation updates are allowed."""
+        period = 1.0 / max(1, self.viewer_fps)
+        now = time.perf_counter()
+        if idle:
+            delay = max(0.0, self._next_viewer_sync_wall - now) if self.viewer else period
+            if delay:
+                time.sleep(delay)
+            now = time.perf_counter()
+        if self.viewer is None:
+            return
+        if not self.viewer.is_running():
+            self.running = False
+            return
+        if now >= self._next_viewer_sync_wall:
+            if self.remote_control is not None or self.terrain_scanner is not None:
+                with self.viewer.lock():
+                    self._update_visuals(self.viewer.user_scn)
+            self.viewer.sync(state_only=True)
+            self.frames += 1
+            self._next_viewer_sync_wall = now + period
+        if not self.viewer.is_running():
+            self.running = False
 
     def _respawn(self):
         if getattr(self, 'remote_control', None) is not None:
@@ -193,6 +297,9 @@ class SimulatorWrapper:
 
     @_catch_interrupt
     def pre_step(self):
+        self._pre_step_skipped = not self._can_update(start_advance=True)
+        if self._pre_step_skipped:
+            return
         self._handle_respawn_request()
         
         # set initial position if sim time is 0 (first step or after reset)
@@ -213,13 +320,21 @@ class SimulatorWrapper:
     
     @_catch_interrupt
     def step(self):
+        # If a key arrives between phases, wait for the next complete cycle so
+        # an advance cannot start with physics but without bridge receive.
+        self._step_skipped = self._pre_step_skipped or not self._can_update(start_advance=True)
+        if self._step_skipped:
+            return
 
         # step simulation
         mujoco.mj_step(self.model, self.data)
 
     @_catch_interrupt
     def post_step(self):
-        
+        if self._pre_step_skipped or self._step_skipped or not self._can_update():
+            self._sync_viewer(idle=True)
+            return
+
         # save last sim time
         self.last_sim_time = self.data.time
         if self.clock_pub is not None:
@@ -240,20 +355,7 @@ class SimulatorWrapper:
         if self.iter_counter % self.send_state_decimation == 0:
             self.xbot2_bridge.send_state()
 
-        # sync viewer at given fps
-        now = time.perf_counter()
-        wall_elapsed_time = now - self.time_start
-
-        if self.viewer is not None and self.frames < self.viewer_fps*wall_elapsed_time:
-            if self.remote_control is not None or self.terrain_scanner is not None:
-                with self.viewer.lock():
-                    self._update_visuals(self.viewer.user_scn)
-            self.viewer.sync(state_only=True)
-            self.frames += 1
-            
-        # exit if viewer window is closed
-        if self.viewer is not None and not self.viewer.is_running():
-            self.running = False
+        self._sync_viewer()
 
         # sync to target RTF at specified interval
         now = time.perf_counter()
@@ -291,6 +393,14 @@ class SimulatorWrapper:
             self.last_print_sim = self.data.time
             
             
+        # Finish an advance only after all normal post-step updates and pacing.
+        with self._respawn_lock:
+            if (self._advance_target is not None
+                    and self.data.time >= self._advance_target - 1e-12):
+                self._advance_target = None
+                if not self._advance_requests:
+                    self._timing_reset_requested = True
+
     def _update_visuals(self, scene: mujoco.MjvScene):
         """Rebuild all simulator overlays while holding the viewer lock."""
         scene.ngeom = 0

@@ -70,6 +70,7 @@ def test_respawn_key_moves_free_root():
     simulator.q_init = {}
     simulator._respawn_lock = __import__('threading').Lock()
     simulator._respawn_requested = False
+    simulator._paused = False
 
     simulator._viewer_key_callback(ord('r'))
     simulator._handle_respawn_request()

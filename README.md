@@ -60,6 +60,49 @@ The equivalent remote JSON request is
 `{"command": "set_actuator_delay", "delay": 0.01}`.
 
 
+## Viewer pause controls
+
+The default viewer key callback handles **Space** to pause/resume and **Right
+Arrow** to advance approximately 16.7 ms of simulation time while paused. Advances run the normal
+physics, bridge communication, remote-control processing, clock publication, and
+terrain scans, with existing pacing and decimation. Repeated presses queue
+additional advances. Full physics timesteps are used, so each advance may exceed
+the requested duration by less than one timestep.
+
+**+ / -** change the target real-time factor (RTF) in steps of 0.1, with a minimum
+of 0.1. The main `=` key (the unshifted `+` key) and keypad `+ / -` also work. The
+new target is printed, and pacing is rebased without accumulating timing error.
+These controls also work while paused, affecting subsequent advances or resume.
+For custom callbacks, call `set_target_rtf(value)` with a finite positive value.
+
+While paused without an advance, only viewer synchronization and window-close
+handling run. **R** respawn requests are ignored during pause, including advances;
+entering pause discards pending respawns. Resuming clears active and queued
+advances and restarts pacing without counting the idle pause.
+
+`SimulatorWrapper.paused` is a read-only property. Call `set_paused()` to pause,
+`set_paused(False)` to resume, or `advance(duration_s=0.1)` to queue a finite,
+positive simulation-time advance while paused. Calls to `advance` while running
+are ignored. These methods can also control headless simulations.
+
+Passing `viewer_key_callback` replaces the default callback completely; custom
+callbacks must implement these controls themselves, for example:
+
+```python
+def on_key(key):
+    if key == ord(' '):
+        sim.set_paused(not sim.paused)
+    elif key == 262:  # GLFW_KEY_RIGHT
+        sim.advance(duration_s=0.01666)
+    elif key in (ord('+'), ord('='), 334):
+        sim.set_target_rtf(round(sim.target_rtf + 0.1, 10))
+    elif key in (ord('-'), 333):
+        sim.set_target_rtf(max(0.1, round(sim.target_rtf - 0.1, 10)))
+```
+
+The callback records requests; physics and timing changes run on the simulation
+thread. A simulation phase already executing when pause is requested may finish.
+
 
 # Custom tags
 
