@@ -48,6 +48,10 @@ class MjXbot2Bridge:
         # discover joints and imus from model
         self.joint_names = self._discover_joints(model)
         self.imu_map, self.imu_names = self._discover_imus(model)
+        self._joint_name_to_index = {name: i for i, name in enumerate(self.joint_names)}
+        self.velocity_feedback_noise_std = np.zeros(len(self.joint_names))
+        self._noise_rng = np.random.default_rng()
+
         # helper to get joint/actuator handles, returns None if not found
         def _or_none(fn, *args):
             try:
@@ -98,9 +102,16 @@ class MjXbot2Bridge:
 
     def send_state(self):
 
+        velocity = np.array([float(jh.qvel[0]) for jh in self.joint_handles])
+        noisy = self.velocity_feedback_noise_std > 0
+        if noisy.any():
+            velocity[noisy] += self._noise_rng.normal(
+                0.0, self.velocity_feedback_noise_std[noisy]
+            )
+
         joint_state = JointState(
             q=[float(jh.qpos[0]) for jh in self.joint_handles],
-            dq=[float(jh.qvel[0]) for jh in self.joint_handles],
+            dq=velocity.tolist(),
             tau=[float(jh.qfrc_smooth[0]) for jh in self.joint_handles],
             k=[float(self.model_act_handles[i].gainprm[0]) for i in range(len(self.joint_names))],
             d=[float(-self.model_act_handles[i].biasprm[2]) for i in range(len(self.joint_names))],
@@ -167,6 +178,17 @@ class MjXbot2Bridge:
             raise ValueError("actuator delay must be finite and non-negative")
         self.actuator_delay_s = seconds
         return seconds
+
+    def set_velocity_feedback_noise(self, joint_names: list[str], stddev: float) -> None:
+        """Set per-joint Gaussian velocity feedback noise in joint units/s."""
+        if isinstance(stddev, bool) or not isinstance(stddev, (int, float)) \
+                or not math.isfinite(stddev) or stddev < 0:
+            raise ValueError("velocity feedback noise stddev must be finite and non-negative")
+        indices = [self._joint_name_to_index[name] for name in joint_names]
+        self.velocity_feedback_noise_std[indices] = stddev
+
+    def reset_velocity_feedback_noise(self) -> None:
+        self.velocity_feedback_noise_std[:] = 0.0
 
     def reset_velocity_integrators(self):
         """Align integrated velocity targets with the current joint positions."""

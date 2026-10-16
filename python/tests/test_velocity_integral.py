@@ -69,3 +69,15 @@ def test_simulator_initial_position_resets_integrator(bridge):
     assert bridge.data.act[0] == pytest.approx(-0.2)
     bridge.send_state()
     assert bridge.bridge_server.states[-1].joints.qref == [-0.2]
+
+
+def test_velocity_feedback_noise_only_changes_sent_state(bridge):
+    bridge.data.joint('hinge').qvel[0] = 0.3
+    bridge._noise_rng = SimpleNamespace(normal=lambda mean, scale: [0.2])
+    bridge.set_velocity_feedback_noise(['hinge'], 0.1)
+    bridge.send_state()
+    assert bridge.bridge_server.states[-1].joints.dq == pytest.approx([0.5])
+    assert bridge.data.joint('hinge').qvel[0] == pytest.approx(0.3)
+    bridge.reset_velocity_feedback_noise()
+    bridge.send_state()
+    assert bridge.bridge_server.states[-1].joints.dq == pytest.approx([0.3])

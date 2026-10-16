@@ -692,6 +692,50 @@ def test_joint_limit_exact_selection_and_slide_force(actuated_server):
     assert actuated_server.data.qfrc_actuator[dof_id] == pytest.approx(2.0)
 
 
+def test_velocity_noise_regex_update_and_restore(actuated_server):
+    settings = {}
+    bridge = SimpleNamespace(initial_actuator_delay_s=0.0)
+    bridge.set_actuator_delay = lambda value: None
+    bridge.set_velocity_feedback_noise = lambda names, stddev: settings.update(
+        {name: stddev for name in names})
+    bridge.reset_velocity_feedback_noise = settings.clear
+    actuated_server.actuator_bridge = bridge
+
+    result = actuated_server.handle_request({
+        "command": "set_velocity_feedback_noise",
+        "joints": [".*_knee", "left_knee"], "stddev": 0.05,
+    })
+    assert result == {"joints": ["left_knee", "right_knee"], "stddev": 0.05}
+    assert settings == {"left_knee": 0.05, "right_knee": 0.05}
+    actuated_server.handle_request({
+        "command": "set_velocity_feedback_noise", "joints": ["slider"],
+        "stddev": 0.0, "regex": False,
+    })
+    assert settings["slider"] == 0.0
+    actuated_server.handle_request({"command": "restore"})
+    assert settings == {}
+
+
+@pytest.mark.parametrize("overrides", [
+    {"joints": ["left_knee", "missing"]}, {"joints": ["["]},
+    {"joints": ["floating"]}, {"joints": []},
+    {"stddev": -1.0}, {"stddev": float("nan")},
+    {"stddev": float("inf")}, {"stddev": True},
+    {"regex": "true"},
+])
+def test_velocity_noise_invalid_request_is_atomic(actuated_server, overrides):
+    calls = []
+    actuated_server.actuator_bridge = SimpleNamespace(
+        set_velocity_feedback_noise=lambda *args: calls.append(args),
+    )
+    with pytest.raises(CommandError):
+        actuated_server.handle_request({
+            "command": "set_velocity_feedback_noise", "joints": [".*_knee"],
+            "stddev": 0.05, **overrides,
+        })
+    assert calls == []
+
+
 def test_contact_regex_expands_and_deduplicates_bodies(remote_server):
     result = remote_server.handle_request({
         "command": "set_contact_parameters", "bodies": ["box|child", "box"],

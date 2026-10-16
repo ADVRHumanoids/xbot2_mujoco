@@ -170,6 +170,8 @@ class RemoteControlServer:
             return self._set_joint_torque_limits(request)
         if command == "set_actuator_delay":
             return self._set_actuator_delay(request)
+        if command == "set_velocity_feedback_noise":
+            return self._set_velocity_feedback_noise(request)
         if command == "restore":
             return self._restore()
         raise CommandError("unknown_command", f"Unknown command: {command!r}")
@@ -397,6 +399,9 @@ class RemoteControlServer:
         if self.actuator_bridge is not None:
             self.actuator_bridge.set_actuator_delay(
                 self.actuator_bridge.initial_actuator_delay_s)
+            reset_noise = getattr(self.actuator_bridge, "reset_velocity_feedback_noise", None)
+            if reset_noise is not None:
+                reset_noise()
         return {
             "restored": True,
             "cleared_wrenches": active_wrenches,
@@ -486,6 +491,22 @@ class RemoteControlServer:
             raise CommandError("unavailable", "Actuator delay control is unavailable")
         self.actuator_bridge.set_actuator_delay(delay)
         return {"delay": delay}
+
+    def _set_velocity_feedback_noise(self, request: dict[str, Any]) -> dict[str, Any]:
+        names, joint_ids = self._resolve_names(
+            request.get("joints"), "joint", request.get("regex", True),
+        )
+        stddev = self._finite_number(request.get("stddev"), "stddev")
+        if stddev < 0:
+            raise CommandError("invalid_parameter", "'stddev' must be non-negative")
+        if any(self.model.jnt_type[joint_id] not in (
+            mujoco.mjtJoint.mjJNT_HINGE, mujoco.mjtJoint.mjJNT_SLIDE,
+        ) for joint_id in joint_ids):
+            raise CommandError("invalid_parameter", "Velocity noise requires hinge or slide joints")
+        if self.actuator_bridge is None:
+            raise CommandError("unavailable", "Velocity feedback noise control is unavailable")
+        self.actuator_bridge.set_velocity_feedback_noise(names, stddev)
+        return {"joints": names, "stddev": stddev}
 
     def _resolve_bodies(
         self, request: dict[str, Any], single: bool = False,
