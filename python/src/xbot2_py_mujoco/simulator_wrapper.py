@@ -419,6 +419,7 @@ class SimulatorWrapper:
             self.remote_control.close()
         if self.viewer is not None:
             self.viewer.close()
+        self.xbot2_bridge.close()
 
 
     def _set_initial_position(self, data: mujoco.MjData):

@@ -88,3 +88,5 @@ def test_xbot2_bridge():
     for jn in joint_names:
         assert abs(qref_after[jn] - qref_new[jn]) < 1e-3, f"qref for joint {jn} is not close to new position reference: {qref_after[jn]} vs {qref_new[jn]}"
 
+    sim.close()
+

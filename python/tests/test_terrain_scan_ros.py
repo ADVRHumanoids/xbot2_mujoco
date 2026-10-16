@@ -97,7 +97,7 @@ def test_simulator_publishes_new_scans_only_when_ros_enabled(monkeypatch, ros, e
     monkeypatch.setattr(rclpy.node, 'Node', lambda *args:
                         SimpleNamespace(create_publisher=create_publisher))
     monkeypatch.setattr(simulator_wrapper, 'MjXbot2Bridge', lambda **kwargs:
-                        SimpleNamespace(send_state=lambda: None))
+                        SimpleNamespace(send_state=lambda: None, close=lambda: None))
     model, _ = scene()
     scanner = TerrainScanner(model, 'pelvis', shape=(3, 2)) if enabled else None
     sim = simulator_wrapper.SimulatorWrapper(

@@ -124,7 +124,7 @@ def test_simulator_updates_scan_at_configured_interval(monkeypatch):
     from xbot2_py_mujoco import simulator_wrapper
 
     monkeypatch.setattr(simulator_wrapper, "MjXbot2Bridge", lambda **kwargs:
-                        SimpleNamespace(send_state=lambda: None))
+                        SimpleNamespace(send_state=lambda: None, close=lambda: None))
     model, data = make_scene('<worldbody><geom type="plane" size="10 10 .1"/></worldbody>')
     scanner = TerrainScanner(model, "robot", shape=(1, 1))
     sim = simulator_wrapper.SimulatorWrapper(

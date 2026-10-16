@@ -243,6 +243,17 @@ class MjXbot2Bridge:
 
         return True
 
+    def close(self):
+        """Release bridge and diagnostics transports before interpreter shutdown."""
+        if self._diag_pub is not None:
+            close = getattr(self._diag_pub, 'close', None)
+            if close is not None:
+                close()
+            self._diag_pub = None
+        if self.bridge_server is not None:
+            self.bridge_server.close()
+            self.bridge_server = None
+
     def _get_imu_state(self, imu_name: str) -> ImuState:
         imu_ids = self.imu_map[imu_name]
         gyro_id = imu_ids['gyro_id']

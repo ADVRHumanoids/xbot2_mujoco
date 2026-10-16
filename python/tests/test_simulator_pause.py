@@ -52,7 +52,7 @@ def make_sim(monkeypatch):
             <geom type="box" size=".1 .1 .1" group="3"/>
           </body></worldbody></mujoco>''')
         model.opt.timestep = timestep
-        bridge = SimpleNamespace(receive=Mock(), send_state=Mock())
+        bridge = SimpleNamespace(receive=Mock(), send_state=Mock(), close=Mock())
         monkeypatch.setattr(wrapper, 'MjXbot2Bridge', lambda **kwargs: bridge)
         fake_viewer = Viewer()
         keys = []
