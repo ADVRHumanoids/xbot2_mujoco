@@ -30,6 +30,7 @@ class SimulatorWrapper:
                  target_rtf: float = None,
                  socket_path: str = None,
                  remote_control_endpoint: str = None,
+                 actuator_delay_s: float = 0.0,
                  spawn_locations: list[tuple[float, float, float]] = None,
                  terrain_scanner: TerrainScanner = None,
                  terrain_scan_decimation: int = 100,
@@ -117,9 +118,13 @@ class SimulatorWrapper:
                 )
 
         # create xbot2 bridge server
-        self.xbot2_bridge = MjXbot2Bridge(name='mj_simulator', model=self.model, data=self.data, socket_path=socket_path)
+        self.xbot2_bridge = MjXbot2Bridge(
+            name='mj_simulator', model=self.model, data=self.data,
+            socket_path=socket_path, actuator_delay_s=actuator_delay_s,
+        )
         self.remote_control = (
-            RemoteControlServer(self.model, self.data, remote_control_endpoint)
+            RemoteControlServer(self.model, self.data, remote_control_endpoint,
+                                actuator_bridge=self.xbot2_bridge)
             if remote_control_endpoint else None
         )
 

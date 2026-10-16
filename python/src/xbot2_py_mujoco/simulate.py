@@ -24,6 +24,13 @@ def _positive_float(value):
     return number
 
 
+def _nonnegative_float(value):
+    number = float(value)
+    if not math.isfinite(number) or number < 0:
+        raise argparse.ArgumentTypeError('Must be a non-negative finite number')
+    return number
+
+
 class _AppendXmlMerge(argparse.Action):
 
     def __call__(self, parser, namespace, values, option_string=None):
@@ -65,6 +72,8 @@ def parse_args(argv=None):
     s.add_argument('--socket-path',           metavar='PATH', help='Unix socket path for xbot2 bridge')
     s.add_argument('--remote-control-endpoint', metavar='ENDPOINT',
                    help='Enable the ZeroMQ/JSON control server (for example tcp://127.0.0.1:5555)')
+    s.add_argument('--actuator-delay', type=_nonnegative_float, default=0.0, metavar='SEC',
+                   help='Delay XBot2 actuator commands by simulation seconds (default: 0)')
     s.add_argument('--spawn-file',            metavar='PATH', help='YAML file with spawn locations')
     s.add_argument('--detect-spawn-locations', action='store_true',
                    help='Load spawn_locations.yaml beside a merged XML file')
@@ -193,6 +202,7 @@ def main():
         target_rtf=args.target_rtf,
         socket_path=args.socket_path,
         remote_control_endpoint=args.remote_control_endpoint,
+        actuator_delay_s=args.actuator_delay,
         spawn_locations=spawn_locations,
         terrain_scanner=terrain_scanner,
         terrain_scan_decimation=args.terrain_scan_decimation,

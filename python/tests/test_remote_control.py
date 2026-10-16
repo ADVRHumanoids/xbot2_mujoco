@@ -1,5 +1,6 @@
 import json
 import uuid
+from types import SimpleNamespace
 
 import mujoco
 import numpy as np
@@ -7,6 +8,29 @@ import pytest
 import zmq
 
 from xbot2_py_mujoco.remote_control import CommandError, RemoteControlServer
+
+
+def test_actuator_delay_remote_control_and_restore(remote_server):
+    bridge = SimpleNamespace(actuator_delay_s=0.03, initial_actuator_delay_s=0.03)
+    bridge.set_actuator_delay = lambda value: setattr(bridge, 'actuator_delay_s', value)
+    remote_server.actuator_bridge = bridge
+
+    assert remote_server.handle_request({
+        'command': 'set_actuator_delay', 'delay': 0.07,
+    }) == {'delay': 0.07}
+    assert bridge.actuator_delay_s == 0.07
+    remote_server.handle_request({'command': 'restore'})
+    assert bridge.actuator_delay_s == 0.03
+
+
+@pytest.mark.parametrize('value', [-1, float('nan'), float('inf'), True, '0.1', None])
+def test_actuator_delay_remote_rejects_invalid_values(remote_server, value):
+    bridge = SimpleNamespace(actuator_delay_s=0.03, initial_actuator_delay_s=0.03)
+    remote_server.actuator_bridge = bridge
+    with pytest.raises(CommandError) as error:
+        remote_server.handle_request({'command': 'set_actuator_delay', 'delay': value})
+    assert error.value.code == 'invalid_parameter'
+    assert bridge.actuator_delay_s == 0.03
 
 
 @pytest.fixture

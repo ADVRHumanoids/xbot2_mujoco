@@ -31,6 +31,35 @@ and after a respawn. `inheritrange="1"` clamps that state to the joint range to
 limit windup, so the joint must have a range. Position actuators retain the
 existing position/velocity control law.
 
+## Python actuator command delay
+
+The Python simulator can delay complete XBot2 commands (position, velocity,
+torque, and gains) by a fixed amount of **simulation time**:
+
+```bash
+python -m xbot2_py_mujoco.simulate ... --actuator-delay 0.02
+```
+
+`SimulatorWrapper(actuator_delay_s=0.02)` provides the same setting in Python.
+The default is zero seconds. Until the first delayed command becomes due, the
+model's initial actuator controls and gains remain in effect. At each physics
+step, the newest due command is applied; superseded commands are skipped.
+Pausing simulation also pauses the delay clock. The setting delays incoming
+commands, not the physical actuator force response.
+
+With `--remote-control-endpoint` enabled, change the delay while running:
+
+```bash
+mjctl actuator-delay --seconds 0.01
+```
+
+The new value applies to subsequently received commands. Commands already
+waiting retain their deadlines. `mjctl restore` resets the value to the
+startup setting, also leaving existing deadlines intact.
+The equivalent remote JSON request is
+`{"command": "set_actuator_delay", "delay": 0.01}`.
+
+
 
 # Custom tags
 

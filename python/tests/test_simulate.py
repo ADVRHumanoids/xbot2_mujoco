@@ -25,6 +25,14 @@ def test_parse_args_preserves_xml_merge_order():
     ]
 
 
+def test_actuator_delay_cli():
+    assert parse_args([]).actuator_delay == 0.0
+    assert parse_args(['--actuator-delay', '0.025']).actuator_delay == 0.025
+    for value in ('-1', 'nan', 'inf'):
+        with pytest.raises(SystemExit):
+            parse_args(['--actuator-delay', value])
+
+
 def test_load_spawn_locations(tmp_path):
     spawn_file = tmp_path / 'spawn.yaml'
     spawn_file.write_text('spawn_locations:\n  - [1, 2, 3]\n  - [4, 5, 6]\n')
@@ -74,7 +82,8 @@ def test_main_wires_terrain_scan_options(monkeypatch, enabled):
     from types import SimpleNamespace
     from xbot2_py_mujoco import simulate
 
-    argv = ['--urdf', 'robot.urdf', '--headless', '--disable-ros']
+    argv = ['--urdf', 'robot.urdf', '--headless', '--disable-ros',
+            '--actuator-delay', '0.025']
     if enabled:
         argv += [
             '--terrain-scan-body', 'base', '--terrain-scan-shape', '3', '2',
@@ -108,6 +117,7 @@ def test_main_wires_terrain_scan_options(monkeypatch, enabled):
     simulate.main()
     assert closed == [True]
     assert captured['viewer'] is False
+    assert captured['actuator_delay_s'] == 0.025
     if enabled:
         scanner = captured['terrain_scanner']
         scan = scanner.scan(mujoco.MjData(captured['model']))

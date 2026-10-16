@@ -1,7 +1,20 @@
 from xbot2_py_bridge.bridge_server import BridgeServer, RobotCommand, JointCommand, RobotState, JointState, ImuState
+from collections import deque
+from dataclasses import dataclass
+import math
 import mujoco
 import numpy as np
 import time, struct
+
+
+@dataclass(frozen=True)
+class _PendingCommand:
+    deadline: float
+    q: tuple[float, ...]
+    dq: tuple[float, ...]
+    tau: tuple[float, ...]
+    k: tuple[float, ...]
+    d: tuple[float, ...]
 
 try:
     from pyxbot2_diagnostics.stats_accumulator import StatAccumulator
@@ -21,7 +34,12 @@ except ImportError:
 
 class MjXbot2Bridge:
 
-    def __init__(self, name: str, model: mujoco.MjModel, data: mujoco.MjData, socket_path: str = None, ):
+    def __init__(self, name: str, model: mujoco.MjModel, data: mujoco.MjData,
+                 socket_path: str = None, actuator_delay_s: float = 0.0):
+
+        self.set_actuator_delay(actuator_delay_s)
+        self.initial_actuator_delay_s = self.actuator_delay_s
+        self._pending_commands = deque()
 
         # save model and data
         self.model = model
@@ -30,7 +48,6 @@ class MjXbot2Bridge:
         # discover joints and imus from model
         self.joint_names = self._discover_joints(model)
         self.imu_map, self.imu_names = self._discover_imus(model)
-
         # helper to get joint/actuator handles, returns None if not found
         def _or_none(fn, *args):
             try:
@@ -42,12 +59,12 @@ class MjXbot2Bridge:
         self.joint_handles = [self.data.joint(jn) for jn in self.joint_names]
         self.act_handles = [_or_none(self.data.actuator, jn) for jn in self.joint_names]
         self.model_act_handles = [_or_none(self.model.actuator, jn) for jn in self.joint_names]
-
         self.velocity_integral = [
             a is not None and a.dyntype[0] == mujoco.mjtDyn.mjDYN_INTEGRATOR
             for a in self.model_act_handles
         ]
 
+        # save last received command
         self.qref = [float(j.qpos[0]) if self.velocity_integral[i] else float(a.ctrl[0])
                      for i, (j, a) in enumerate(zip(self.joint_handles, self.act_handles))]
         self.vref = [0.0] * len(self.joint_names)
@@ -106,6 +123,7 @@ class MjXbot2Bridge:
         cmd = self.bridge_server.receive()
 
         if not cmd:
+            self.apply_due_commands()
             return False
 
         if isinstance(cmd, bool):
@@ -129,35 +147,27 @@ class MjXbot2Bridge:
                 self._diag_pub.publish_stats('rtt', self._rtt_acc)
 
 
-        self.qref = joint_cmd.q
-        self.vref = joint_cmd.dq
-        self.tauref = joint_cmd.tau
-        
-        # apply qref as actuator's ctrl (if exists)
-        for i, act in enumerate(self.act_handles):
-            if act is None:
-                continue
-            act.ctrl = joint_cmd.dq[i] if self.velocity_integral[i] else joint_cmd.q[i]
-
-        # apply v, tau, k and d as actuator model parameters 
-        # see https://mujoco.readthedocs.io/en/stable/XMLreference.html#actuator-position
-        # we want to achieve tau = tau_ff +k*(qref - q) + d*(vref - dq) => 
-        #   biasprm[0] = d*dq + tau, gainprm[0] = k, biasprm[1] = -k, biasprm[2] = -d
-        for i, model_act in enumerate(self.model_act_handles):
-            if model_act is None:
-                continue
-            dq = joint_cmd.dq[i]
-            tau = joint_cmd.tau[i]
-            k = joint_cmd.k[i]
-            d = joint_cmd.d[i]
-
-            model_act.biasprm[0] = d*dq + tau  # feedforward 
-            model_act.biasprm[1] = -k 
-            model_act.biasprm[2] = -d
-            model_act.gainprm[0] = k
-
+        # Copy every field: shared-memory arrays are overwritten by later receives.
+        self._pending_commands.append(_PendingCommand(
+            deadline=float(self.data.time) + self.actuator_delay_s,
+            q=tuple(float(value) for value in joint_cmd.q),
+            dq=tuple(float(value) for value in joint_cmd.dq),
+            tau=tuple(float(value) for value in joint_cmd.tau),
+            k=tuple(float(value) for value in joint_cmd.k),
+            d=tuple(float(value) for value in joint_cmd.d),
+        ))
+        self.apply_due_commands()
         return True
-    
+
+    def set_actuator_delay(self, seconds: float) -> float:
+        if isinstance(seconds, bool) or not isinstance(seconds, (int, float)):
+            raise ValueError("actuator delay must be finite and non-negative")
+        seconds = float(seconds)
+        if not math.isfinite(seconds) or seconds < 0:
+            raise ValueError("actuator delay must be finite and non-negative")
+        self.actuator_delay_s = seconds
+        return seconds
+
     def reset_velocity_integrators(self):
         """Align integrated velocity targets with the current joint positions."""
         for i, (joint, act, model_act, is_integral) in enumerate(zip(
@@ -167,6 +177,49 @@ class MjXbot2Bridge:
                 self.data.act[int(model_act.actadr[0])] = joint.qpos[0]
                 act.ctrl = 0.0
                 self.qref[i] = float(joint.qpos[0])
+
+    def apply_due_commands(self) -> bool:
+        # Deadlines can be out of order after a live delay change. Never apply
+        # an older command after a newer one has already reached the actuators.
+        newest_due = None
+        for index, command in enumerate(self._pending_commands):
+            if command.deadline <= float(self.data.time) + 1e-12:
+                newest_due = index
+        if newest_due is None:
+            return False
+        command = self._pending_commands[newest_due]
+        for _ in range(newest_due + 1):
+            self._pending_commands.popleft()
+
+        self.qref = list(command.q)
+        self.vref = command.dq
+        self.tauref = command.tau
+        
+        # A position actuator takes qref; intvelocity integrates the velocity
+        # reference internally, so its control is vref.
+        for i, act in enumerate(self.act_handles):
+            if act is None:
+                continue
+            act.ctrl = command.dq[i] if self.velocity_integral[i] else command.q[i]
+
+        # Position: tau = tau_ff + k*(qref-q) + d*(vref-v).
+        # Intvelocity: tau = tau_ff + k*integral(vref-v) + d*(vref-v),
+        # provided its activation was initialized to the joint position.
+        # Both use the same affine gain/bias parameters; only ctrl differs.
+        for i, model_act in enumerate(self.model_act_handles):
+            if model_act is None:
+                continue
+            dq = command.dq[i]
+            tau = command.tau[i]
+            k = command.k[i]
+            d = command.d[i]
+
+            model_act.biasprm[0] = d*dq + tau  # feedforward 
+            model_act.biasprm[1] = -k 
+            model_act.biasprm[2] = -d
+            model_act.gainprm[0] = k
+
+        return True
 
     def _get_imu_state(self, imu_name: str) -> ImuState:
         imu_ids = self.imu_map[imu_name]

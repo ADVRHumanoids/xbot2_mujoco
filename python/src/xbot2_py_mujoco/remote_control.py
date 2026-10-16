@@ -72,6 +72,7 @@ class RemoteControlServer:
         data: mujoco.MjData,
         endpoint: str,
         max_requests_per_step: int = 16,
+        actuator_bridge: Any = None,
     ):
         if not endpoint:
             raise ValueError("Remote-control endpoint must not be empty")
@@ -82,6 +83,7 @@ class RemoteControlServer:
         self.data = data
         self._constant_data: mujoco.MjData | None = None
         self.max_requests_per_step = max_requests_per_step
+        self.actuator_bridge = actuator_bridge
         self._active_wrenches: list[_ActiveWrench] = []
         self._payloads: dict[int, _PointPayload] = {}
         self._managed_body_ids: set[int] = set()
@@ -166,6 +168,8 @@ class RemoteControlServer:
             return self._schedule_wrench(request)
         if command == "set_joint_torque_limits":
             return self._set_joint_torque_limits(request)
+        if command == "set_actuator_delay":
+            return self._set_actuator_delay(request)
         if command == "restore":
             return self._restore()
         raise CommandError("unknown_command", f"Unknown command: {command!r}")
@@ -390,6 +394,9 @@ class RemoteControlServer:
         self._active_wrenches.clear()
         self._managed_body_ids.clear()
         self._payloads.clear()
+        if self.actuator_bridge is not None:
+            self.actuator_bridge.set_actuator_delay(
+                self.actuator_bridge.initial_actuator_delay_s)
         return {
             "restored": True,
             "cleared_wrenches": active_wrenches,
@@ -470,6 +477,15 @@ class RemoteControlServer:
         self.model.jnt_actfrcrange[joint_ids] = [-limit, limit]
         self.model.jnt_actfrclimited[joint_ids] = True
         return {"joints": names, "limit": limit}
+
+    def _set_actuator_delay(self, request: dict[str, Any]) -> dict[str, Any]:
+        delay = self._finite_number(request.get("delay"), "delay")
+        if delay < 0:
+            raise CommandError("invalid_parameter", "'delay' must be non-negative")
+        if self.actuator_bridge is None:
+            raise CommandError("unavailable", "Actuator delay control is unavailable")
+        self.actuator_bridge.set_actuator_delay(delay)
+        return {"delay": delay}
 
     def _resolve_bodies(
         self, request: dict[str, Any], single: bool = False,
