@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 import argparse
-import copy, hashlib, json, pickle, warnings
+import copy, hashlib, json, math, pickle, warnings
 import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -32,6 +32,31 @@ class MeshPyramidStairsTerrainCfg(SubTerrainBaseCfg):
 @dataclass
 class MeshInvertedPyramidStairsTerrainCfg(MeshPyramidStairsTerrainCfg):
     pass
+
+
+@dataclass
+class MeshOpenPyramidStairsTerrainCfg(SubTerrainBaseCfg):
+    """Thin pyramid treads with open risers; dimensions are in meters.
+
+    ``step_width`` is the horizontal advance between steps. ``tread_overlap``
+    extends each upper tread over its lower neighbor. Step heights denote
+    walking-surface tops, and ``platform_width`` is the minimum landing width.
+    """
+
+    step_height_range: tuple[float, float] = (0.05, 0.2)
+    step_width: float = 0.3
+    platform_width: float = 1.0
+    border_width: float = 0.0
+    tread_thickness: float = 0.02
+    tread_overlap: float = 0.0
+    inverted: bool = False
+
+
+@dataclass
+class MeshOpenInvertedPyramidStairsTerrainCfg(MeshOpenPyramidStairsTerrainCfg):
+    """Open pyramid treads descending toward the central landing."""
+
+    inverted: bool = True
 
 
 @dataclass
@@ -170,6 +195,8 @@ class TerrainGenerator:
         if not 0 <= c.difficulty_range[0] <= c.difficulty_range[1] <= 1:
             raise ValueError("difficulty_range must lie in [0, 1]")
         for n, x in c.sub_terrains.items():
+            if isinstance(x, MeshOpenPyramidStairsTerrainCfg):
+                self._validate_open_stairs(n, x)
             if isinstance(x, MeshPyramidStairsTerrainCfg) and (
                 x.step_width <= 0
                 or x.platform_width + 2 * x.step_width
@@ -188,6 +215,42 @@ class TerrainGenerator:
                 < c.horizontal_scale
             ):
                 raise ValueError(f"{n}: invalid noise sampling")
+
+    def _validate_open_stairs(self, name, c):
+        if any(not math.isfinite(v) or v <= 0 for v in self.cfg.size):
+            raise ValueError(f"{name}: size must contain finite positive dimensions")
+        heights = c.step_height_range
+        if (
+            len(heights) != 2
+            or any(not math.isfinite(v) or v <= 0 for v in heights)
+            or heights[0] > heights[1]
+        ):
+            raise ValueError(
+                f"{name}: step_height_range must contain ordered finite positive heights"
+            )
+        for field_name in ("step_width", "platform_width", "tread_thickness"):
+            value = getattr(c, field_name)
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError(f"{name}: {field_name} must be finite and positive")
+        if not math.isfinite(c.border_width) or c.border_width < 0:
+            raise ValueError(f"{name}: border_width must be finite and nonnegative")
+        if c.tread_thickness >= heights[0]:
+            raise ValueError(
+                f"{name}: tread_thickness must be smaller than the minimum step height"
+            )
+        if not math.isfinite(c.tread_overlap) or not 0 <= c.tread_overlap < c.step_width:
+            raise ValueError(f"{name}: tread_overlap must satisfy 0 <= tread_overlap < step_width")
+        inner_size = np.asarray(self.cfg.size) - 2 * c.border_width
+        num_steps = self._open_stairs_step_count(c)
+        if num_steps < 1:
+            raise ValueError(f"{name}: stairs do not fit a step and the central landing")
+        if c.inverted and min(inner_size - 2 * num_steps * c.step_width) <= 2 * c.tread_overlap:
+            raise ValueError(f"{name}: tread_overlap must leave a positive opening above the central landing")
+
+    def _open_stairs_step_count(self, c):
+        available = (min(self.cfg.size) - 2 * c.border_width - c.platform_width) / (2 * c.step_width)
+        # Match the reference's tolerance for exact fits rounded below an integer.
+        return math.floor(available + 1e-9)
 
     def _key(self):
         d = asdict(self.cfg)
@@ -287,6 +350,8 @@ class TerrainGenerator:
 
     def _patch(self, n, c, d):
         lerp = lambda a: a[0] + d * (a[1] - a[0])
+        if isinstance(c, MeshOpenPyramidStairsTerrainCfg):
+            return self._open_stairs_patch(n, c, d)
         if isinstance(c, MeshPyramidStairsTerrainCfg):
             inv = isinstance(c, MeshInvertedPyramidStairsTerrainCfg)
             sx, sy = self.cfg.size
@@ -387,6 +452,58 @@ class TerrainGenerator:
                 | (abs(y)[None, :] > self.cfg.size[1] / 2 - c.border_width)
             ] = 0
         return _Patch(n, d, float(h[nx // 2, ny // 2]), heightfield=h)
+
+    def _open_stairs_patch(self, name, c, difficulty):
+        """Port the Isaac terrain's thin plates to centered MuJoCo boxes."""
+        size = np.asarray(self.cfg.size, dtype=float)
+        num_steps = self._open_stairs_step_count(c)
+        step_height = c.step_height_range[0] + difficulty * (
+            c.step_height_range[1] - c.step_height_range[0]
+        )
+        direction = -1 if c.inverted else 1
+        boxes = []
+
+        def plate(lower, upper, top):
+            half_size = np.array([*((upper - lower) / 2), c.tread_thickness / 2])
+            position = np.array([
+                *((upper + lower - size) / 2),
+                top - c.tread_thickness / 2,
+            ])
+            boxes.append((tuple(position), tuple(half_size)))
+
+        def ring(outer, inner, top):
+            # Four rectangles partition the ring without overlapping corners.
+            lower, upper = np.full(2, outer), size - outer
+            inner_lower, inner_upper = np.full(2, inner), size - inner
+            plate(lower, np.array([upper[0], inner_lower[1]]), top)
+            plate(np.array([lower[0], inner_upper[1]]), upper, top)
+            plate(np.array([lower[0], inner_lower[1]]),
+                  np.array([inner_lower[0], inner_upper[1]]), top)
+            plate(np.array([inner_upper[0], inner_lower[1]]),
+                  np.array([upper[0], inner_upper[1]]), top)
+
+        if c.border_width > 0:
+            inset = c.border_width + (c.tread_overlap if c.inverted else 0)
+            ring(0.0, inset, 0.0)
+
+        for k in range(num_steps):
+            outer = c.border_width + k * c.step_width
+            inner = outer + c.step_width
+            if c.inverted:
+                inner += c.tread_overlap
+            else:
+                outer = max(0.0, outer - c.tread_overlap)
+            ring(outer, inner, direction * (k + 1) * step_height)
+
+        landing_inset = c.border_width + num_steps * c.step_width
+        if not c.inverted:
+            landing_inset = max(0.0, landing_inset - c.tread_overlap)
+        landing_top = direction * (num_steps + 1) * step_height
+        plate(np.full(2, landing_inset), size - landing_inset, landing_top)
+        # Catch falls below all walking surfaces without filling the open risers.
+        lowest_top = min(landing_top, 0.0 if c.border_width > 0 else step_height)
+        plate(np.zeros(2), size, lowest_top - 0.5)
+        return _Patch(name, difficulty, landing_top, boxes)
 
     @staticmethod
     def _v(*x):
@@ -539,14 +656,14 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
     sub_terrains={
         "pyramid_stairs": MeshPyramidStairsTerrainCfg(
             proportion=0.2,  # Share of randomly selected terrain types.
-            step_height_range=(0.05, 0.1),  # Minimum and maximum step height.
+            step_height_range=(0.10, 0.30),  # Minimum and maximum step height.
             step_width=0.3,  # Width of each stair step in meters.
             platform_width=3.0,  # Flat center platform width in meters.
             border_width=1.0,  # Inset from the tile edge in meters.
         ),
         "pyramid_stairs_inv": MeshInvertedPyramidStairsTerrainCfg(
             proportion=0.2,  # Share of randomly selected terrain types.
-            step_height_range=(0.05, 0.1),  # Minimum and maximum step height.
+            step_height_range=(0.10, 0.30),  # Minimum and maximum step height.
             step_width=0.3,  # Width of each stair step in meters.
             platform_width=3.0,  # Flat center platform width in meters.
             border_width=1.0,  # Inset from the tile edge in meters.
@@ -565,13 +682,13 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
         ),
         "hf_pyramid_slope": HfPyramidSlopedTerrainCfg(
             proportion=0.1,  # Share of randomly selected terrain types.
-            slope_range=(0, 0.4),  # Minimum and maximum pyramid slope.
+            slope_range=(0, 0.7),  # Minimum and maximum pyramid slope.
             platform_width=2.0,  # Flat center platform width in meters.
             border_width=0.25,  # Flat inset border width in meters.
         ),
         "hf_pyramid_slope_inv": HfInvertedPyramidSlopedTerrainCfg(
             proportion=0.1,  # Share of randomly selected terrain types.
-            slope_range=(0, 0.4),  # Minimum and maximum inverted pyramid slope.
+            slope_range=(0, 0.7),  # Minimum and maximum inverted pyramid slope.
             platform_width=2.0,  # Flat center platform width in meters.
             border_width=0.25,  # Flat inset border width in meters.
         ),

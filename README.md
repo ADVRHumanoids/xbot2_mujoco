@@ -141,6 +141,51 @@ model = mujoco.MjModel.from_xml_string(mjcf_str)
   assets/            # mesh/texture files (symlinked or copied)
 ```
 
+# Open stairs terrain
+
+The terrain generator supports `MeshOpenPyramidStairsTerrainCfg` and
+`MeshOpenInvertedPyramidStairsTerrainCfg`, matching the open stairs geometry in
+`kyon_isaac`. Four thin box plates form each rectangular tread ring, with a
+central landing and a catch floor 0.5 m below the lowest walking surface.
+Step height interpolates with terrain difficulty. Dimensions are in meters:
+
+```python
+from xbot2_py_mujoco.utils.terrain_generator import (
+    MeshOpenPyramidStairsTerrainCfg,
+    MeshOpenInvertedPyramidStairsTerrainCfg,
+    TerrainGenerator,
+    TerrainGeneratorCfg,
+)
+
+stairs = dict(
+    step_height_range=(0.10, 0.30),
+    step_width=0.3,
+    platform_width=3.0,
+    border_width=1.0,
+    tread_thickness=0.02,
+    tread_overlap=0.05,
+)
+generator = TerrainGenerator(TerrainGeneratorCfg(
+    seed=0,
+    size=(8.0, 8.0),
+    num_rows=4,
+    num_cols=2,
+    curriculum=True,
+    sub_terrains={
+        "open_stairs": MeshOpenPyramidStairsTerrainCfg(**stairs),
+        "open_stairs_inv": MeshOpenInvertedPyramidStairsTerrainCfg(**stairs),
+    },
+))
+generator.save("/tmp/open_stairs/world.xml")
+```
+
+`step_width` controls horizontal advance; `tread_overlap` extends an upper
+tread over its lower neighbor. Thickness must be smaller than the minimum
+step height, and overlap must be nonnegative and smaller than `step_width`.
+Inverted stairs also require a positive opening above the landing. Generated
+terrain geoms use group **2**, and `spawn_locations.yaml` places spawns above
+each central landing using `spawn_height`.
+
 # Terrain height scan
 
 The Python simulator supports a local N×M grid of vertical rays for terrain

@@ -193,6 +193,123 @@ def test_sloped_heightfield_reaches_zero_at_border():
     assert profile[-1] == 0
 
 
+@pytest.mark.parametrize("inverted", [False, True])
+@pytest.mark.parametrize("border_width", [0.0, 0.1])
+@pytest.mark.parametrize("overlap", [0.0, 0.05])
+def test_open_stairs_geometry_and_collision(tmp_path, inverted, border_width, overlap):
+    terrain_class = (
+        tg.MeshOpenInvertedPyramidStairsTerrainCfg
+        if inverted else tg.MeshOpenPyramidStairsTerrainCfg
+    )
+    config = tg.TerrainGeneratorCfg(
+        seed=3,
+        size=(2.0, 2.4),
+        difficulty_range=(0.5, 0.5),
+        sub_terrains={"open_stairs": terrain_class(
+            step_height_range=(0.08, 0.12),
+            step_width=0.2,
+            platform_width=0.6,
+            border_width=border_width,
+            tread_thickness=0.02,
+            tread_overlap=overlap,
+        )},
+    )
+    generator = tg.TerrainGenerator(config)
+    patch = generator._patches[0][0]
+    # Three rings fit even when the available width rounds just below 3.
+    assert len(patch.boxes) == 12 + (4 if border_width else 0) + 2
+    direction = -1 if inverted else 1
+    ring_offset = 4 if border_width else 0
+    for k in range(3):
+        ring = patch.boxes[ring_offset + 4 * k:ring_offset + 4 * (k + 1)]
+        outer = border_width + k * 0.2
+        inner = outer + 0.2 + (overlap if inverted else 0)
+        if not inverted:
+            outer = max(0, outer - overlap)
+        assert all(p[2] + s[2] == pytest.approx(direction * (k + 1) * 0.1)
+                   for p, s in ring)
+        assert ring[0][1][1] * 2 == pytest.approx(inner - outer)
+        # The plates partition the rectangular ring without filling its opening.
+        area = sum(4 * s[0] * s[1] for _, s in ring)
+        assert area == pytest.approx(
+            (2.0 - 2 * outer) * (2.4 - 2 * outer)
+            - (2.0 - 2 * inner) * (2.4 - 2 * inner)
+        )
+    landing, floor = patch.boxes[-2:]
+    assert landing[0][:2] == pytest.approx((0, 0))
+    landing_inset = border_width + 0.6 - (overlap if not inverted else 0)
+    assert landing[1][:2] == pytest.approx((1 - landing_inset, 1.2 - landing_inset))
+    assert patch.origin_z == pytest.approx(direction * 0.4)
+    assert floor[0][2] + floor[1][2] == pytest.approx(
+        min(direction * 0.4, 0 if border_width else 0.1) - 0.5
+    )
+    assert all(s[2] * 2 == pytest.approx(0.02) for _, s in patch.boxes)
+    assert all(min(s) > 0 for _, s in patch.boxes)
+
+    world = generator.save(tmp_path / "open_stairs.xml")
+    model = mujoco.MjModel.from_xml_path(str(world))
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    assert model.ngeom == len(patch.boxes)
+    assert np.all(model.geom_group == 2)
+    geom_id = np.array([-1], dtype=np.int32)
+    # A horizontal ray passes through the first riser's vertical clearance.
+    assert mujoco.mj_ray(model, data, np.array([-2., 0., direction * 0.05]),
+                         np.array([1., 0., 0.]), None, 1, -1, geom_id) == -1
+    # A vertical ray at the origin lands on the central walking surface.
+    distance = mujoco.mj_ray(model, data, np.array([0., 0., 1.]),
+                             np.array([0., 0., -1.]), None, 1, -1, geom_id)
+    assert distance == pytest.approx(1 - patch.origin_z)
+    spawns = yaml.safe_load((tmp_path / "spawn_locations.yaml").read_text())
+    assert spawns["spawn_locations"][0] == pytest.approx(
+        (0, 0, patch.origin_z + config.spawn_height)
+    )
+
+
+@pytest.mark.parametrize("kwargs, message", [
+    ({"step_height_range": (0, 0.1)}, "step_height_range"),
+    ({"step_height_range": (0.2, 0.1)}, "step_height_range"),
+    ({"step_height_range": (0.1, float("nan"))}, "step_height_range"),
+    ({"step_width": 0}, "step_width"),
+    ({"platform_width": float("inf")}, "platform_width"),
+    ({"border_width": -0.1}, "border_width"),
+    ({"tread_thickness": 0}, "tread_thickness"),
+    ({"tread_thickness": 0.05}, "minimum step height"),
+    ({"tread_overlap": -0.1}, "tread_overlap"),
+    ({"tread_overlap": 0.3}, "tread_overlap"),
+    ({"tread_overlap": float("nan")}, "tread_overlap"),
+    ({"platform_width": 2.0}, "do not fit"),
+    ({"inverted": True, "platform_width": 0.1, "tread_overlap": 0.25}, "positive opening"),
+])
+def test_open_stairs_validation(kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        tg.TerrainGenerator(tg.TerrainGeneratorCfg(
+            size=(2, 2),
+            sub_terrains={"stairs": tg.MeshOpenPyramidStairsTerrainCfg(**kwargs)},
+        ))
+
+
+def test_open_stairs_cache_and_curriculum(tmp_path):
+    config = tg.TerrainGeneratorCfg(
+        seed=42,
+        size=(2, 2),
+        num_rows=2,
+        num_cols=2,
+        curriculum=True,
+        use_cache=True,
+        cache_dir=str(tmp_path / "cache"),
+        sub_terrains={
+            "up": tg.MeshOpenPyramidStairsTerrainCfg(platform_width=0.6),
+            "down": tg.MeshOpenInvertedPyramidStairsTerrainCfg(platform_width=0.6),
+        },
+    )
+    first, cached = tg.TerrainGenerator(config), tg.TerrainGenerator(config)
+    assert first.terrain_types.tolist() == [["up", "down"], ["up", "down"]]
+    assert first.terrain_origins[1, 0, 2] > first.terrain_origins[0, 0, 2] > 0
+    assert first.terrain_origins[1, 1, 2] < first.terrain_origins[0, 1, 2] < 0
+    assert first.to_xml_string(tmp_path / "assets") == cached.to_xml_string(tmp_path / "assets")
+
+
 def test_cli_saves_default_world(tmp_path, monkeypatch, capsys):
     small = tg.TerrainGeneratorCfg(
         seed=1,
