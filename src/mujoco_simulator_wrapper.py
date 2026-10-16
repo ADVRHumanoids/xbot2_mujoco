@@ -155,7 +155,13 @@ with open(mj_xml_path_orig, 'r') as file:
     mujoco = mj_xml_tree.xpath('/mujoco')[0]
     etree.strip_tags(mj_xml_tree, etree.Comment)
 
-try: 
+# replace joint type="free" with freejoint so it doesn't inherit joint defaults from childclass
+# for elem in mj_xml_tree.iter():
+#     if elem.tag == 'joint' and elem.attrib.get('type') == 'free':
+#         elem.tag = 'freejoint'
+#         del elem.attrib['type']
+
+try:
     with open(args.sdf, 'r') as file:
         sdf_yaml = yaml.safe_load(file)
         worldbody = mj_xml_tree.findall('worldbody')[0]
@@ -182,6 +188,12 @@ for elem in mj_xml_tree.iter():
     if elem.attrib.get('name') == 'pelvis':
         elem.set('childclass', 'kyon_all')
         # elem.set('childclass', 'no_collision')
+
+# override childclass for wheel bodies so both geom and joint inherit 'wheels' defaults
+import re
+for elem in mj_xml_tree.iter():
+    if elem.tag == 'body' and re.match(r'^wheel_\d+$', elem.attrib.get('name', '')):
+        elem.set('childclass', 'wheels')
 
 # add compiler attr
 
