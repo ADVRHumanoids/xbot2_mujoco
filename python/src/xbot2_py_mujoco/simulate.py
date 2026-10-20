@@ -63,6 +63,8 @@ def parse_args(argv=None):
     s.add_argument('--srdf-cmd',   metavar='CMD',  help='Command that generates the SRDF')
     s.add_argument('--headless',              action='store_true', help='Disable MuJoCo viewer')
     s.add_argument('--viewer-fps',            type=int,   default=60,    metavar='N',   help='Viewer render fps (default: 60)')
+    s.add_argument('--base-velocity-plot-body', metavar='BODY',
+                   help='Show linear and angular velocity plots in this body frame')
     s.add_argument('--disable-ros',           action='store_true', help='Disable ROS2 publishing')
     s.add_argument('--ros-node-name',         metavar='NAME', help='ROS2 node name')
     s.add_argument('--ros-topic',             metavar='TOPIC', help='ROS2 robot_description topic')
@@ -192,6 +194,7 @@ def main():
         q_init=gen.q_init,
         viewer=not args.headless,
         viewer_fps=args.viewer_fps,
+        base_velocity_plot_body=args.base_velocity_plot_body,
         ros=not args.disable_ros,
         ros_node_name=args.ros_node_name,
         ros_robot_description_topic=args.ros_topic,

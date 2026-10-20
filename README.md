@@ -662,3 +662,15 @@ center of mass. Arrow length scales with force magnitude (100 N gives a 0.5 m
 arrow). Body-frame forces track the body's orientation, overlapping forces sum,
 and expired or cancelled forces disappear. Pure torques have no force arrow.
 These markers are viewer overlays and add no mass or collision geometry.
+
+### Base velocity plots
+
+Pass `--base-velocity-plot-body pelvis` to show separate linear (m/s) and
+angular (rad/s) velocity plots inside the passive viewer. Both use the selected
+link origin and its local x/y/z axes. The plots show the last 10 seconds of
+simulation time (up to 1,000 samples), and clear on reset or respawn.
+Omitting the option disables plotting; headless runs skip it.
+A viewer exposing `set_figures` is required.
+
+For Kyon, enable them with
+`ros2 launch kyon_mujoco kyon_world.launch enable_base_velocity_plot:=true`.

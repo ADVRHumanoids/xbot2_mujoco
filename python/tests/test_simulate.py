@@ -84,7 +84,7 @@ def test_main_wires_terrain_scan_options(monkeypatch, enabled):
     from xbot2_py_mujoco import simulate
 
     argv = ['--urdf', 'robot.urdf', '--headless', '--disable-ros',
-            '--actuator-delay', '0.025']
+            '--actuator-delay', '0.025', '--base-velocity-plot-body=base']
     if enabled:
         argv += [
             '--terrain-scan-body', 'base', '--terrain-scan-shape', '3', '2',
@@ -120,6 +120,7 @@ def test_main_wires_terrain_scan_options(monkeypatch, enabled):
     assert captured['viewer'] is False
     assert captured['actuator_delay_s'] == 0.025
     assert captured['rgbd_cameras'] == ['camera-config']
+    assert captured['base_velocity_plot_body'] == 'base'
     if enabled:
         scanner = captured['terrain_scanner']
         scan = scanner.scan(mujoco.MjData(captured['model']))
@@ -151,3 +152,8 @@ def test_cli_rejects_invalid_terrain_scan_values(options):
     with pytest.raises(SystemExit) as exc:
         parse_args(options)
     assert exc.value.code == 2
+
+
+def test_base_velocity_plot_cli_defaults():
+    assert parse_args([]).base_velocity_plot_body is None
+    assert parse_args(['--base-velocity-plot-body=']).base_velocity_plot_body == ''

@@ -12,6 +12,7 @@ import numpy as np
 from mujoco.viewer import launch_passive, Handle
 from xbot2_py_mujoco.mj_xbot2_bridge import MjXbot2Bridge
 from xbot2_py_mujoco.remote_control import RemoteControlServer
+from xbot2_py_mujoco.base_velocity_plot import BaseVelocityPlot
 from xbot2_py_mujoco.terrain_scan import TerrainScanner, TerrainScan
 from xbot2_py_mujoco.rgbd import RgbdCameraCfg, RgbdCameraManager, validate_cameras
 
@@ -39,7 +40,8 @@ class SimulatorWrapper:
                  terrain_scan_decimation: int = 100,
                  terrain_scan_visualization: bool = True,
                  terrain_scan_topic: str = '/heightscan',
-                 rgbd_cameras: list[RgbdCameraCfg] | None = None):
+                 rgbd_cameras: list[RgbdCameraCfg] | None = None,
+                 base_velocity_plot_body: str = None):
 
         rgbd_cameras = tuple(rgbd_cameras or ())
         validate_cameras(model, rgbd_cameras)
@@ -102,6 +104,12 @@ class SimulatorWrapper:
         self._step_skipped = False
         self.viewer_fps = viewer_fps
         self.target_rtf = target_rtf
+
+        self.base_velocity_plot = None
+        if viewer and base_velocity_plot_body:
+            if not callable(getattr(Handle, 'set_figures', None)):
+                raise RuntimeError('Base velocity plots require a MuJoCo viewer with set_figures support')
+            self.base_velocity_plot = BaseVelocityPlot(model, base_velocity_plot_body)
 
         # create viewer if requested
         if viewer:
@@ -286,6 +294,9 @@ class SimulatorWrapper:
             if self.remote_control is not None or self.terrain_scanner is not None:
                 with self.viewer.lock():
                     self._update_visuals(self.viewer.user_scn)
+            if self.base_velocity_plot is not None:
+                self.base_velocity_plot.sample(self.data)
+                self.viewer.set_figures(self.base_velocity_plot.overlays(self.viewer.viewport))
             self.viewer.sync(state_only=True)
             self.frames += 1
             self._next_viewer_sync_wall = now + period
@@ -313,6 +324,12 @@ class SimulatorWrapper:
         self.data.qvel[dof_start:dof_start + 6] = 0.0
         self._set_initial_position(self.data)
         mujoco.mj_forward(self.model, self.data)
+        self._clear_velocity_plot()
+
+    def _clear_velocity_plot(self):
+        plot = getattr(self, "base_velocity_plot", None)
+        if plot is not None:
+            plot.clear()
 
     def _catch_interrupt(fn):
         """Decorator: catch KeyboardInterrupt, set running=False and close viewer."""
@@ -337,6 +354,7 @@ class SimulatorWrapper:
         if self.data.time == 0.0:
             if getattr(self, 'rgbd_manager', None) is not None:
                 self.rgbd_manager.reset()
+            self._clear_velocity_plot()
             self._set_initial_position(self.data)
             self.data.time = self.last_sim_time
             self.last_sync_sim = self.data.time
@@ -393,6 +411,7 @@ class SimulatorWrapper:
             if self.odometry_publisher is not None:
                 self.odometry_publisher.publish(self.data)
 
+        # sync viewer at given fps
         self._sync_viewer()
 
         # sync to target RTF at specified interval
