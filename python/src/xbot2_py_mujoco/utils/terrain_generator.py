@@ -589,6 +589,9 @@ class TerrainGenerator:
         ad = Path(asset_dir).resolve()
         ad.mkdir(parents=True, exist_ok=True)
         root = ET.Element("mujoco", model="generated_terrain")
+        visual = ET.SubElement(root, "visual")
+        ET.SubElement(visual, "headlight", ambient=".5 .5 .5")
+        ET.SubElement(visual, "map", znear="0.001")
         de = ET.SubElement(
             ET.SubElement(root, "default"), "default", {"class": "terrain"}
         )
@@ -597,7 +600,16 @@ class TerrainGenerator:
         )
         asset = ET.SubElement(root, "asset")
         ET.SubElement(
-            asset, "material", name="terrain_grid", rgba=".25 .35 .25 1"
+            asset, "texture", type="skybox", builtin="gradient",
+            rgb1=".3 .5 .7", rgb2="0 0 0", width="512", height="512"
+        )
+        ET.SubElement(
+            asset, "texture", name="terrain_grid", type="2d", builtin="checker",
+            rgb1=".1 .2 .3", rgb2=".2 .3 .4", width="512", height="512"
+        )
+        ET.SubElement(
+            asset, "material", name="terrain_grid", texture="terrain_grid",
+            texrepeat="1 1", texuniform="true", reflectance="0.8"
         )
         world = ET.SubElement(root, "worldbody")
         for r, row in enumerate(self._patches):
