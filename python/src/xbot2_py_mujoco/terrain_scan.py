@@ -76,7 +76,7 @@ class TerrainScanner:
     If the body's X axis is vertical, heading is undefined and world X is used.
     ``spacing`` is in meters; rays start ``z_offset`` above the root body origin
     and extend at most ``max_distance`` meters. Robot geoms must be assigned to
-    ``excluded_geom_groups`` (default 0 and 1, for visuals and collisions).
+    ``excluded_geom_groups`` (default 0, 1 and 3, for robot geometry and labels).
     Terrain must use a remaining group, such as 2. Any environment geoms in
     the excluded groups are also skipped.
     The scanner does not change the model's group assignments. Visible geoms
@@ -89,7 +89,7 @@ class TerrainScanner:
     def __init__(self, model: mujoco.MjModel, robot_body: str,
                  shape=(17, 11), spacing=(0.1, 0.1),
                  z_offset: float = 2.0, max_distance: float = 5.0,
-                 excluded_geom_groups=(0, 1)):
+                 excluded_geom_groups=(0, 1, 3)):
         if not isinstance(robot_body, str) or not robot_body:
             raise ValueError("robot_body must be a non-empty robot root body name")
         body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, robot_body)

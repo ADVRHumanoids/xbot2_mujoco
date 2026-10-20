@@ -92,8 +92,8 @@ def parse_args(argv=None):
     scan.add_argument('--terrain-scan-max-distance', type=_positive_float, default=5.0,
                       metavar='METERS', help='Maximum downward ray distance (default: 5)')
     scan.add_argument('--terrain-scan-excluded-groups', nargs='+', type=int,
-                      choices=range(6), default=(0, 1), metavar='GROUP',
-                      help='Geom groups excluded from rays (default: 0 1)')
+                      choices=range(6), default=(0, 1, 3), metavar='GROUP',
+                      help='Geom groups excluded from rays (default: 0 1 3)')
     scan.add_argument('--terrain-scan-decimation', type=_positive_int, default=100,
                       metavar='STEPS', help='Scan every this many simulation steps (default: 100)')
     scan.add_argument('--terrain-scan-topic', default='/heightscan', metavar='TOPIC',

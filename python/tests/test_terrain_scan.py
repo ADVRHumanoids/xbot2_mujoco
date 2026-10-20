@@ -61,6 +61,17 @@ def test_flat_scan_excludes_entire_articulated_robot_and_preserves_state():
     np.testing.assert_allclose(scanner.scan(data).x, scan.x + 1)
 
 
+def test_default_scan_skips_visual_step_labels():
+    model, data = make_scene('''<worldbody>
+      <geom name="ground" type="plane" size="10 10 .1"/>
+      <geom name="label" type="box" pos="0 0 .002" size=".2 .1 .0005"
+            group="3" contype="0" conaffinity="0"/>
+    </worldbody>''')
+    scan = TerrainScanner(model, "robot", shape=(1, 1)).scan(data)
+    assert scan.geom_ids[0, 0] == model.geom("ground").id
+    assert scan.heights[0, 0] == pytest.approx(0)
+
+
 def test_step_height_and_misses():
     model, data = make_scene('''<worldbody>
       <geom name="step" type="box" pos=".2 0 .1" size=".09 .09 .1"/>
