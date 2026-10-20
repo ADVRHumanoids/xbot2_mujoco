@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import yaml
 
 
@@ -509,6 +509,82 @@ class TerrainGenerator:
     def _v(*x):
         return " ".join(f"{float(a):.12g}" for a in x)
 
+    def _step_label_surfaces(self, patch):
+        """Walking treads and landing, excluding borders and the open-stair floor."""
+        cfg = self.cfg.sub_terrains[patch.name]
+        if not isinstance(cfg, (MeshPyramidStairsTerrainCfg, MeshOpenPyramidStairsTerrainCfg)):
+            return []
+        if isinstance(cfg, MeshOpenPyramidStairsTerrainCfg):
+            return patch.boxes[4 if cfg.border_width > 0 else 0:-1]
+        boxes = patch.boxes
+        inner_half = np.asarray(self.cfg.size) / 2 - cfg.border_width
+        return [
+            (p, s) for p, s in boxes
+            if all(abs(p[axis]) + s[axis] <= inner_half[axis] + 1e-9 for axis in (0, 1))
+        ]
+
+    def _add_step_labels(self, asset, world, asset_dir, relative_assets, patch, row, col):
+        """Put upright step-height labels on the exposed vertical step faces."""
+        surfaces = self._step_label_surfaces(patch)
+        if not surfaces:
+            return
+        cfg = self.cfg.sub_terrains[patch.name]
+        low, high = cfg.step_height_range
+        step_height = low + patch.difficulty * (high - low)
+        text = f"h = {step_height:.2f}"
+        open_stairs = isinstance(cfg, MeshOpenPyramidStairsTerrainCfg)
+        inverted = cfg.inverted if open_stairs else isinstance(cfg, MeshInvertedPyramidStairsTerrainCfg)
+        width, height = 1024, 384
+        image = Image.new("RGB", (width, height), (18, 27, 38))
+        draw = ImageDraw.Draw(image)
+        font = ImageFont.load_default(size=160)
+        left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
+        draw.text(((width - right - left) / 2, (height - bottom - top) / 2),
+                  text, font=font, fill=(239, 243, 247))
+        draw.rectangle((6, 6, width - 7, height - 7), outline=(91, 175, 194), width=6)
+        name = f"terrain_r{row}_c{col}_{patch.name}_step_height"
+        path = asset_dir / f"{name}.png"
+        image.save(path, compress_level=9)
+        ET.SubElement(
+            asset, "texture", name=name, type="2d",
+            file=f"{asset_dir.name}/{path.name}" if relative_assets else str(path),
+        )
+        ET.SubElement(
+            asset, "material", name=name, texture=name, texuniform="false",
+            texrepeat="1 1", emission="0.5", specular="0", shininess="0",
+        )
+        cx, cy, _ = self._center(row, col)
+        aspect = width / height
+        index = 0
+        for p, s in surfaces:
+            landing = abs(p[0]) < 1e-9 and abs(p[1]) < 1e-9
+            # A solid inverted landing has no exposed vertical side.
+            if landing and inverted and not open_stairs:
+                continue
+            if landing:
+                faces = [(0, -1), (0, 1), (1, -1), (1, 1)]
+            else:
+                axis = 1 if abs(p[0]) < 1e-9 else 0
+                sign = 1 if p[axis] > 0 else -1
+                # Descending steps expose the inner wall of each ring.
+                faces = [(axis, -sign if inverted else sign)]
+            # Open stairs have a thin vertical tread edge, not a full riser.
+            face_height = 2 * s[2] if open_stairs else step_height
+            for axis, sign in faces:
+                label_width = min(0.4, 1.6 * s[1 - axis], 0.8 * face_height * aspect)
+                label_height = label_width / aspect
+                position = np.array([cx + p[0], cy + p[1], p[2] + s[2] - face_height / 2])
+                position[axis] += sign * (s[axis] + 0.0015)
+                yaw = math.atan2(sign if axis == 1 else 0, sign if axis == 0 else 0) + math.pi / 2
+                a, b = math.cos(yaw / 2) * math.sqrt(0.5), math.sin(yaw / 2) * math.sqrt(0.5)
+                ET.SubElement(
+                    world, "geom", name=f"{name}_{index}", type="box", group="3",
+                    contype="0", conaffinity="0", material=name,
+                    pos=self._v(*position), quat=self._v(a, a, b, b),
+                    size=self._v(label_width / 2, label_height / 2, 0.0005),
+                )
+                index += 1
+
     def build_xml(self, asset_dir, relative_assets=False):
         ad = Path(asset_dir).resolve()
         ad.mkdir(parents=True, exist_ok=True)
@@ -582,6 +658,7 @@ class TerrainGenerator:
                                 material="terrain_grid",
                                 **{"class": "terrain"},
                             )
+                self._add_step_labels(asset, world, ad, relative_assets, q, r, c)
         # Surround the complete grid with four static box geoms.
         if self.cfg.border_width:
             ix, iy = (

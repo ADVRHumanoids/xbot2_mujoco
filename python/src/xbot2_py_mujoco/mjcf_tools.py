@@ -54,6 +54,7 @@ class MjcfGenerator:
         # add compiler directives
         compiler = etree.Element("compiler")
         compiler.attrib['meshdir'] = self.mj_xml_dir
+        compiler.attrib['texturedir'] = self.mj_xml_dir
         mujoco_tag.append(compiler)
 
 

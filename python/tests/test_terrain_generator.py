@@ -64,7 +64,11 @@ def test_curriculum_layout_origins_and_mujoco_load(tmp_path):
     m = mujoco.MjModel.from_xml_path(str(g.save(tmp_path / "world.xml")))
     assert m.nhfield == 6 and m.ngeom > 20
     # Heightfields, box tiles and outer borders all inherit the terrain group.
-    assert np.all(m.geom_group == 2)
+    panels = m.geom_group == 3
+    assert np.count_nonzero(panels) > 12
+    assert np.all(m.geom_group[~panels] == 2)
+    assert np.all(m.geom_contype[panels] == 0)
+    assert np.all(m.geom_conaffinity[panels] == 0)
 
 
 def test_saved_world_is_relocatable(tmp_path):
@@ -74,7 +78,12 @@ def test_saved_world_is_relocatable(tmp_path):
             seed=1,
             size=(2, 2),
             slope_threshold=None,
-            sub_terrains={"rough": tg.HfRandomUniformTerrainCfg()},
+            num_cols=2,
+            curriculum=True,
+            sub_terrains={
+                "rough": tg.HfRandomUniformTerrainCfg(),
+                "stairs": tg.MeshPyramidStairsTerrainCfg(),
+            },
         )
     ).save(output_dir / "terrain.xml")
 
@@ -83,6 +92,50 @@ def test_saved_world_is_relocatable(tmp_path):
     model = mujoco.MjModel.from_xml_path(str(relocated / world.name))
 
     assert model.nhfield == 1
+    assert np.any(model.geom_group == 3)
+
+
+@pytest.mark.parametrize("terrain_class", [
+    tg.MeshPyramidStairsTerrainCfg, tg.MeshInvertedPyramidStairsTerrainCfg,
+    tg.MeshOpenPyramidStairsTerrainCfg, tg.MeshOpenInvertedPyramidStairsTerrainCfg,
+])
+def test_step_labels_are_centered_on_vertical_faces_and_visual_only(tmp_path, terrain_class):
+    generator = tg.TerrainGenerator(tg.TerrainGeneratorCfg(
+        seed=1, size=(2, 2), sub_terrains={"stairs": terrain_class(
+            step_height_range=(0.2, 0.2), step_width=0.2, platform_width=0.6,
+            border_width=0.1,
+        )},
+    ))
+    world = generator.save(tmp_path / "world.xml")
+    model = mujoco.MjModel.from_xml_path(str(world))
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    labels = np.flatnonzero(model.geom_group == 3)
+    # Four faces per riser; a solid inverted landing has no exposed sides.
+    assert len(labels) == (12 if terrain_class is tg.MeshInvertedPyramidStairsTerrainCfg else 16)
+    assert np.all(model.geom_contype[labels] == 0)
+    assert np.all(model.geom_conaffinity[labels] == 0)
+    assert np.all(model.geom_group[np.setdiff1d(np.arange(model.ngeom), labels)] == 2)
+    texture = model.texture("terrain_r0_c0_stairs_step_height")
+    assert texture.width[0] == 1024 and texture.height[0] == 384
+    assert (tmp_path / "world_assets" / "terrain_r0_c0_stairs_step_height.png").is_file()
+    groups = np.array([0, 0, 1, 0, 1, 1], dtype=np.uint8)
+    for label_id in labels:
+        rotation = data.geom_xmat[label_id].reshape(3, 3)
+        normal = rotation[:, 2]
+        assert np.allclose(rotation[:, 1], [0, 0, 1])  # Text is upright.
+        assert normal[2] == pytest.approx(0)
+        origin = model.geom_pos[label_id] + 0.05 * normal
+        hit = np.array([-1], dtype=np.int32)
+        mujoco.mj_ray(model, data, origin, -normal, None, 1, -1, hit)
+        assert hit[0] == label_id
+        distance = mujoco.mj_ray(model, data, origin, -normal, groups, 1, -1, hit)
+        assert distance == pytest.approx(0.0515)
+        assert model.geom_group[hit[0]] == 2
+        top = model.geom_pos[hit[0], 2] + model.geom_size[hit[0], 2]
+        face_height = (0.02 if isinstance(generator.cfg.sub_terrains["stairs"], tg.MeshOpenPyramidStairsTerrainCfg)
+                       else 0.2)
+        assert model.geom_pos[label_id, 2] == pytest.approx(top - face_height / 2)
 
 
 def test_merge_with_mjcf_generator(tmp_path):
@@ -92,7 +145,12 @@ def test_merge_with_mjcf_generator(tmp_path):
             size=(2, 2),
             horizontal_scale=0.2,
             slope_threshold=None,
-            sub_terrains={"rough": tg.HfRandomUniformTerrainCfg()},
+            num_cols=2,
+            curriculum=True,
+            sub_terrains={
+                "rough": tg.HfRandomUniformTerrainCfg(),
+                "stairs": tg.MeshPyramidStairsTerrainCfg(),
+            },
         )
     )
     world = g.save(tmp_path / "terrain.xml")
@@ -112,6 +170,7 @@ def test_merge_with_mjcf_generator(tmp_path):
         >= 0
     )
     assert model.geom("terrain_r0_c0_rough").group[0] == 2
+    assert np.any(model.geom_group == 3)
 
 
 def test_cache_and_warnings(tmp_path):
@@ -250,15 +309,16 @@ def test_open_stairs_geometry_and_collision(tmp_path, inverted, border_width, ov
     model = mujoco.MjModel.from_xml_path(str(world))
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
-    assert model.ngeom == len(patch.boxes)
-    assert np.all(model.geom_group == 2)
+    assert model.ngeom == len(patch.boxes) + 16
+    assert np.count_nonzero(model.geom_group == 2) == len(patch.boxes)
     geom_id = np.array([-1], dtype=np.int32)
+    groups = np.array([0, 0, 1, 0, 1, 1], dtype=np.uint8)
     # A horizontal ray passes through the first riser's vertical clearance.
     assert mujoco.mj_ray(model, data, np.array([-2., 0., direction * 0.05]),
-                         np.array([1., 0., 0.]), None, 1, -1, geom_id) == -1
+                         np.array([1., 0., 0.]), groups, 1, -1, geom_id) == -1
     # A vertical ray at the origin lands on the central walking surface.
     distance = mujoco.mj_ray(model, data, np.array([0., 0., 1.]),
-                             np.array([0., 0., -1.]), None, 1, -1, geom_id)
+                             np.array([0., 0., -1.]), groups, 1, -1, geom_id)
     assert distance == pytest.approx(1 - patch.origin_z)
     spawns = yaml.safe_load((tmp_path / "spawn_locations.yaml").read_text())
     assert spawns["spawn_locations"][0] == pytest.approx(

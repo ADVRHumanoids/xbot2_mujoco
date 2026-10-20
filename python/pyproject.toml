@@ -15,7 +15,7 @@ authors = [
 dependencies = [
     "mujoco==3.8.0",
     "numpy",
-    "Pillow",
+    "Pillow>=10.1",
     "PyYAML",
     "pyzmq",
 ]
