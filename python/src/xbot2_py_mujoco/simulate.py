@@ -208,6 +208,7 @@ def main():
         terrain_scan_decimation=args.terrain_scan_decimation,
         terrain_scan_visualization=not args.no_terrain_scan_visualization,
         terrain_scan_topic=args.terrain_scan_topic,
+        rgbd_cameras=gen.rgbd_cameras,
     )
 
     # main simulation loop, which runs until the viewer window is closed (if enabled) or the process is killed

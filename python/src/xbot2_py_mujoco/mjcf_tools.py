@@ -6,6 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import mujoco
+from xbot2_py_mujoco.rgbd import RgbdCameraCfg, validate_cameras
 
 class MjcfGenerator:
     
@@ -26,6 +27,7 @@ class MjcfGenerator:
 
         # 
         self.q_init : dict[str, float] = {}
+        self.rgbd_cameras: list[RgbdCameraCfg] = []
 
         # create directories
         shutil.rmtree(self.mj_xml_dir, ignore_errors=True)
@@ -81,6 +83,8 @@ class MjcfGenerator:
     def generate_mjcf_string(self):
         self._finalize_xml()
         mjcf_str = etree.tostring(self.mj_xml_tree).decode()
+        if self.rgbd_cameras:
+            validate_cameras(mujoco.MjModel.from_xml_string(mjcf_str), self.rgbd_cameras)
         with open(self.mj_xml_path, 'w') as f:
             print(f'[MjcfGenerator] writing final mjcf to {self.mj_xml_path}')
             f.write(mjcf_str)
@@ -238,6 +242,13 @@ class MjcfGenerator:
                 except ValueError:
                     print(f'Warning: <q_init> joint "{joint_name}" has non-numeric value "{joint_value}", skipping')
             mujoco_root.remove(q_init_elem)
+
+        # Keep capture settings outside MuJoCo's schema, like q_init.
+        elements = mujoco_root.findall('rgbd')
+        cameras = [RgbdCameraCfg.from_xml(element) for element in elements]
+        self.rgbd_cameras.extend(cameras)
+        for element in elements:
+            mujoco_root.remove(element)
         
         
         

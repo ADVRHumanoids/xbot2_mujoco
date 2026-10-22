@@ -13,6 +13,7 @@ from mujoco.viewer import launch_passive, Handle
 from xbot2_py_mujoco.mj_xbot2_bridge import MjXbot2Bridge
 from xbot2_py_mujoco.remote_control import RemoteControlServer
 from xbot2_py_mujoco.terrain_scan import TerrainScanner, TerrainScan
+from xbot2_py_mujoco.rgbd import RgbdCameraCfg, RgbdCameraManager, validate_cameras
 
 class SimulatorWrapper:
 
@@ -37,7 +38,13 @@ class SimulatorWrapper:
                  terrain_scanner: TerrainScanner = None,
                  terrain_scan_decimation: int = 100,
                  terrain_scan_visualization: bool = True,
-                 terrain_scan_topic: str = '/heightscan'):
+                 terrain_scan_topic: str = '/heightscan',
+                 rgbd_cameras: list[RgbdCameraCfg] | None = None):
+
+        rgbd_cameras = tuple(rgbd_cameras or ())
+        validate_cameras(model, rgbd_cameras)
+        self.rgbd_manager = None
+        self.rgbd_publisher = None
 
         if (isinstance(terrain_scan_decimation, bool)
                 or not isinstance(terrain_scan_decimation, int)
@@ -128,6 +135,9 @@ class SimulatorWrapper:
                 self.terrain_scan_pub = self.ros_node.create_publisher(
                     PointCloud2, terrain_scan_topic, qos_profile_sensor_data,
                 )
+            if rgbd_cameras:
+                from xbot2_py_mujoco.rgbd_ros import RgbdPublisher
+                self.rgbd_publisher = RgbdPublisher(self.ros_node, rgbd_cameras)
 
         # create xbot2 bridge server
         self.xbot2_bridge = MjXbot2Bridge(
@@ -158,6 +168,21 @@ class SimulatorWrapper:
 
         # running flag
         self.running = True
+        if rgbd_cameras:
+            self.rgbd_manager = RgbdCameraManager(model, rgbd_cameras)
+
+    @property
+    def rgbd_frames(self):
+        """Independent copies of the latest RGB-D frames, keyed by camera name."""
+        manager = getattr(self, 'rgbd_manager', None)
+        return manager.latest_frames if manager is not None else {}
+
+    def _poll_rgbd(self):
+        manager = getattr(self, 'rgbd_manager', None)
+        if manager is not None:
+            for frame in manager.poll():
+                if self.rgbd_publisher is not None:
+                    self.rgbd_publisher.publish(frame)
 
     @property
     def paused(self) -> bool:
@@ -241,6 +266,7 @@ class SimulatorWrapper:
 
     def _sync_viewer(self, idle=False):
         """Keep the viewer interactive even when no simulation updates are allowed."""
+        self._poll_rgbd()
         period = 1.0 / max(1, self.viewer_fps)
         now = time.perf_counter()
         if idle:
@@ -272,6 +298,8 @@ class SimulatorWrapper:
         if not len(free_joints):
             print("[Simulator] Warning: No free joint found in the model, cannot respawn.")
             return
+        if getattr(self, 'rgbd_manager', None) is not None:
+            self.rgbd_manager.reset()
         joint_id = int(free_joints[0])
         qpos_start = self.model.jnt_qposadr[joint_id]
         dof_start = self.model.jnt_dofadr[joint_id]
@@ -304,6 +332,8 @@ class SimulatorWrapper:
         
         # set initial position if sim time is 0 (first step or after reset)
         if self.data.time == 0.0:
+            if getattr(self, 'rgbd_manager', None) is not None:
+                self.rgbd_manager.reset()
             self._set_initial_position(self.data)
             self.data.time = self.last_sim_time
             self.last_sync_sim = self.data.time
@@ -342,6 +372,9 @@ class SimulatorWrapper:
             from rosgraph_msgs.msg import Clock
             seconds, nanoseconds = divmod(round(self.data.time * 1e9), 1_000_000_000)
             self.clock_pub.publish(Clock(clock=Time(sec=seconds, nanosec=nanoseconds)))
+
+        if self.rgbd_manager is not None:
+            self.rgbd_manager.submit(self.data)
 
         # send state to bridge at specified decimation
         self.iter_counter += 1
@@ -415,6 +448,8 @@ class SimulatorWrapper:
         self.post_step()
 
     def close(self):
+        if getattr(self, 'rgbd_manager', None) is not None:
+            self.rgbd_manager.close()
         if self.remote_control is not None:
             self.remote_control.close()
         if self.viewer is not None:
