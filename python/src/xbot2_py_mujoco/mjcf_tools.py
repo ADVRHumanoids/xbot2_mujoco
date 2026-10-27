@@ -7,6 +7,7 @@ from pathlib import Path
 
 import mujoco
 from xbot2_py_mujoco.rgbd import RgbdCameraCfg, validate_cameras
+from xbot2_py_mujoco.lidar import LidarCfg, validate_lidars
 
 class MjcfGenerator:
     
@@ -28,6 +29,7 @@ class MjcfGenerator:
         # 
         self.q_init : dict[str, float] = {}
         self.rgbd_cameras: list[RgbdCameraCfg] = []
+        self.lidars: list[LidarCfg] = []
 
         # create directories
         shutil.rmtree(self.mj_xml_dir, ignore_errors=True)
@@ -83,8 +85,10 @@ class MjcfGenerator:
     def generate_mjcf_string(self):
         self._finalize_xml()
         mjcf_str = etree.tostring(self.mj_xml_tree).decode()
-        if self.rgbd_cameras:
-            validate_cameras(mujoco.MjModel.from_xml_string(mjcf_str), self.rgbd_cameras)
+        if self.rgbd_cameras or self.lidars:
+            model = mujoco.MjModel.from_xml_string(mjcf_str)
+            validate_cameras(model, self.rgbd_cameras)
+            validate_lidars(model, self.lidars)
         with open(self.mj_xml_path, 'w') as f:
             print(f'[MjcfGenerator] writing final mjcf to {self.mj_xml_path}')
             f.write(mjcf_str)
@@ -247,6 +251,11 @@ class MjcfGenerator:
         elements = mujoco_root.findall('rgbd')
         cameras = [RgbdCameraCfg.from_xml(element) for element in elements]
         self.rgbd_cameras.extend(cameras)
+        for element in elements:
+            mujoco_root.remove(element)
+
+        elements = mujoco_root.findall('lidar')
+        self.lidars.extend(LidarCfg.from_xml(element) for element in elements)
         for element in elements:
             mujoco_root.remove(element)
         
