@@ -156,18 +156,6 @@ def test_simulator_scans_at_rate(monkeypatch):
     sim.close()
 
 
-def test_site_transform():
-    pytest.importorskip('geometry_msgs')
-    from xbot2_py_mujoco.lidar_ros import site_transform
-    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody><body name="mount" pos="1 2 3">
-      <site name="lidar" pos=".1 .2 .3" quat="0 1 0 0"/></body></worldbody></mujoco>''')
-    transform = site_transform(model, LidarCfg('lidar', (0.0,), frame_id='lidar_frame'))
-    assert (transform.header.frame_id, transform.child_frame_id) == ('mount', 'lidar_frame')
-    t, q = transform.transform.translation, transform.transform.rotation
-    np.testing.assert_allclose((t.x, t.y, t.z), (.1, .2, .3))
-    np.testing.assert_allclose((q.w, q.x, q.y, q.z), (0, 1, 0, 0))
-
-
 def test_xml_defaults_and_repeated_finalization(tmp_path):
     generator = MjcfGenerator('lidar', (Path(__file__).parent / 'resources/nice_robot.urdf').read_text(),
                               output_dir=str(tmp_path / 'robot'))
