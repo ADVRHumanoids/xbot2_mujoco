@@ -24,6 +24,9 @@ dependencies = [
 mjctl = "xbot2_py_mujoco.mjctl:main"
 
 [project.optional-dependencies]
+lidar = [
+    "mujoco-lidar",
+]
 dev = [
     "pytest>=7",
     "pytest-cov",

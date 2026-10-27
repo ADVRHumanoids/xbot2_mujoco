@@ -106,7 +106,7 @@ def test_main_wires_terrain_scan_options(monkeypatch, enabled):
       </body>
     </worldbody></mujoco>'''
     monkeypatch.setattr(simulate, 'MjcfGenerator', lambda **kwargs:
-                        SimpleNamespace(q_init={}, rgbd_cameras=['camera-config'], generate_mjcf_string=lambda: xml))
+                        SimpleNamespace(q_init={}, rgbd_cameras=['camera-config'], lidars=['lidar-config'], generate_mjcf_string=lambda: xml))
     captured = {}
     closed = []
 
@@ -120,6 +120,7 @@ def test_main_wires_terrain_scan_options(monkeypatch, enabled):
     assert captured['viewer'] is False
     assert captured['actuator_delay_s'] == 0.025
     assert captured['rgbd_cameras'] == ['camera-config']
+    assert captured['lidars'] == ['lidar-config']
     if enabled:
         scanner = captured['terrain_scanner']
         scan = scanner.scan(mujoco.MjData(captured['model']))
