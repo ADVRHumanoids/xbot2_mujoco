@@ -31,6 +31,6 @@ def pointcloud_from_scan(scan: LidarScan, frame_id: str) -> PointCloud2:
         header=Header(frame_id=frame_id, stamp=Time(sec=seconds, nanosec=nanoseconds)),
         height=1, width=len(cloud), fields=_FIELDS, is_bigendian=False,
         point_step=_DTYPE.itemsize, row_step=_DTYPE.itemsize * len(cloud),
-        data=cloud.tobytes(), is_dense=True,
+        data=cloud.tobytes(), is_dense=False,  # misses are (0, 0, 0), as the driver's
     )
 
