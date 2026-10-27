@@ -15,9 +15,9 @@ BACKENDS = ('cpu', 'taichi', 'warp')
 class LidarScan:
     lidar: str
     time: float         # sweep start: the time of its first slice
-    points: np.ndarray  # (columns * rings, 3) in the site frame, ring fastest; misses are 0
-    rings: np.ndarray   # (columns * rings,) ring index of each point
-    times: np.ndarray   # (columns * rings,) sim time of the pose each point was traced at
+    points: np.ndarray  # (columns * returns * rings, 3) in the site frame, ring fastest; misses 0
+    rings: np.ndarray   # ring index of each point
+    times: np.ndarray   # sim time of the pose each point was traced at
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,7 @@ class LidarCfg:
     geom_groups: tuple[int, ...] = (0, 2)
     exclude_body: str | None = None  # e.g. the body enclosing the sensor
     slices: int = 20  # traces per sweep; columns of a slice share one pose and time
+    returns: int = 1  # each traced column written this many times (2: a dual return driver's)
 
     def __post_init__(self):
         if not isinstance(self.site, str) or not self.site.strip():
@@ -54,6 +55,8 @@ class LidarCfg:
         if (isinstance(self.slices, bool) or not isinstance(self.slices, int)
                 or not 0 < self.slices <= self.horizontal_samples):
             raise ValueError('Lidar slices must be an integer in [1, horizontal_samples]')
+        if isinstance(self.returns, bool) or not isinstance(self.returns, int) or self.returns < 1:
+            raise ValueError('Lidar returns must be a positive integer')
         if not math.isfinite(self.start_azimuth_deg):
             raise ValueError('Lidar start_azimuth_deg must be finite')
         if self.backend not in BACKENDS:
@@ -74,14 +77,14 @@ class LidarCfg:
     def from_xml(cls, element):
         allowed = {'site', 'elevations_deg', 'rate', 'topic', 'frame_id', 'backend', 'cutoff',
                    'min_range', 'horizontal_samples', 'start_azimuth_deg', 'geom_groups',
-                   'exclude_body', 'slices'}
+                   'exclude_body', 'slices', 'returns'}
         if set(element.attrib) - allowed or len(element):
             raise ValueError('Unknown lidar attributes or child elements')
         optional = {}
         for name, convert in (('rate', float), ('topic', str), ('frame_id', str),
                               ('backend', str), ('cutoff', float), ('min_range', float),
                               ('horizontal_samples', int), ('start_azimuth_deg', float),
-                              ('exclude_body', str), ('slices', int)):
+                              ('exclude_body', str), ('slices', int), ('returns', int)):
             if element.get(name) is not None:
                 optional[name] = convert(element.get(name))
         if element.get('geom_groups') is not None:
@@ -126,7 +129,7 @@ class Lidar:
         self._phi = phi.astype(np.float32)
         self._directions = np.stack((np.cos(phi) * np.cos(theta), np.cos(phi) * np.sin(theta),
                                      np.sin(phi)), axis=-1)
-        self._rings = np.tile(np.arange(rings, dtype=np.uint16), cfg.horizontal_samples)
+        self._rings = np.tile(np.arange(rings, dtype=np.uint16), cfg.horizontal_samples * cfg.returns)
         # Ray index where each slice starts, and the end of the last one.
         self._slice_rays = [rings * (k * cfg.horizontal_samples // cfg.slices)
                             for k in range(cfg.slices + 1)]
@@ -166,8 +169,13 @@ class Lidar:
         self._times[a:b] = time
         if due < self.cfg.slices:
             return None
-        scan = LidarScan(self.cfg.site, float(self._times[0]), self._points.copy(), self._rings,
-                         self._times.copy())
+        scan = LidarScan(self.cfg.site, float(self._times[0]), self._columns(self._points),
+                         self._rings, self._columns(self._times))
         self._sweep_start += period
         self._next_slice = 0
         return scan
+
+    def _columns(self, per_ray):
+        """Each column (its rings) repeated `returns` times, the copies next to it."""
+        columns = per_ray.reshape(self.cfg.horizontal_samples, -1, *per_ray.shape[1:])
+        return np.repeat(columns, self.cfg.returns, axis=0).reshape(-1, *per_ray.shape[1:])

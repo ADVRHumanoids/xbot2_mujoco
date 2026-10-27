@@ -47,6 +47,27 @@ def test_ranges_and_layout(backend):
     np.testing.assert_array_equal(scan.points[2:], 0)
 
 
+def test_returns_repeat_each_column():
+    model, data = scene()
+    # Columns at 0, -90, 180, 90 deg, two returns each: the wall (+x) in the first pair only.
+    scan = full_scan(model, data, elevations_deg=(0.0, 5.0), horizontal_samples=4, returns=2)
+    points = scan.points.reshape(4, 2, 2, 3)  # columns, returns, rings
+    np.testing.assert_array_equal(points[:, 0], points[:, 1])
+    np.testing.assert_allclose(points[0, 0, 0], (4.9, 0, 0), atol=1e-4)
+    np.testing.assert_array_equal(points[1:], 0)
+    np.testing.assert_array_equal(scan.rings, [0, 1] * 8)
+    assert len(scan.times) == 16
+
+
+def test_cloud_is_not_dense():
+    pytest.importorskip('sensor_msgs')
+    from xbot2_py_mujoco.lidar_ros import pointcloud_from_scan
+    model, data = scene()
+    msg = pointcloud_from_scan(full_scan(model, data, elevations_deg=(0.0,), horizontal_samples=4,
+                                         returns=2), 'lidar')
+    assert (msg.width, msg.is_dense) == (8, False)
+
+
 def test_start_azimuth_rotates_columns():
     model, data = scene()
     points = full_scan(model, data, elevations_deg=(0.0,), horizontal_samples=4,
@@ -163,13 +184,13 @@ def test_xml_defaults_and_repeated_finalization(tmp_path):
     generator.merge_xml(f'''<mujoco>
       <reference element="body" name="{body}"><site name="lidar"/></reference>
       <lidar site="lidar" elevations_deg="-1 0 1" rate="20" topic="/points" backend="cpu"
-             horizontal_samples="10" start_azimuth_deg="96" geom_groups="0 2 3" slices="5"/>
+             horizontal_samples="10" start_azimuth_deg="96" geom_groups="0 2 3" slices="5" returns="2"/>
     </mujoco>''')
     xml = generator.generate_mjcf_string()
     assert '<lidar' not in xml
     assert generator.lidars == [LidarCfg('lidar', (-1.0, 0.0, 1.0), rate=20, topic='/points',
                                          horizontal_samples=10, start_azimuth_deg=96,
-                                         geom_groups=(0, 2, 3), slices=5)]
+                                         geom_groups=(0, 2, 3), slices=5, returns=2)]
     assert generator.lidars[0].frame_id == 'lidar'
     assert generator.generate_mjcf_string() == xml
     assert len(generator.lidars) == 1
@@ -190,6 +211,7 @@ def test_xml_unknown_site(tmp_path):
     'site="s" elevations_deg="0" backend="jax"', 'site="s" elevations_deg="0" geom_groups="6"',
     'site="s" elevations_deg="0" frame_id="/s"', 'site="s" elevations_deg="0" topic="/"',
     'site="s" elevations_deg="0" extra="1"', 'site="s" elevations_deg="0" slices="0"',
+    'site="s" elevations_deg="0" returns="0"',
     'site="s" elevations_deg="0" horizontal_samples="10" slices="11"',
 ])
 def test_invalid_xml_settings(attributes):
