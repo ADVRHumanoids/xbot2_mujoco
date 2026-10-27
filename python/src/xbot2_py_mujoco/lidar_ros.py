@@ -2,7 +2,6 @@
 
 import numpy as np
 from builtin_interfaces.msg import Time
-from geometry_msgs.msg import TransformStamped
 from sensor_msgs.msg import PointCloud2, PointField
 from std_msgs.msg import Header
 
@@ -35,15 +34,3 @@ def pointcloud_from_scan(scan: LidarScan, frame_id: str) -> PointCloud2:
         data=cloud.tobytes(), is_dense=True,
     )
 
-
-def site_transform(model, cfg) -> TransformStamped:
-    """The lidar frame in its site's parent body, for /tf_static."""
-    site = model.site(cfg.site)
-    transform = TransformStamped()
-    transform.header.frame_id = model.body(int(site.bodyid[0])).name
-    transform.child_frame_id = cfg.frame_id
-    t = transform.transform.translation
-    t.x, t.y, t.z = (float(x) for x in site.pos)
-    q = transform.transform.rotation
-    q.w, q.x, q.y, q.z = (float(x) for x in site.quat)
-    return transform
