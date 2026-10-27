@@ -15,6 +15,8 @@ from xbot2_py_mujoco.remote_control import RemoteControlServer
 from xbot2_py_mujoco.terrain_scan import TerrainScanner, TerrainScan
 from xbot2_py_mujoco.rgbd import RgbdCameraCfg, RgbdCameraManager, validate_cameras
 from xbot2_py_mujoco.lidar import Lidar, LidarCfg, LidarScan
+from xbot2_py_mujoco.imu import Imu, ImuCfg, ImuSample
+from xbot2_py_mujoco.odometry import Odometry, OdometryCfg, OdometrySample
 
 class SimulatorWrapper:
 
@@ -41,7 +43,9 @@ class SimulatorWrapper:
                  terrain_scan_visualization: bool = True,
                  terrain_scan_topic: str = '/heightscan',
                  rgbd_cameras: list[RgbdCameraCfg] | None = None,
-                 lidars: list[LidarCfg] | None = None):
+                 lidars: list[LidarCfg] | None = None,
+                 imus: list[ImuCfg] | None = None,
+                 odometries: list[OdometryCfg] | None = None):
 
         rgbd_cameras = tuple(rgbd_cameras or ())
         validate_cameras(model, rgbd_cameras)
@@ -62,6 +66,12 @@ class SimulatorWrapper:
         self.lidars = [Lidar(model, cfg) for cfg in lidars or ()]
         self.lidar_scans: dict[str, LidarScan] = {}
         self.lidar_pubs = {}
+        self.imus = [Imu(model, cfg) for cfg in imus or ()]
+        self.imu_samples: dict[str, ImuSample] = {}
+        self.imu_pubs = {}
+        self.odometries = [Odometry(model, cfg) for cfg in odometries or ()]
+        self.odometry_samples: dict[str, OdometrySample] = {}
+        self.odometry_pubs = {}
         self.clock_pub = None
 
         # define default values
@@ -143,14 +153,24 @@ class SimulatorWrapper:
             if self.lidars:
                 from sensor_msgs.msg import PointCloud2
                 from rclpy.qos import qos_profile_sensor_data
-                from tf2_ros import StaticTransformBroadcaster
-                from xbot2_py_mujoco.lidar_ros import site_transform
                 for lidar in self.lidars:
                     self.lidar_pubs[lidar.cfg.site] = self.ros_node.create_publisher(
                         PointCloud2, lidar.cfg.topic, qos_profile_sensor_data,
                     )
-                self.lidar_tf = StaticTransformBroadcaster(self.ros_node)
-                self.lidar_tf.sendTransform([site_transform(model, l.cfg) for l in self.lidars])
+            # Reliable, as ros_gz_bridge's and the robot's drivers: reliable subscribers (FAST-LIO's
+            # IMU) get them too.
+            if self.imus:
+                from sensor_msgs.msg import Imu as ImuMsg
+                for imu in self.imus:
+                    self.imu_pubs[imu.cfg.topic] = self.ros_node.create_publisher(
+                        ImuMsg, imu.cfg.topic, 10,
+                    )
+            if self.odometries:
+                from nav_msgs.msg import Odometry as OdometryMsg
+                for odometry in self.odometries:
+                    self.odometry_pubs[odometry.cfg.topic] = self.ros_node.create_publisher(
+                        OdometryMsg, odometry.cfg.topic, 10,
+                    )
             if rgbd_cameras:
                 from xbot2_py_mujoco.rgbd_ros import RgbdPublisher
                 self.rgbd_publisher = RgbdPublisher(self.ros_node, rgbd_cameras)
@@ -409,6 +429,22 @@ class SimulatorWrapper:
                 if publisher is not None:
                     from xbot2_py_mujoco.lidar_ros import pointcloud_from_scan
                     publisher.publish(pointcloud_from_scan(scan, lidar.cfg.frame_id))
+        for imu in self.imus:
+            sample = imu.step(self.data)
+            if sample is not None:
+                self.imu_samples[imu.cfg.topic] = sample
+                publisher = self.imu_pubs.get(imu.cfg.topic)
+                if publisher is not None:
+                    from xbot2_py_mujoco.imu_ros import imu_message
+                    publisher.publish(imu_message(sample, imu.cfg))
+        for odometry in self.odometries:
+            sample = odometry.step(self.data)
+            if sample is not None:
+                self.odometry_samples[odometry.cfg.topic] = sample
+                publisher = self.odometry_pubs.get(odometry.cfg.topic)
+                if publisher is not None:
+                    from xbot2_py_mujoco.odometry_ros import odometry_message
+                    publisher.publish(odometry_message(sample, odometry.cfg))
         if self.iter_counter % self.send_state_decimation == 0:
             self.xbot2_bridge.send_state()
 

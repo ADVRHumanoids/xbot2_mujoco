@@ -8,6 +8,8 @@ from pathlib import Path
 import mujoco
 from xbot2_py_mujoco.rgbd import RgbdCameraCfg, validate_cameras
 from xbot2_py_mujoco.lidar import LidarCfg, validate_lidars
+from xbot2_py_mujoco.imu import ImuCfg, validate_imus
+from xbot2_py_mujoco.odometry import OdometryCfg, validate_odometries
 
 class MjcfGenerator:
     
@@ -30,6 +32,8 @@ class MjcfGenerator:
         self.q_init : dict[str, float] = {}
         self.rgbd_cameras: list[RgbdCameraCfg] = []
         self.lidars: list[LidarCfg] = []
+        self.imus: list[ImuCfg] = []
+        self.odometries: list[OdometryCfg] = []
 
         # create directories
         shutil.rmtree(self.mj_xml_dir, ignore_errors=True)
@@ -85,10 +89,12 @@ class MjcfGenerator:
     def generate_mjcf_string(self):
         self._finalize_xml()
         mjcf_str = etree.tostring(self.mj_xml_tree).decode()
-        if self.rgbd_cameras or self.lidars:
+        if self.rgbd_cameras or self.lidars or self.imus or self.odometries:
             model = mujoco.MjModel.from_xml_string(mjcf_str)
             validate_cameras(model, self.rgbd_cameras)
             validate_lidars(model, self.lidars)
+            validate_imus(model, self.imus)
+            validate_odometries(model, self.odometries)
         with open(self.mj_xml_path, 'w') as f:
             print(f'[MjcfGenerator] writing final mjcf to {self.mj_xml_path}')
             f.write(mjcf_str)
@@ -254,10 +260,12 @@ class MjcfGenerator:
         for element in elements:
             mujoco_root.remove(element)
 
-        elements = mujoco_root.findall('lidar')
-        self.lidars.extend(LidarCfg.from_xml(element) for element in elements)
-        for element in elements:
-            mujoco_root.remove(element)
+        for tag, cls, configs in (('lidar', LidarCfg, self.lidars), ('imu', ImuCfg, self.imus),
+                                  ('odometry', OdometryCfg, self.odometries)):
+            elements = mujoco_root.findall(tag)
+            configs.extend(cls.from_xml(element) for element in elements)
+            for element in elements:
+                mujoco_root.remove(element)
         
         
         
