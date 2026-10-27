@@ -14,9 +14,10 @@ BACKENDS = ('cpu', 'taichi', 'warp')
 @dataclass(frozen=True)
 class LidarScan:
     lidar: str
-    time: float
+    time: float         # sweep start: the time of its first slice
     points: np.ndarray  # (columns * rings, 3) in the site frame, ring fastest; misses are 0
     rings: np.ndarray   # (columns * rings,) ring index of each point
+    times: np.ndarray   # (columns * rings,) sim time of the pose each point was traced at
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,7 @@ class LidarCfg:
     start_azimuth_deg: float = 0.0
     geom_groups: tuple[int, ...] = (0, 2)
     exclude_body: str | None = None  # e.g. the body enclosing the sensor
+    slices: int = 20  # traces per sweep; columns of a slice share one pose and time
 
     def __post_init__(self):
         if not isinstance(self.site, str) or not self.site.strip():
@@ -49,6 +51,9 @@ class LidarCfg:
         if (isinstance(self.horizontal_samples, bool) or not isinstance(self.horizontal_samples, int)
                 or self.horizontal_samples <= 0):
             raise ValueError('Lidar horizontal_samples must be a positive integer')
+        if (isinstance(self.slices, bool) or not isinstance(self.slices, int)
+                or not 0 < self.slices <= self.horizontal_samples):
+            raise ValueError('Lidar slices must be an integer in [1, horizontal_samples]')
         if not math.isfinite(self.start_azimuth_deg):
             raise ValueError('Lidar start_azimuth_deg must be finite')
         if self.backend not in BACKENDS:
@@ -69,14 +74,14 @@ class LidarCfg:
     def from_xml(cls, element):
         allowed = {'site', 'elevations_deg', 'rate', 'topic', 'frame_id', 'backend', 'cutoff',
                    'min_range', 'horizontal_samples', 'start_azimuth_deg', 'geom_groups',
-                   'exclude_body'}
+                   'exclude_body', 'slices'}
         if set(element.attrib) - allowed or len(element):
             raise ValueError('Unknown lidar attributes or child elements')
         optional = {}
         for name, convert in (('rate', float), ('topic', str), ('frame_id', str),
                               ('backend', str), ('cutoff', float), ('min_range', float),
                               ('horizontal_samples', int), ('start_azimuth_deg', float),
-                              ('exclude_body', str)):
+                              ('exclude_body', str), ('slices', int)):
             if element.get(name) is not None:
                 optional[name] = convert(element.get(name))
         if element.get('geom_groups') is not None:
@@ -103,13 +108,15 @@ def validate_lidars(model, configs):
 
 
 class Lidar:
-    """Instantaneous scans of columns x rings rays: columns clockwise from start_azimuth_deg,
-    ring fastest. Call due/scan from the physics thread."""
+    """Sweeps of columns x rings rays: columns clockwise from start_azimuth_deg, ring fastest,
+    one sweep per 1/rate s. Each slice of columns is traced at the robot's pose when it is due:
+    motion distortion. Call step after every mj_step, from the physics thread."""
 
     def __init__(self, model, cfg: LidarCfg):
         validate_lidars(model, [cfg])
         from mujoco_lidar import MjLidarWrapper
         self.cfg = cfg
+        self._model = model
         rings = len(cfg.elevations_deg)
         azimuth = (math.radians(cfg.start_azimuth_deg)
                    - np.arange(cfg.horizontal_samples) * 2 * math.pi / cfg.horizontal_samples)
@@ -120,27 +127,47 @@ class Lidar:
         self._directions = np.stack((np.cos(phi) * np.cos(theta), np.cos(phi) * np.sin(theta),
                                      np.sin(phi)), axis=-1)
         self._rings = np.tile(np.arange(rings, dtype=np.uint16), cfg.horizontal_samples)
+        # Ray index where each slice starts, and the end of the last one.
+        self._slice_rays = [rings * (k * cfg.horizontal_samples // cfg.slices)
+                            for k in range(cfg.slices + 1)]
         geomgroup = np.zeros(mujoco.mjNGROUP, dtype=np.uint8)
         geomgroup[list(cfg.geom_groups)] = 1
         exclude = -1 if cfg.exclude_body is None else model.body(cfg.exclude_body).id
         self._wrapper = MjLidarWrapper(model, cfg.site, backend=cfg.backend, cutoff_dist=cfg.cutoff,
                                        args={'geomgroup': geomgroup, 'bodyexclude': exclude})
-        self._deadline = None
+        self._points = np.zeros((len(theta), 3), dtype=np.float32)
+        self._times = np.zeros(len(theta))
+        self._sweep_start = None
+        self._next_slice = 0
         self._last_time = None
 
-    def due(self, time: float) -> bool:
-        if self._last_time is not None and time < self._last_time:
-            self._deadline = None
+    def step(self, data) -> LidarScan | None:
+        """Trace the slices due by now; the sweep once its last slice is traced."""
+        # After mj_step, poses are those of the step's start.
+        time = float(data.time) - self._model.opt.timestep
+        # Sim time is a sum of steps: a slice is due at the step nearest its time.
+        tolerance = self._model.opt.timestep / 2
+        period = 1.0 / self.cfg.rate
+        if (self._sweep_start is None or time < self._last_time
+                or time >= self._sweep_start + period):
+            self._sweep_start = time
+            self._next_slice = 0
         self._last_time = time
-        if self._deadline is None:
-            self._deadline = time
-        if time + 1e-12 < self._deadline:
-            return False
-        self._deadline += (math.floor((time - self._deadline) * self.cfg.rate + 1e-9) + 1) / self.cfg.rate
-        return True
-
-    def scan(self, data) -> LidarScan:
-        distances = np.asarray(self._wrapper.trace_rays(data, self._theta, self._phi), dtype=np.float64)
+        due = min(self.cfg.slices,
+                  math.floor((time + tolerance - self._sweep_start) * self.cfg.slices / period) + 1)
+        if due <= self._next_slice:
+            return None
+        a, b = self._slice_rays[self._next_slice], self._slice_rays[due]
+        self._next_slice = due
+        distances = np.asarray(self._wrapper.trace_rays(data, self._theta[a:b], self._phi[a:b]),
+                               dtype=np.float64)
         hit = (distances >= self.cfg.min_range) & (distances < self.cfg.cutoff)
-        points = np.where(hit[:, None], self._directions * distances[:, None], 0.0)
-        return LidarScan(self.cfg.site, float(data.time), points.astype(np.float32), self._rings)
+        self._points[a:b] = np.where(hit[:, None], self._directions[a:b] * distances[:, None], 0.0)
+        self._times[a:b] = time
+        if due < self.cfg.slices:
+            return None
+        scan = LidarScan(self.cfg.site, float(self._times[0]), self._points.copy(), self._rings,
+                         self._times.copy())
+        self._sweep_start += period
+        self._next_slice = 0
+        return scan

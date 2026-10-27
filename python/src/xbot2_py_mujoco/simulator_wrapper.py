@@ -143,10 +143,14 @@ class SimulatorWrapper:
             if self.lidars:
                 from sensor_msgs.msg import PointCloud2
                 from rclpy.qos import qos_profile_sensor_data
+                from tf2_ros import StaticTransformBroadcaster
+                from xbot2_py_mujoco.lidar_ros import site_transform
                 for lidar in self.lidars:
                     self.lidar_pubs[lidar.cfg.site] = self.ros_node.create_publisher(
                         PointCloud2, lidar.cfg.topic, qos_profile_sensor_data,
                     )
+                self.lidar_tf = StaticTransformBroadcaster(self.ros_node)
+                self.lidar_tf.sendTransform([site_transform(model, l.cfg) for l in self.lidars])
             if rgbd_cameras:
                 from xbot2_py_mujoco.rgbd_ros import RgbdPublisher
                 self.rgbd_publisher = RgbdPublisher(self.ros_node, rgbd_cameras)
@@ -398,8 +402,9 @@ class SimulatorWrapper:
                 frame_id = self.model.body(self.terrain_scanner.body_id).name
                 self.terrain_scan_pub.publish(pointcloud_from_scan(self.terrain_scan, frame_id))
         for lidar in self.lidars:
-            if lidar.due(self.data.time):
-                scan = self.lidar_scans[lidar.cfg.site] = lidar.scan(self.data)
+            scan = lidar.step(self.data)
+            if scan is not None:
+                self.lidar_scans[lidar.cfg.site] = scan
                 publisher = self.lidar_pubs.get(lidar.cfg.site)
                 if publisher is not None:
                     from xbot2_py_mujoco.lidar_ros import pointcloud_from_scan
