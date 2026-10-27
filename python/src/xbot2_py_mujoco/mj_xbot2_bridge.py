@@ -6,6 +6,8 @@ import mujoco
 import numpy as np
 import time, struct
 
+from xbot2_py_mujoco.imu import discover_imus, read_imu
+
 
 @dataclass(frozen=True)
 class _PendingCommand:
@@ -47,7 +49,8 @@ class MjXbot2Bridge:
 
         # discover joints and imus from model
         self.joint_names = self._discover_joints(model)
-        self.imu_map, self.imu_names = self._discover_imus(model)
+        self.imu_map = discover_imus(model)
+        self.imu_names = list(self.imu_map)
         self._joint_name_to_index = {name: i for i, name in enumerate(self.joint_names)}
         self.velocity_feedback_noise_std = np.zeros(len(self.joint_names))
         self._noise_rng = np.random.default_rng()
@@ -255,19 +258,9 @@ class MjXbot2Bridge:
             self.bridge_server = None
 
     def _get_imu_state(self, imu_name: str) -> ImuState:
-        imu_ids = self.imu_map[imu_name]
-        gyro_id = imu_ids['gyro_id']
-        acc_id = imu_ids['acc_id']
-        site_id = imu_ids['site_id']
-
-        quat_w = np.empty(4)
-        mujoco.mju_mat2Quat(quat_w, self.data.site(site_id).xmat)
+        quat_w, ang_vel_b, lin_acc_b = read_imu(self.model, self.data, self.imu_map[imu_name])
         # wxyz to xyzw
-        quat_w = np.roll(quat_w, -1)
-        lin_acc_b = self.data.sensordata[acc_id*3:(acc_id+1)*3]
-        ang_vel_b = self.data.sensordata[gyro_id*3:(gyro_id+1)*3]
-
-        return ImuState(quat_w=quat_w, lin_acc_b=lin_acc_b, ang_vel_b=ang_vel_b)
+        return ImuState(quat_w=np.roll(quat_w, -1), lin_acc_b=lin_acc_b, ang_vel_b=ang_vel_b)
 
     @staticmethod
     def _discover_joints(model: mujoco.MjModel) -> list:
@@ -277,21 +270,3 @@ class MjXbot2Bridge:
                         int(mujoco.mjtJoint.mjJNT_SLIDE))
         return [model.joint(jnt).name for jnt in range(model.njnt)
                 if int(model.jnt_type[jnt]) in scalar_types]
-
-    @staticmethod
-    def _discover_imus(model: mujoco.MjModel) -> tuple:
-        site_imu_map = {}
-        for i in range(model.nsensor):
-            if model.sensor_objtype[i] != mujoco.mjtObj.mjOBJ_SITE:
-                continue
-            site_id = model.sensor_objid[i]
-            site_name = model.site(site_id).name
-            if model.sensor_type[i] == mujoco.mjtSensor.mjSENS_GYRO:
-                site_imu_map.setdefault(site_name, {})['gyro_id'] = i
-                site_imu_map[site_name]['site_id'] = site_id
-            elif model.sensor_type[i] == mujoco.mjtSensor.mjSENS_ACCELEROMETER:
-                site_imu_map.setdefault(site_name, {})['acc_id'] = i
-                site_imu_map[site_name]['site_id'] = site_id
-        imu_map = {name: ids for name, ids in site_imu_map.items()
-                   if 'gyro_id' in ids and 'acc_id' in ids}
-        return imu_map, list(imu_map.keys())
