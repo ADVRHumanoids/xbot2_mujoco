@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(xbot2_mujoco)
 
+# install marker file to make sure we have an install target
 set(install_marker "${CMAKE_CURRENT_BINARY_DIR}/xbot2_mujoco.marker")
 file(WRITE "${install_marker}" "")
 install(FILES "${install_marker}" DESTINATION "share/${PROJECT_NAME}")
