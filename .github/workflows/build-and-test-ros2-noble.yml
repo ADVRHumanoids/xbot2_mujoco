@@ -2,9 +2,9 @@ name: Build and Test (Noble-ROS2)
 
 on:
   push:
-    branches: [ "al_devel" ]
+    branches: [ "master" ]
   pull_request:
-    branches: [ "al_devel" ]
+    branches: [ "master" ]
   schedule:
     - cron: "0 0 * * *"
 
