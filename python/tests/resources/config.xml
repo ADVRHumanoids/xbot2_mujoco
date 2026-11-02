@@ -1,0 +1,74 @@
+<mujoco>
+
+    <compiler angle="radian" />
+
+    <!--  integrators: [Euler, RK4, implicit, implicitfast] -->
+    <option integrator="Euler"
+        timestep="0.001"
+        iterations="100"
+    />
+    <size njmax="1000" nconmax="200" />
+
+    <!-- contact filtering -->
+    <contact>
+
+    </contact>
+
+    <!-- class definitions -->
+    <default>
+        <default class="robot_leg">
+            <joint armature="0.25" damping="1.8" frictionloss="5.0" />
+            <position kp="200" kv="10" inheritrange="1.0" />
+        </default>
+    </default>
+
+    <!-- sensors -->
+    <sensor>
+        <accelerometer name="base_link_acc" site="base_link" />
+        <gyro name="base_link_gyro" site="base_link" />
+    </sensor>
+
+    <!-- substitutions -->
+    <reference element="body" name="base_link">
+        <site name="base_link" />
+    </reference>
+
+    <!-- childclass assignments (for default friction, actuator gains, ...) -->
+    <setattribute element="body" name="fl_hip_link">
+        <attribute name="childclass" value="robot_leg" />
+    </setattribute>
+    <setattribute element="body" name="fr_hip_link">
+        <attribute name="childclass" value="robot_leg" />
+    </setattribute>
+    <setattribute element="body" name="rl_hip_link">
+        <attribute name="childclass" value="robot_leg" />
+    </setattribute>
+    <setattribute element="body" name="rr_hip_link">
+        <attribute name="childclass" value="robot_leg" />
+    </setattribute>
+
+    <!-- initial configuration (ankles are fixed joints, excluded) -->
+    <q_init>
+        <joint name="fl_hip" value="0.15" />
+        <joint name="fl_knee" value="-0.4" />
+        <joint name="fr_hip" value="-0.15" />
+        <joint name="fr_knee" value="0.4" />
+        <joint name="rl_hip" value="-0.15" />
+        <joint name="rl_knee" value="-0.4" />
+        <joint name="rr_hip" value="0.15" />
+        <joint name="rr_knee" value="0.4" />
+    </q_init>
+
+    <!-- actuators (ankles are fixed joints, no actuator needed) -->
+    <actuator>
+        <position class="robot_leg" name="fl_hip" joint="fl_hip" />
+        <position class="robot_leg" name="fl_knee" joint="fl_knee" />
+        <position class="robot_leg" name="fr_hip" joint="fr_hip" />
+        <position class="robot_leg" name="fr_knee" joint="fr_knee" />
+        <position class="robot_leg" name="rl_hip" joint="rl_hip" />
+        <position class="robot_leg" name="rl_knee" joint="rl_knee" />
+        <position class="robot_leg" name="rr_hip" joint="rr_hip" />
+        <position class="robot_leg" name="rr_knee" joint="rr_knee" />
+    </actuator>
+
+</mujoco>    

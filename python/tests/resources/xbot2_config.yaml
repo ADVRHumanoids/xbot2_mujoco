@@ -1,0 +1,22 @@
+XBotInterface:
+  urdf: cat $RESOURCE_DIR/nice_robot.urdf
+  srdf: cat $RESOURCE_DIR/nice_robot.srdf
+
+ModelInterface:
+  model_type: pin
+
+xbotcore_device_configs:
+  mj: $PWD/xbot2_hal_config.yaml
+
+xbotcore_threads:
+    main: {sched: other, prio: 0 , period: 0.001, main: true}
+
+xbotcore_plugins: {}
+
+xbotcore_param:
+   /xbot/hal/enable_safety: false
+   /xbot/hal/joint_safety/filter_autostart: false
+
+
+
+

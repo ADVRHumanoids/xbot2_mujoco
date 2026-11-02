@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--This does not replace URDF, and is not an extension of URDF.
+    This is a format for representing semantic information about the robot structure.
+    A URDF file must exist for this robot as well, where the joints and the links that are referenced are defined
+-->
+<robot name="quadruped">
+    <!--GROUPS: Representation of a set of joints and links. This can be useful for specifying DOF to plan for, defining arms, end effectors, etc-->
+    <!--LINKS: When a link is specified, the parent joint of that link (if it exists) is automatically included-->
+    <!--JOINTS: When a joint is specified, the child link of that joint (which will always exist) is automatically included-->
+    <!--CHAINS: When a chain is specified, all the links along the chain (including endpoints) are included in the group. Additionally, all the joints that are parents to included links are also included. This means that joints along the chain and the parent joint of the base link are included in the group-->
+    <!--SUBGROUPS: Groups can also be formed by referencing to already defined group names-->
+    <group name="base">
+        <link name="base_link"/>
+    </group>
+    <group name="front_left_leg">
+        <chain base_link="base_link" tip_link="fl_foot_link"/>
+    </group>
+    <group name="front_right_leg">
+        <chain base_link="base_link" tip_link="fr_foot_link"/>
+    </group>
+    <group name="rear_left_leg">
+        <chain base_link="base_link" tip_link="rl_foot_link"/>
+    </group>
+    <group name="rear_right_leg">
+        <chain base_link="base_link" tip_link="rr_foot_link"/>
+    </group>
+    <group name="chains">
+        <group name="front_left_leg"/>
+        <group name="front_right_leg"/>
+        <group name="rear_left_leg"/>
+        <group name="rear_right_leg"/>
+    </group>
+    <!--GROUP STATES: Purpose: Define a named state for a particular group, in terms of joint values. This is useful to define states like 'folded arms'-->
+    <group_state name="home" group="chains">
+        <joint name="fl_hip" value="0"/>
+        <joint name="fl_knee" value="0"/>
+        <joint name="fr_hip" value="0"/>
+        <joint name="fr_knee" value="0"/>
+        <joint name="rl_hip" value="0"/>
+        <joint name="rl_knee" value="0"/>
+        <joint name="rr_hip" value="0"/>
+        <joint name="rr_knee" value="0"/>
+    </group_state>
+</robot>
