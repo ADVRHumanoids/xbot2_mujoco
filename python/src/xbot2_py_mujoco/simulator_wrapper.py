@@ -58,6 +58,7 @@ class SimulatorWrapper:
         self.terrain_scan_visualization = terrain_scan_visualization
         self.terrain_scan_pub = None
         self.clock_pub = None
+        self.odometry_publisher = None
 
         # define default values
         if q_init is None:
@@ -120,6 +121,8 @@ class SimulatorWrapper:
             rclpy.init()
             self.ros_node = Node(ros_node_name or 'simulator_wrapper_node')
             self.clock_pub = self.ros_node.create_publisher(Clock, '/clock', 1)
+            from xbot2_py_mujoco.odometry_ros import OdometryPublisher
+            self.odometry_publisher = OdometryPublisher(self.ros_node, model)
             latching_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
             self.urdf_pub = self.ros_node.create_publisher(String, ros_robot_description_topic, latching_qos)
             self.srdf_pub = self.ros_node.create_publisher(String, ros_robot_description_topic + '_semantic', latching_qos)
@@ -387,6 +390,8 @@ class SimulatorWrapper:
                 self.terrain_scan_pub.publish(pointcloud_from_scan(self.terrain_scan, frame_id))
         if self.iter_counter % self.send_state_decimation == 0:
             self.xbot2_bridge.send_state()
+            if self.odometry_publisher is not None:
+                self.odometry_publisher.publish(self.data)
 
         self._sync_viewer()
 
