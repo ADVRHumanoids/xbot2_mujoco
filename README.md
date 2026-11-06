@@ -283,6 +283,18 @@ Inverted stairs also require a positive opening above the landing. Generated
 terrain geoms use group **2**, and `spawn_locations.yaml` places spawns above
 each central landing using `spawn_height`.
 
+# ROS 2 odometry
+
+With `ros=True` (the default), the simulator publishes `nav_msgs/msg/Odometry`
+on `/<body_name>/odom` for every movable root body (a direct child of the world
+body with at least one joint). Unnamed roots use `body_<id>` as their name.
+Messages use simulation time, `world` as `header.frame_id`, and the body name
+as `child_frame_id`. Pose is expressed in world coordinates; linear and angular
+velocity are expressed in the body frame at its origin. Publishing follows
+`send_state_decimation` and works headless. Covariances retain their default
+zero values. ROS environments need `nav_msgs` installed; `ros=False` /
+`--disable-ros` disables odometry publishing.
+
 # Terrain height scan
 
 The Python simulator supports a local N×M grid of vertical rays for terrain
