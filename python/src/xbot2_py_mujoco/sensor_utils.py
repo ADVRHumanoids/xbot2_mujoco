@@ -1,4 +1,4 @@
-"""Checks and the rate schedule shared by the IMU and odometry sensors."""
+"""Checks and the rate schedule of the IMU sensor."""
 
 import math
 import re

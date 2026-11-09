@@ -211,7 +211,6 @@ def main():
         rgbd_cameras=gen.rgbd_cameras,
         lidars=gen.lidars,
         imus=gen.imus,
-        odometries=gen.odometries,
     )
 
     # main simulation loop, which runs until the viewer window is closed (if enabled) or the process is killed
