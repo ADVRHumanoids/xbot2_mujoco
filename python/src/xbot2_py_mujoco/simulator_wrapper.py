@@ -86,6 +86,7 @@ class SimulatorWrapper:
         if not math.isfinite(target_rtf) or target_rtf <= 0:
             raise ValueError("target_rtf must be finite and positive")
 
+        explicit_spawn_locations = spawn_locations is not None
         if spawn_locations is None:
             spawn_locations = [(0.0, 0.0, 0.0)]
     
@@ -93,6 +94,9 @@ class SimulatorWrapper:
         self.model = model
         self.data = mujoco.MjData(model)
         self.spawn_locations = [tuple(location) for location in spawn_locations]
+        if explicit_spawn_locations:
+            self._set_spawn_position()
+        mujoco.mj_forward(self.model, self.data)
         self._respawn_lock = threading.Lock()
         self._respawn_requested = False
         # The viewer callback only changes control state, never MuJoCo data.
@@ -306,25 +310,31 @@ class SimulatorWrapper:
     def _respawn(self):
         if getattr(self, 'remote_control', None) is not None:
             self.remote_control.clear_wrenches()
+        if not self._set_spawn_position():
+            return
+        if getattr(self, 'rgbd_manager', None) is not None:
+            self.rgbd_manager.reset()
+        self._set_initial_position(self.data)
+        mujoco.mj_forward(self.model, self.data)
+        self._clear_velocity_plot()
+
+    def _set_spawn_position(self):
+        """Apply a configured world pose at startup or on respawn."""
         free_joints = np.flatnonzero(
             self.model.jnt_type == mujoco.mjtJoint.mjJNT_FREE
         )
         if not len(free_joints):
-            print("[Simulator] Warning: No free joint found in the model, cannot respawn.")
-            return
-        if getattr(self, 'rgbd_manager', None) is not None:
-            self.rgbd_manager.reset()
+            print("[Simulator] Warning: No free joint found in the model, cannot set spawn position.")
+            return False
         joint_id = int(free_joints[0])
         qpos_start = self.model.jnt_qposadr[joint_id]
         dof_start = self.model.jnt_dofadr[joint_id]
         x, y, z = random.choice(self.spawn_locations)
-        print(f"[Simulator] Respawning asset to location ({x}, {y}, {z}).")
+        print(f"[Simulator] Setting spawn position to ({x}, {y}, {z}).")
         self.data.qpos[qpos_start:qpos_start + 3] = (x, y, z)
         self.data.qpos[qpos_start + 3:qpos_start + 7] = (1.0, 0.0, 0.0, 0.0)
         self.data.qvel[dof_start:dof_start + 6] = 0.0
-        self._set_initial_position(self.data)
-        mujoco.mj_forward(self.model, self.data)
-        self._clear_velocity_plot()
+        return True
 
     def _clear_velocity_plot(self):
         plot = getattr(self, "base_velocity_plot", None)

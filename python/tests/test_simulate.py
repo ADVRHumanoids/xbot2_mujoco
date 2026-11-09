@@ -59,6 +59,42 @@ def test_load_spawn_locations_rejects_invalid_shape(tmp_path):
         _load_spawn_locations(spawn_file)
 
 
+@pytest.mark.parametrize('spawn_locations, expected_position', [
+    ([(1.0, 2.0, 0.5)], [1.0, 2.0, 0.5]),
+    (None, [0.0, 0.0, 1.0]),
+])
+def test_startup_sets_spawn_before_viewer_and_bridge(monkeypatch, spawn_locations, expected_position):
+    from types import SimpleNamespace
+    from xbot2_py_mujoco import simulator_wrapper as wrapper
+
+    model = mujoco.MjModel.from_xml_string(
+        '<mujoco><worldbody><body pos="0 0 1"><freejoint/>'
+        '<geom size=".1"/></body></worldbody></mujoco>'
+    )
+    observed = []
+
+    def launch(model, data, **kwargs):
+        observed.append(data.qpos[:3].copy())
+        return SimpleNamespace(close=lambda: None)
+
+    def bridge(**kwargs):
+        observed.append(kwargs['data'].qpos[:3].copy())
+        return SimpleNamespace(close=lambda: None)
+
+    monkeypatch.setattr(wrapper, 'launch_passive', launch)
+    monkeypatch.setattr(wrapper, 'MjXbot2Bridge', bridge)
+    sim = SimulatorWrapper(model, viewer=True, ros=False, spawn_locations=spawn_locations)
+    try:
+        assert sim.data.time == 0.0
+        np.testing.assert_allclose(sim.data.qpos[:3], expected_position)
+        np.testing.assert_allclose(sim.data.xpos[1], expected_position)
+        assert len(observed) == 2
+        for position in observed:
+            np.testing.assert_allclose(position, expected_position)
+    finally:
+        sim.close()
+
+
 def test_respawn_key_moves_free_root():
     model = mujoco.MjModel.from_xml_string(
         '<mujoco><worldbody><body><freejoint/><geom size="1 1 1"/></body></worldbody></mujoco>'

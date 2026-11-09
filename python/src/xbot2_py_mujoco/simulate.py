@@ -159,7 +159,7 @@ def main():
     spawn_file = args.spawn_file
     if spawn_file is None and args.detect_spawn_locations:
         spawn_file = _detect_spawn_file(args.xml_merges)
-    spawn_locations = _load_spawn_locations(spawn_file)
+    spawn_locations = _load_spawn_locations(spawn_file) if spawn_file is not None else None
 
     # create the mjcf file (xml) from the urdf, merging extra xml files and 
     # finally patching the result with information from the config yaml file

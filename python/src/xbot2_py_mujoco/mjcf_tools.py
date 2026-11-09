@@ -1,6 +1,6 @@
 import os 
 import shutil
-import rospkg
+from ament_index_python.packages import get_package_share_directory
 from lxml import etree
 from copy import deepcopy
 from pathlib import Path
@@ -110,6 +110,9 @@ class MjcfGenerator:
 
 
     def _preprocess_urdf(XML):
+        # lxml requires bytes when XML includes an encoding declaration.
+        if isinstance(XML, str):
+            XML = XML.encode("utf-8")
         tree = etree.fromstring(XML)
         etree.strip_tags(tree, etree.Comment)
         robot = tree.xpath('/robot')[0]
@@ -125,43 +128,34 @@ class MjcfGenerator:
     
     
     def _resolve_ros_package_uri_and_copy_assets(self, urdf: str):
-        rospack = rospkg.RosPack()
-        seq_id = 0
-        urdf_processed = str()
-        last_pos = 0
-        pos = urdf.find('filename="')    
-        while pos != -1:
-            uri_start = pos + len('filename="')
-            uri_end = urdf.find('"', uri_start)
-            uri = urdf[uri_start:uri_end]
-
+        tree = etree.fromstring(urdf.encode('utf-8'))
+        # Gazebo plugin libraries also have filename attributes, but are not
+        # mesh or texture assets and must not be copied or checked here.
+        assets = tree.xpath('//mesh[@filename] | //texture[@filename]')
+        for seq_id, asset in enumerate(assets):
+            uri = asset.get('filename')
             if uri.startswith('package://'):
-                pkg_start = len('package://')
-                pkg_end = uri.find('/', pkg_start)
-                pkg_name = uri[pkg_start:pkg_end]
-                uri = rospack.get_path(pkg_name) + uri[pkg_end:] 
-            
+                pkg_name, relative_path = uri[len('package://'):].split('/', 1)
+                uri = os.path.join(get_package_share_directory(pkg_name), relative_path)
+
+            if not os.path.isfile(uri):
+                raise FileNotFoundError(f'Asset not found: {uri}')
+
             filename = os.path.basename(uri)
             dst_file = os.path.join(self.mj_assetsdir, str(seq_id) + '_' + filename)
-            seq_id += 1
             if not os.path.exists(dst_file):
-                try: 
+                if os.path.islink(dst_file):
                     os.remove(dst_file)
-                except: pass
-
                 if self.copy_assets:
                     shutil.copy(uri, dst_file)
                 else:
-                    os.symlink(uri, dst_file)
+                    os.symlink(os.path.abspath(uri), dst_file)
 
-            urdf_processed = urdf_processed + urdf[last_pos:uri_start] + './assets/' + os.path.basename(dst_file)
-            last_pos = uri_end
-            pos = urdf.find('filename="', uri_end)    
+            asset.set('filename', './assets/' + os.path.basename(dst_file))
 
-        urdf_processed = urdf_processed + urdf[last_pos:]
-        return urdf_processed
-    
-    
+        return etree.tostring(tree).decode('utf-8')
+
+
     def _tree_merge(a, b):
 
         def merge_key(elem):

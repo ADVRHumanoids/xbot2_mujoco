@@ -63,6 +63,70 @@ def gen_finalized(urdf_str, config_xml_str, world_xml_str):
 # Construction
 # ---------------------------------------------------------------------------
 
+@pytest.mark.parametrize('as_bytes', [False, True])
+@pytest.mark.parametrize('with_declaration', [False, True])
+def test_preprocess_urdf_accepts_encoding_declaration(as_bytes, with_declaration):
+    xml = '<robot name="robôt"><link name="base_link"/></robot>'
+    if with_declaration:
+        xml = '<?xml version="1.0" encoding="utf-8"?>' + xml
+    if as_bytes:
+        xml = xml.encode('utf-8')
+
+    processed = MjcfGenerator._preprocess_urdf(xml)
+    robot = etree.fromstring(processed.encode('utf-8'))
+    assert robot.get('name') == 'robôt'
+    assert robot.find('link').get('name') == 'base_link'
+    assert robot.find('mujoco/compiler').get('angle') == 'radian'
+
+
+@pytest.mark.parametrize('copy_assets', [False, True])
+@pytest.mark.parametrize('missing_asset', [False, True])
+def test_resolve_package_assets_uses_ament(monkeypatch, tmp_path, copy_assets, missing_asset):
+    package_share = tmp_path / 'installed_package'
+    mesh = package_share / 'meshes' / 'part.stl'
+    mesh.parent.mkdir(parents=True)
+    if not missing_asset:
+        mesh.write_bytes(b'mesh contents')
+    requested_packages = []
+
+    def get_share(package):
+        requested_packages.append(package)
+        return str(package_share)
+
+    monkeypatch.setattr(
+        'xbot2_py_mujoco.mjcf_tools.get_package_share_directory', get_share,
+    )
+    gen = object.__new__(MjcfGenerator)
+    gen.mj_assetsdir = str(tmp_path / 'assets')
+    gen.copy_assets = copy_assets
+    Path(gen.mj_assetsdir).mkdir()
+    xml = '<robot><mesh filename="package://robot_description/meshes/part.stl"/></robot>'
+
+    if missing_asset:
+        with pytest.raises(FileNotFoundError, match='Asset not found:') as exc:
+            gen._resolve_ros_package_uri_and_copy_assets(xml)
+        assert str(mesh) in str(exc.value)
+        assert not list(Path(gen.mj_assetsdir).iterdir())
+    else:
+        processed = gen._resolve_ros_package_uri_and_copy_assets(xml)
+        destination = Path(gen.mj_assetsdir) / '0_part.stl'
+        assert destination.read_bytes() == mesh.read_bytes()
+        assert destination.is_symlink() == (not copy_assets)
+        assert etree.fromstring(processed).find('mesh').get('filename') == './assets/0_part.stl'
+    assert requested_packages == ['robot_description']
+
+
+def test_resolve_assets_ignores_gazebo_plugin_libraries(tmp_path):
+    gen = object.__new__(MjcfGenerator)
+    gen.mj_assetsdir = str(tmp_path)
+    gen.copy_assets = False
+    xml = '<robot><gazebo><plugin name="server" filename="libserver.so"/></gazebo></robot>'
+
+    processed = gen._resolve_ros_package_uri_and_copy_assets(xml)
+    assert etree.fromstring(processed).find('gazebo/plugin').get('filename') == 'libserver.so'
+    assert not list(tmp_path.iterdir())
+
+
 def test_generator_constructs(gen):
     assert gen is not None
     assert gen.mj_xml_tree is not None
