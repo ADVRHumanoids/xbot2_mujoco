@@ -62,6 +62,8 @@ class LidarCfg:
             raise ValueError('Lidar slices must be an integer in [1, horizontal_samples]')
         if isinstance(self.returns, bool) or not isinstance(self.returns, int) or self.returns < 1:
             raise ValueError('Lidar returns must be a positive integer')
+        if not isinstance(self.reliable, bool):
+            raise ValueError('Lidar reliable must be a boolean')
         if not math.isfinite(self.start_azimuth_deg):
             raise ValueError('Lidar start_azimuth_deg must be finite')
         if not math.isfinite(self.horizontal_fov_deg) or not 0 < self.horizontal_fov_deg <= 360:
@@ -99,6 +101,10 @@ class LidarCfg:
                               ('scan_topic', str)):
             if element.get(name) is not None:
                 optional[name] = convert(element.get(name))
+        if element.get('reliable') is not None:
+            if element.get('reliable') not in ('true', 'false'):
+                raise ValueError('Lidar reliable must be true or false')
+            optional['reliable'] = element.get('reliable') == 'true'
         if element.get('geom_groups') is not None:
             optional['geom_groups'] = tuple(int(g) for g in element.get('geom_groups').split())
         if element.get('reliable') is not None:
