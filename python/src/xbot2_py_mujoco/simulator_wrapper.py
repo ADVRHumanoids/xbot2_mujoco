@@ -155,8 +155,10 @@ class SimulatorWrapper:
                 from sensor_msgs.msg import PointCloud2
                 from rclpy.qos import qos_profile_sensor_data
                 for lidar in self.lidars:
+                    # A reliable publisher also serves best-effort subscribers.
+                    qos = 5 if lidar.cfg.reliable else qos_profile_sensor_data
                     self.lidar_pubs[lidar.cfg.site] = self.ros_node.create_publisher(
-                        PointCloud2, lidar.cfg.topic, qos_profile_sensor_data,
+                        PointCloud2, lidar.cfg.topic, qos,
                     )
             # Reliable, as ros_gz_bridge's and the robot's drivers: reliable subscribers (FAST-LIO's
             # IMU) get them too.

@@ -36,6 +36,7 @@ class LidarCfg:
     exclude_body: str | None = None  # e.g. the body enclosing the sensor
     slices: int = 20  # traces per sweep; columns of a slice share one pose and time
     returns: int = 1  # each traced column written this many times (2: a dual return driver's)
+    reliable: bool = False  # reliable ROS publisher instead of the best-effort sensor-data QoS
 
     def __post_init__(self):
         if not isinstance(self.site, str) or not self.site.strip():
@@ -57,6 +58,8 @@ class LidarCfg:
             raise ValueError('Lidar slices must be an integer in [1, horizontal_samples]')
         if isinstance(self.returns, bool) or not isinstance(self.returns, int) or self.returns < 1:
             raise ValueError('Lidar returns must be a positive integer')
+        if not isinstance(self.reliable, bool):
+            raise ValueError('Lidar reliable must be a boolean')
         if not math.isfinite(self.start_azimuth_deg):
             raise ValueError('Lidar start_azimuth_deg must be finite')
         if self.backend not in BACKENDS:
@@ -77,7 +80,7 @@ class LidarCfg:
     def from_xml(cls, element):
         allowed = {'site', 'elevations_deg', 'rate', 'topic', 'frame_id', 'backend', 'cutoff',
                    'min_range', 'horizontal_samples', 'start_azimuth_deg', 'geom_groups',
-                   'exclude_body', 'slices', 'returns'}
+                   'exclude_body', 'slices', 'returns', 'reliable'}
         if set(element.attrib) - allowed or len(element):
             raise ValueError('Unknown lidar attributes or child elements')
         optional = {}
@@ -87,6 +90,10 @@ class LidarCfg:
                               ('exclude_body', str), ('slices', int), ('returns', int)):
             if element.get(name) is not None:
                 optional[name] = convert(element.get(name))
+        if element.get('reliable') is not None:
+            if element.get('reliable') not in ('true', 'false'):
+                raise ValueError('Lidar reliable must be true or false')
+            optional['reliable'] = element.get('reliable') == 'true'
         if element.get('geom_groups') is not None:
             optional['geom_groups'] = tuple(int(g) for g in element.get('geom_groups').split())
         return cls(site=element.get('site', ''),
