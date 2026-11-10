@@ -211,12 +211,10 @@ def test_resume_and_advance_reset_timing_without_catchup(make_sim):
     sim, bridge, viewer, keys, clock = make_sim()
     sim.set_paused()
     clock.now += 100
-    sim.sync_error_integral = 0.1
     sim.advance()
     sim.pre_step()
     assert sim.last_sync_wall == clock.now
     assert sim.last_print_wall == clock.now
-    assert sim.sync_error_integral == 0
     sim.step()
     sim.post_step()
     assert clock.sleeps[-1] == pytest.approx(sim.model.opt.timestep)
@@ -224,13 +222,25 @@ def test_resume_and_advance_reset_timing_without_catchup(make_sim):
     sim.set_paused(False)
     assert sim._advance_target is None and not sim._advance_requests
     clock.now += 100
-    sim.sync_error_integral = -0.1
     count, start = sim.iter_counter, sim.data.time
     sim.run()
     assert sim.iter_counter == count + 1
     assert sim.data.time == pytest.approx(start + sim.model.opt.timestep)
-    assert sim.sync_error_integral == 0
     assert clock.sleeps[-1] == pytest.approx(sim.model.opt.timestep)
+
+
+def test_pacing_recovers_bounded_lag(make_sim):
+    sim, bridge, viewer, keys, clock = make_sim()
+    dt = sim.model.opt.timestep
+    sim.run()
+    clock.now += 1.0
+    slept = len(clock.sleeps)
+    for _ in range(round(sim.MAX_PACING_LAG / dt)):
+        sim.run()
+    assert len(clock.sleeps) == slept
+    for _ in range(4):
+        sim.run()
+    assert clock.sleeps[-3:] == pytest.approx([dt] * 3)
 
 
 @pytest.mark.parametrize('duration', [0, -1, float('nan'), float('inf')])

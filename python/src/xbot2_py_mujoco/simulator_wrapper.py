@@ -19,6 +19,9 @@ from xbot2_py_mujoco.imu import Imu, ImuCfg, ImuSample
 
 class SimulatorWrapper:
 
+    # Wall time a lagging simulation may recover by running faster than the target RTF.
+    MAX_PACING_LAG = 0.01
+
     def __init__(self, model: mujoco.MjModel,
                  q_init: dict[str, float] = None,
                  ignore_joints: list[str] = None,
@@ -192,7 +195,6 @@ class SimulatorWrapper:
         self.last_print_wall = self.time_start
         self.last_print_sim = self.data.time
         self.last_sim_time = self.data.time
-        self.sync_error_integral = .0
 
         # running flag
         self.running = True
@@ -277,7 +279,6 @@ class SimulatorWrapper:
         self._next_viewer_sync_wall = now
         self.last_sync_wall = self.last_print_wall = now
         self.last_sync_sim = self.last_print_sim = self.data.time
-        self.sync_error_integral = 0.0
 
     def _can_update(self, start_advance=False):
         with self._respawn_lock:
@@ -436,38 +437,26 @@ class SimulatorWrapper:
 
         self._sync_viewer()
 
-        # sync to target RTF at specified interval
+        # Sleep until the wall time at which the current sim time is due. The
+        # next sync point is that due time, so sleep overshoot is recovered,
+        # but a simulation that fell behind recovers at most MAX_PACING_LAG.
         now = time.perf_counter()
         if now - self.last_sync_wall >= self.sync_interval:
-            wall_delta = now - self.last_sync_wall
-            sim_delta = self.data.time - self.last_sync_sim
-            sync_time = sim_delta/self.target_rtf - wall_delta + self.sync_error_integral
-            if sync_time > 0:
-                time.sleep(sync_time)
-
-            # Mark the sync point after sleeping. If we kept the pre-sleep
-            # timestamp, the next cycle would count this sleep again and skip
-            # throttling, producing an RTF above the target.
-            self.last_sync_wall = time.perf_counter()
+            due = (self.last_sync_wall +
+                   (self.data.time - self.last_sync_sim) / self.target_rtf)
+            if due > now:
+                time.sleep(due - now)
+            self.last_sync_wall = max(due, time.perf_counter() - self.MAX_PACING_LAG)
             self.last_sync_sim = self.data.time
 
         # print RTF at specified interval
         now = time.perf_counter()
 
         if now - self.last_print_wall >= self.rtf_print_interval:
-            # 
             wall_delta = now - self.last_print_wall
             sim_delta = self.data.time - self.last_print_sim
-
-            # closed loop rtf correction
-            sync_error = sim_delta/self.target_rtf - wall_delta
-            self.sync_error_integral += 0.5*sync_error * (self.model.opt.timestep / self.rtf_print_interval) 
-            # clamp integral to avoid windup
-            self.sync_error_integral = max(min(self.sync_error_integral, 0.1), -0.1)
-
-            # print rtf
             rtf = sim_delta / wall_delta if wall_delta > 0 else 0.0
-            print(f'RTF: {rtf:.3f} (Sync error: {1000*sync_error:.3f} ms, Correction: {1000*self.sync_error_integral:.3f} ms)')
+            print(f'RTF: {rtf:.3f} (target {self.target_rtf:g})')
             self.last_print_wall = now
             self.last_print_sim = self.data.time
             
