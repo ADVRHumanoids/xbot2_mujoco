@@ -184,13 +184,15 @@ def test_xml_defaults_and_repeated_finalization(tmp_path):
     generator.merge_xml(f'''<mujoco>
       <reference element="body" name="{body}"><site name="lidar"/></reference>
       <lidar site="lidar" elevations_deg="-1 0 1" rate="20" topic="/points" backend="cpu"
-             horizontal_samples="10" start_azimuth_deg="96" geom_groups="0 2 3" slices="5" returns="2"/>
+             horizontal_samples="10" start_azimuth_deg="96" geom_groups="0 2 3" slices="5" returns="2"
+             reliable="true"/>
     </mujoco>''')
     xml = generator.generate_mjcf_string()
     assert '<lidar' not in xml
     assert generator.lidars == [LidarCfg('lidar', (-1.0, 0.0, 1.0), rate=20, topic='/points',
                                          horizontal_samples=10, start_azimuth_deg=96,
-                                         geom_groups=(0, 2, 3), slices=5, returns=2)]
+                                         geom_groups=(0, 2, 3), slices=5, returns=2,
+                                         reliable=True)]
     assert generator.lidars[0].frame_id == 'lidar'
     assert generator.generate_mjcf_string() == xml
     assert len(generator.lidars) == 1
@@ -211,7 +213,7 @@ def test_xml_unknown_site(tmp_path):
     'site="s" elevations_deg="0" backend="jax"', 'site="s" elevations_deg="0" geom_groups="6"',
     'site="s" elevations_deg="0" frame_id="/s"', 'site="s" elevations_deg="0" topic="/"',
     'site="s" elevations_deg="0" extra="1"', 'site="s" elevations_deg="0" slices="0"',
-    'site="s" elevations_deg="0" returns="0"',
+    'site="s" elevations_deg="0" returns="0"', 'site="s" elevations_deg="0" reliable="1"',
     'site="s" elevations_deg="0" horizontal_samples="10" slices="11"',
 ])
 def test_invalid_xml_settings(attributes):
