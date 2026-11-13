@@ -69,7 +69,7 @@ class MjcfGenerator:
         if isinstance(xml_str, Path):
             source_dir = xml_str.parent.resolve()
             xml_str = xml_str.read_text()
-        mj_opt_tree = etree.fromstring(xml_str)
+        mj_opt_tree = etree.fromstring(xml_str.encode())
         etree.strip_tags(mj_opt_tree, etree.Comment)
         if source_dir is not None:
             for asset in mj_opt_tree.xpath('//asset//*[@file]'):
@@ -117,7 +117,7 @@ class MjcfGenerator:
 
 
     def _preprocess_urdf(XML):
-        tree = etree.fromstring(XML)
+        tree = etree.fromstring(XML.encode())
         etree.strip_tags(tree, etree.Comment)
         robot = tree.xpath('/robot')[0]
         mujoco = etree.Element("mujoco")
