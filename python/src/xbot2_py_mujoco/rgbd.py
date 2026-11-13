@@ -10,6 +10,8 @@ import threading
 import mujoco
 import numpy as np
 
+from xbot2_py_mujoco.sensor_utils import parse_bool
+
 
 STREAMS = ('color', 'depth')
 
@@ -22,6 +24,10 @@ class RgbdCameraCfg:
     frame_id: str | None = None
     geom_groups: tuple[int, ...] = (0, 2)
     streams: tuple[str, ...] = STREAMS  # rendered and published: 'color', 'depth' or both
+    # (min, max) [m]: depth below min is -inf, beyond max or without a hit +inf (REP 117).
+    # None: no range, depth without a hit is NaN.
+    depth_range: tuple[float, float] | None = None
+    reliable: bool = False  # ROS QoS: reliable (depth 10, as ros_gz_bridge) or sensor data
 
     def __post_init__(self):
         if not isinstance(self.camera, str) or not self.camera.strip():
@@ -42,13 +48,19 @@ class RgbdCameraCfg:
         if not streams or len(set(streams)) != len(streams) or set(streams) - set(STREAMS):
             raise ValueError(f'RGB-D streams must be distinct values of {", ".join(STREAMS)}')
         object.__setattr__(self, 'streams', streams)
+        if self.depth_range is not None:
+            depth_range = tuple(float(v) for v in self.depth_range)
+            if (len(depth_range) != 2 or not all(math.isfinite(v) for v in depth_range)
+                    or not 0 <= depth_range[0] < depth_range[1]):
+                raise ValueError('RGB-D depth_range must be two finite values 0 <= min < max')
+            object.__setattr__(self, 'depth_range', depth_range)
         object.__setattr__(self, 'topic', topic)
         object.__setattr__(self, 'frame_id', frame)
         object.__setattr__(self, 'geom_groups', groups)
 
     @classmethod
     def from_xml(cls, element):
-        allowed = {'camera', 'rate', 'topic', 'frame_id', 'geom_groups', 'streams'}
+        allowed = {'camera', 'rate', 'topic', 'frame_id', 'geom_groups', 'streams', 'depth_range', 'reliable'}
         if set(element.attrib) - allowed or len(element):
             raise ValueError('Unknown RGB-D attributes or child elements')
         return cls(
@@ -56,6 +68,9 @@ class RgbdCameraCfg:
             topic=element.get('topic'), frame_id=element.get('frame_id'),
             geom_groups=tuple(int(g) for g in element.get('geom_groups', '0 2').split()),
             streams=tuple(element.get('streams', ' '.join(STREAMS)).split()),
+            depth_range=(tuple(float(v) for v in element.get('depth_range').split())
+                         if element.get('depth_range') is not None else None),
+            reliable=parse_bool(element.get('reliable', 'false'), 'RGB-D reliable'),
         )
 
 
@@ -155,6 +170,10 @@ class _Capture:
                 renderer.disable_depth_rendering()
             far = m.stat.extent * m.vis.map.zfar
             depth[(~np.isfinite(depth)) | (depth >= far * (1 - 1e-6)) | (depth <= 0)] = np.nan
+            if cfg.depth_range is not None:
+                min_depth, max_depth = cfg.depth_range
+                depth[np.isnan(depth) | (depth > max_depth)] = np.inf
+                depth[depth < min_depth] = -np.inf
         parent_id = int(m.cam_bodyid[camera_id])
         parent_rotation = d.xmat[parent_id].reshape(3, 3)
         rotation = d.cam_xmat[camera_id].reshape(3, 3) @ np.diag([1., -1., -1.])

@@ -127,3 +127,16 @@ def test_simulator_camera_lifecycle_ros_optional_pause_and_respawn(monkeypatch, 
     finally:
         sim.close()
     assert made[0].closed
+
+
+@pytest.mark.parametrize('reliable', [False, True])
+def test_publisher_qos(monkeypatch, reliable):
+    import tf2_ros
+    qos = {}
+    def create(message_type, topic, profile):
+        qos[topic] = profile
+        return SimpleNamespace(publish=lambda m: None)
+    monkeypatch.setattr(tf2_ros, 'TransformBroadcaster', lambda node: SimpleNamespace(sendTransform=lambda t: None))
+    RgbdPublisher(SimpleNamespace(create_publisher=create), [RgbdCameraCfg('front', reliable=reliable)])
+    expected = 10 if reliable else qos_profile_sensor_data
+    assert all(profile == expected for profile in qos.values()) and len(qos) == 4

@@ -223,7 +223,15 @@ def test_xml_unknown_site(tmp_path):
     'site="s" elevations_deg="0" returns="0"',
     'site="s" elevations_deg="0" horizontal_samples="10" slices="11"',
     'site="s" elevations_deg="0" horizontal_fov_deg="0"', 'site="s" elevations_deg="0" horizontal_fov_deg="361"',
+    'site="s" elevations_deg="0" reliable="yes"',
 ])
 def test_invalid_xml_settings(attributes):
     with pytest.raises(ValueError):
         LidarCfg.from_xml(etree.fromstring(f'<lidar {attributes}/>'))
+
+
+@pytest.mark.parametrize('value, expected', [(None, False), ('true', True), ('0', False)])
+def test_xml_reliable(value, expected):
+    attribute = '' if value is None else f' reliable="{value}"'
+    cfg = LidarCfg.from_xml(etree.fromstring(f'<lidar site="s" elevations_deg="0"{attribute}/>'))
+    assert cfg.reliable is expected

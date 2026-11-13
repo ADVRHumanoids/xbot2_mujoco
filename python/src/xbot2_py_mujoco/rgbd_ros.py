@@ -45,14 +45,15 @@ def messages_from_frame(frame, frame_id):
 class RgbdPublisher:
     def __init__(self, node, configs):
         from rclpy.qos import qos_profile_sensor_data
+        qos = lambda cfg: 10 if cfg.reliable else qos_profile_sensor_data
         from tf2_ros import TransformBroadcaster
         self.configs = {cfg.camera: cfg for cfg in configs}
         self.publishers = {}
         self.tf = TransformBroadcaster(node)
         for cfg in configs:
             self.publishers[cfg.camera] = {
-                stream: (node.create_publisher(Image, f'{cfg.topic}/{stream}/image_raw', qos_profile_sensor_data),
-                         node.create_publisher(CameraInfo, f'{cfg.topic}/{stream}/camera_info', qos_profile_sensor_data))
+                stream: (node.create_publisher(Image, f'{cfg.topic}/{stream}/image_raw', qos(cfg)),
+                         node.create_publisher(CameraInfo, f'{cfg.topic}/{stream}/camera_info', qos(cfg)))
                 for stream in cfg.streams
             }
 

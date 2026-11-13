@@ -129,3 +129,21 @@ def test_only_the_configured_stream_is_rendered(streams):
     frame = render(capture_model(), cfg=RgbdCameraCfg('front', streams=streams))
     assert (frame.rgb is not None, frame.depth is not None) == ('color' in streams, 'depth' in streams)
     assert (frame.rgb if frame.rgb is not None else frame.depth).shape[:2] == (120, 160)
+
+
+@pytest.mark.parametrize('depth_range, target', [
+    ((0.1, 10.0), 'finite'),  # the target at about 2 m is within range
+    ((0.1, 1.5), 'inf'),      # beyond max
+    ((2.5, 10.0), '-inf'),    # below min
+])
+def test_depth_range_marks_out_of_range_and_misses_as_rep117_infinities(depth_range, target):
+    frame = render(capture_model(), cfg=RgbdCameraCfg('front', streams=('depth',), depth_range=depth_range))
+    center = frame.depth[60, 80]
+    assert {'finite': np.isfinite(center), 'inf': center == np.inf, '-inf': center == -np.inf}[target]
+    assert frame.depth[0, 0] == np.inf  # no hit
+    assert not np.isnan(frame.depth).any()
+
+
+def test_without_depth_range_misses_are_nan():
+    frame = render(capture_model(), cfg=RgbdCameraCfg('front', streams=('depth',)))
+    assert np.isnan(frame.depth[0, 0]) and np.isfinite(frame.depth[60, 80])

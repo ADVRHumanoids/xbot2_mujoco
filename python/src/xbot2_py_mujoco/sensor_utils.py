@@ -41,3 +41,12 @@ class RateSchedule:
             return False
         self._next += (math.floor((time + self._tolerance - self._next) / self._period) + 1) * self._period
         return True
+
+
+def parse_bool(value, kind):
+    """XML boolean: true/false or 1/0."""
+    if value.lower() in ('true', '1'):
+        return True
+    if value.lower() in ('false', '0'):
+        return False
+    raise ValueError(f'{kind} must be true or false')

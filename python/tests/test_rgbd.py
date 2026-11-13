@@ -58,6 +58,9 @@ def test_xml_reference_defaults_merge_and_repeated_finalization(generator):
     'camera="front" geom_groups=""', 'camera="front" extra="1"',
     'camera="front" frame_id="/optical"', 'camera="front" topic="/"',
     'camera="front" streams=""', 'camera="front" streams="ir"', 'camera="front" streams="color color"',
+    'camera="front" depth_range="1"', 'camera="front" depth_range="2 1"',
+    'camera="front" depth_range="-1 2"', 'camera="front" depth_range="0 inf"',
+    'camera="front" reliable="yes"',
 ])
 def test_invalid_xml_settings(attributes):
     with pytest.raises((ValueError, TypeError)):

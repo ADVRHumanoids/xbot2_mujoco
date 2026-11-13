@@ -7,6 +7,8 @@ import re
 import mujoco
 import numpy as np
 
+from xbot2_py_mujoco.sensor_utils import parse_bool
+
 
 BACKENDS = ('cpu', 'taichi', 'warp')
 
@@ -37,6 +39,7 @@ class LidarCfg:
     exclude_body: str | None = None  # e.g. the body enclosing the sensor
     slices: int = 20  # traces per sweep; columns of a slice share one pose and time
     returns: int = 1  # each traced column written this many times (2: a dual return driver's)
+    reliable: bool = False  # ROS QoS: reliable (depth 10, as ros_gz_bridge) or sensor data
 
     def __post_init__(self):
         if not isinstance(self.site, str) or not self.site.strip():
@@ -80,7 +83,7 @@ class LidarCfg:
     def from_xml(cls, element):
         allowed = {'site', 'elevations_deg', 'rate', 'topic', 'frame_id', 'backend', 'cutoff',
                    'min_range', 'horizontal_samples', 'start_azimuth_deg', 'horizontal_fov_deg', 'geom_groups',
-                   'exclude_body', 'slices', 'returns'}
+                   'exclude_body', 'slices', 'returns', 'reliable'}
         if set(element.attrib) - allowed or len(element):
             raise ValueError('Unknown lidar attributes or child elements')
         optional = {}
@@ -92,6 +95,8 @@ class LidarCfg:
                 optional[name] = convert(element.get(name))
         if element.get('geom_groups') is not None:
             optional['geom_groups'] = tuple(int(g) for g in element.get('geom_groups').split())
+        if element.get('reliable') is not None:
+            optional['reliable'] = parse_bool(element.get('reliable'), 'Lidar reliable')
         return cls(site=element.get('site', ''),
                    elevations_deg=tuple(float(e) for e in element.get('elevations_deg', '').split()),
                    **optional)
