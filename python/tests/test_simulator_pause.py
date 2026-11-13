@@ -127,6 +127,7 @@ def test_custom_callback_fully_replaces_default(make_sim):
 def test_idle_pause_freezes_all_updates_and_renders(make_sim, monkeypatch):
     sim, bridge, viewer, keys, clock = make_sim(viewer=True)
     sim.remote_control = Mock()
+    sim.control.apply_wrenches = Mock(wraps=sim.control.apply_wrenches)
     sim.clock_pub = Mock()
     sim.terrain_scanner = Mock()
     sim.terrain_scan_pub = Mock()
@@ -147,7 +148,7 @@ def test_idle_pause_freezes_all_updates_and_renders(make_sim, monkeypatch):
     bridge.receive.assert_not_called()
     bridge.send_state.assert_not_called()
     sim.remote_control.process_requests.assert_not_called()
-    sim.remote_control.apply_wrenches.assert_not_called()
+    sim.control.apply_wrenches.assert_not_called()
     sim.clock_pub.publish.assert_not_called()
     sim.terrain_scanner.scan.assert_not_called()
     sim.terrain_scan_pub.publish.assert_not_called()
@@ -163,6 +164,7 @@ def test_idle_pause_freezes_all_updates_and_renders(make_sim, monkeypatch):
 def test_queued_advances_normal_updates_and_step_resolution(make_sim, separate_phases):
     sim, bridge, viewer, keys, clock = make_sim(timestep=0.007, scanner=True)
     sim.remote_control = Mock()
+    sim.control.apply_wrenches = Mock(wraps=sim.control.apply_wrenches)
     sim.set_paused()
     sim.advance()
     sim.advance()
@@ -180,7 +182,7 @@ def test_queued_advances_normal_updates_and_step_resolution(make_sim, separate_p
     assert bridge.receive.call_count == 30
     assert bridge.send_state.call_count == 15
     assert sim.remote_control.process_requests.call_count == 30
-    assert sim.remote_control.apply_wrenches.call_count == 30
+    assert sim.control.apply_wrenches.call_count == 30
     sim.run()
     assert sim.iter_counter == 30
     assert bridge.receive.call_count == 30

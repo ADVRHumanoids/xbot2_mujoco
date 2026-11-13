@@ -60,6 +60,27 @@ The equivalent remote JSON request is
 `{"command": "set_actuator_delay", "delay": 0.01}`.
 
 
+## Injecting a custom Python bridge
+
+`SimulatorWrapper(..., bridge_factory=factory)` calls `factory(model, data)`
+with the model and simulator-owned `MjData`. The returned object implements:
+
+- `receive()`: called before every physics step to update actuator commands.
+- `send_state()`: called after stepping at `send_state_decimation`.
+- `close()`: releases bridge resources when the simulator closes.
+- Optional `reset()`: clears controller state after initial joint placement and
+  on simulator reset/respawn. It preserves the pose already set by the wrapper.
+  Existing bridges without this hook retain `reset_velocity_integrators()`.
+
+An injected bridge overrides the default XBot2 transport regardless of
+`enable_xbot2_bridge`. Without a factory, the default remains enabled;
+`enable_xbot2_bridge=False` disables it. XBot2 transport/diagnostics imports
+are lazy, so custom bridges do not require those packages at runtime.
+`enable_pacing=False` disables real-time throttling; its default is `True`.
+`physics_steps` and `elapsed_time` count actual physics steps across resets.
+Remote actuator-delay/noise tuning is available only if the selected bridge
+implements those additional actuator-tuning methods.
+
 ## Viewer pause controls
 
 The default viewer key callback handles **Space** to pause/resume and **Right
@@ -427,6 +448,53 @@ geometry and are limited by the scene's available geom capacity.
 
 # Remote control
 
+The controls are owned by `SimulatorWrapper` and are available directly from
+Python with no endpoint, ZeroMQ socket, XBot2 transport, or ROS node running:
+
+```python
+sim.set_friction('.*_foot', [.8, .005, .001], regex=True)
+sim.set_contact_parameters('base_link', solref=[.01, 1], condim=4)
+sim.set_body_properties('base_link', mass=25, com=[.02, 0, .08])
+sim.add_payload('base_link', mass=5, position=[.2, 0, .1])
+sim.set_joint_torque_limits('.*_knee', 40, regex=True)
+sim.set_actuator_delay(.02)
+sim.set_velocity_feedback_noise('.*_knee', .05, regex=True)
+sim.apply_wrench('base_link', force=[100, 0, 0], torque=[0, 0, 5],
+                 frame='local', duration=.25)
+sim.clear_wrenches('base_link')
+sim.restore()
+```
+
+Python body/joint selectors are exact names by default; pass a sequence for
+multiple selectors or `regex=True` for full-name regex matching. Wrenches and
+payloads accept a single body name or regex. Vectors accept lists, tuples, or
+NumPy arrays. Force is in N and torque in Nm, applied at the body COM.
+`global`/`world` and `local`/`body` are equivalent frame names. Omitting wrench
+`duration` sets/replaces a persistent wrench on each selected body. Supplying
+a positive simulation-time duration adds a timed wrench; overlapping timed and
+persistent wrenches sum. `clear_wrenches()` clears all body forces, including
+raw `data.xfrc_applied`; a body name clears only that body's wrenches.
+
+The viewer draws force arrows and payload markers for local Python calls as well
+as remote requests. Use `sim.set_status_text('...')` for a small top-left text
+overlay, or an empty string to clear it; this requires viewer `set_texts` support.
+For offscreen consumers, `sim.control.update_visuals(renderer.scene, clear=False)`
+appends the same cues without removing model geometry, and
+`sim.draw_status_text(rgb_frame)` adds the corner text to video pixels.
+
+`control_request(request_dict)` accepts every JSON command documented below,
+returns its result, and raises `CommandError` (a `ValueError`) for invalid input.
+`restore()` restores model properties and tuning defaults, removes payloads,
+and clears applied forces while preserving pose, velocity, controls and time.
+Actuator delay/noise require support from the selected bridge; both the XBot2
+bridge and policy toolkit's ONNX bridge implement them.
+
+Call Python controls between physics steps on the simulation thread. An optional
+`RemoteControlServer` forwards `mjctl` requests to the same `sim.control` object,
+sharing validation, startup snapshots, payloads and wrench scheduling with local
+calls. Closing the network server alone leaves that shared state intact. Wrapper
+reset/respawn clears wrenches; model-property changes persist until `restore()`.
+
 Install the Python package from the repository root to get the `mjctl` command
 (activate your Python environment first):
 
@@ -451,8 +519,8 @@ reply. Start the simulator with remote control enabled as shown below, then run
 | `body` | `BODY... [--mass KG] [--com X Y Z] [--regex]` | Set positive total mass and/or COM in local meters. At least one option is required; rotational inertia stays unchanged. |
 | `payload` | `BODY --mass KG --position X Y Z [--regex]` | Attach a positive point mass at a local position in meters, replacing the previous payload relative to startup properties. |
 | `torque-limits` | `JOINT... --limit VALUE [--exact]` | Set a non-negative symmetric net actuator limit in Nm for hinges or N for slides. Zero disables output. Joint selectors are full-name regex by default. |
-| `actuator-delay` | `--seconds SEC` | Set the uniform XBot2 command delay in non-negative simulation seconds. Zero disables it. Pending commands keep their deadlines. |
-| `velocity-noise` | `JOINT... --stddev VALUE [--exact]` | Add independent Gaussian noise to joint velocity feedback sent to XBot2. Standard deviation is in rad/s for hinges and m/s for slides; zero disables it. Joint selectors are full-name regex by default. |
+| `actuator-delay` | `--seconds SEC` | Set the selected bridge's uniform command delay in non-negative simulation seconds. Zero disables it. Pending commands keep their deadlines. |
+| `velocity-noise` | `JOINT... --stddev VALUE [--exact]` | Add independent Gaussian noise to joint velocity feedback used by the selected bridge. Standard deviation is in rad/s for hinges and m/s for slides; zero disables it. Joint selectors are full-name regex by default. |
 | `restore` | None | Restore API-managed startup properties and actuator delay, clear velocity feedback noise, remove payloads, cancel wrenches, and clear all applied forces without resetting simulation state. |
 
 Body selectors use exact names by default; `--regex` enables Python regular
@@ -623,15 +691,16 @@ mjctl torque-limits '.*_knee' \
 
 Use `--exact` with `torque-limits` or `velocity-noise` to select literal joint names.
 For example, `mjctl velocity-noise '.*_knee' --stddev 0.05` adds zero-mean
-noise to each selected velocity feedback sample. The simulator's true joint
-velocities and actuator calculations remain unchanged. The limits take
+noise to each selected velocity feedback sample. Noise does not directly modify
+true MuJoCo velocities or native actuator calculations; XBot2 clients or the
+ONNX policy receive the perturbed feedback. The limits take
 effect on the next simulation step without resetting pose, velocity, controls,
 or time. Existing actuator force limits still apply and can further restrict
 output. These joint limits constrain actuator output, not external contact forces
 or remotely applied wrenches.
 
 The `restore` command restores all contact, body, and joint torque-limit properties managed by this
-API to the values captured when the server started. It also cancels scheduled
+API to the values captured when the simulator control state was created. It also cancels scheduled
 wrenches, removes added payloads (including their inertia changes), and clears
 both Cartesian and generalized applied-force arrays. It restores the startup
 actuator command delay and clears velocity feedback noise; queued commands keep

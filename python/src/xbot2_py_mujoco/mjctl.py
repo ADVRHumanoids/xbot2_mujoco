@@ -119,16 +119,16 @@ Replies are JSON. Exit codes: 0 success, 1 server/transport failure,
     limits.add_argument("--exact", dest="regex", action="store_false", default=True,
                         help="Treat joint selectors as exact names instead of regex patterns")
 
-    delay = command("actuator-delay", "Set XBot2 actuator command delay",
-                    "Delay complete XBot2 commands in simulation time. Zero disables the "
+    delay = command("actuator-delay", "Set actuator command delay",
+                    "Delay complete actuator commands in simulation time. Zero disables the "
                     "delay. Commands already pending keep their existing deadlines.",
                     "mjctl actuator-delay --seconds 0.02")
     delay.add_argument("--seconds", type=_nonnegative_float, required=True,
                        help="Finite, non-negative delay in simulation seconds")
 
     noise = command("velocity-noise", "Set joint velocity feedback noise",
-                    "Add independent, zero-mean Gaussian noise to velocity feedback sent "
-                    "to XBot2. The standard deviation uses rad/s for hinge joints and m/s "
+                    "Add independent, zero-mean Gaussian noise to joint velocity feedback "
+                    "used by the selected bridge. The standard deviation uses rad/s for hinge joints and m/s "
                     "for slide joints. Zero disables noise for selected joints.",
                     "mjctl velocity-noise '.*_knee' --stddev 0.05")
     noise.add_argument("joints", nargs="+", help="Joint regex patterns (full-name match)")

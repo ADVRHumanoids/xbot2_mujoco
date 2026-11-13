@@ -10,13 +10,27 @@ from typing import Callable
 import mujoco
 import numpy as np
 from mujoco.viewer import launch_passive, Handle
-from xbot2_py_mujoco.mj_xbot2_bridge import MjXbot2Bridge
 from xbot2_py_mujoco.remote_control import RemoteControlServer
+from xbot2_py_mujoco.simulation_control import SimulationControl
 from xbot2_py_mujoco.base_velocity_plot import BaseVelocityPlot
 from xbot2_py_mujoco.terrain_scan import TerrainScanner, TerrainScan
 from xbot2_py_mujoco.rgbd import RgbdCameraCfg, RgbdCameraManager, validate_cameras
 
+
+def MjXbot2Bridge(*args, **kwargs):
+    """Load the default transport only when it is actually selected."""
+    from xbot2_py_mujoco.mj_xbot2_bridge import MjXbot2Bridge as Bridge
+    return Bridge(*args, **kwargs)
+
+
 class SimulatorWrapper:
+    """MuJoCo simulation with an optional injected command/state bridge.
+
+    bridge_factory(model, data) overrides the default transport, including when
+    enable_xbot2_bridge=False. Bridges implement receive(), send_state(), and
+    close(). An optional reset() hook is called after initial joint placement
+    and on respawn/reset; legacy bridges retain reset_velocity_integrators().
+    """
 
     def __init__(self, model: mujoco.MjModel,
                  q_init: dict[str, float] = None,
@@ -41,7 +55,18 @@ class SimulatorWrapper:
                  terrain_scan_visualization: bool = True,
                  terrain_scan_topic: str = '/heightscan',
                  rgbd_cameras: list[RgbdCameraCfg] | None = None,
-                 base_velocity_plot_body: str = None):
+                 base_velocity_plot_body: str = None,
+                 enable_xbot2_bridge: bool = True,
+                 bridge_factory: Callable[[mujoco.MjModel, mujoco.MjData], object] = None,
+                 enable_pacing: bool = True):
+
+        # A custom factory takes precedence over the default XBot2 bridge flag.
+        self._custom_bridge = bridge_factory is not None
+        self.enable_pacing = enable_pacing
+        self.physics_steps = 0
+        self._status_text = ''
+        self._status_text_was_visible = False
+        self._status_font = None
 
         rgbd_cameras = tuple(rgbd_cameras or ())
         validate_cameras(model, rgbd_cameras)
@@ -155,13 +180,20 @@ class SimulatorWrapper:
                 self.rgbd_publisher = RgbdPublisher(self.ros_node, rgbd_cameras)
 
         # create xbot2 bridge server
-        self.xbot2_bridge = MjXbot2Bridge(
-            name='mj_simulator', model=self.model, data=self.data,
-            socket_path=socket_path, actuator_delay_s=actuator_delay_s,
-        )
+        if self._custom_bridge:
+            self.xbot2_bridge = bridge_factory(self.model, self.data)
+        elif enable_xbot2_bridge:
+            self.xbot2_bridge = MjXbot2Bridge(
+                name='mj_simulator', model=self.model, data=self.data,
+                socket_path=socket_path, actuator_delay_s=actuator_delay_s,
+            )
+        else:
+            self.xbot2_bridge = None
+        # Python calls and remote requests mutate the same state, even with no socket.
+        self.control = SimulationControl(self.model, self.data, self.xbot2_bridge)
         self.remote_control = (
             RemoteControlServer(self.model, self.data, remote_control_endpoint,
-                                actuator_bridge=self.xbot2_bridge)
+                                control=self.control)
             if remote_control_endpoint else None
         )
 
@@ -185,6 +217,123 @@ class SimulatorWrapper:
         self.running = True
         if rgbd_cameras:
             self.rgbd_manager = RgbdCameraManager(model, rgbd_cameras)
+            self.rgbd_manager.reset()
+        self._clear_velocity_plot()
+        # Finish initialization before scripts can issue commands or disturbances.
+        self._set_initial_position(self.data)
+        mujoco.mj_forward(self.model, self.data)
+        self._initial_position_initialized = True
+
+    @property
+    def elapsed_time(self):
+        """Total physics time, independent of episode resets."""
+        return self.physics_steps * self.model.opt.timestep
+
+    @property
+    def status_text(self):
+        return self._status_text
+
+    def set_status_text(self, text):
+        """Set the small top-left status overlay; an empty string clears it."""
+        if not isinstance(text, str):
+            raise TypeError('status text must be a string')
+        self._status_text = text
+
+    def draw_status_text(self, frame):
+        """Add the same status to an RGB video frame, leaving input pixels intact."""
+        if not self._status_text:
+            return frame
+        import textwrap
+        from PIL import Image, ImageDraw, ImageFont
+        if self._status_font is None:
+            self._status_font = ImageFont.load_default(size=14)
+        columns = max(1, int((frame.shape[1] - 28) / self._status_font.getlength('M')))
+        lines = [part for line in self._status_text.splitlines()
+                 for part in (textwrap.wrap(line, width=columns) or [''])]
+        text = '\n'.join(lines[:6] + (['...'] if len(lines) > 6 else []))
+        image = Image.fromarray(frame).copy()
+        draw = ImageDraw.Draw(image)
+        box = draw.multiline_textbbox((14, 12), text, font=self._status_font, spacing=3)
+        draw.rectangle((8, 8, box[2] + 6, box[3] + 6), fill=(20, 20, 20))
+        draw.multiline_text((14, 12), text, font=self._status_font, fill='white', spacing=3)
+        return np.asarray(image).copy()
+
+    @staticmethod
+    def _control_value(value):
+        if isinstance(value, np.ndarray):
+            return value.tolist()
+        if isinstance(value, np.generic):
+            return value.item()
+        if isinstance(value, (list, tuple)):
+            return [SimulatorWrapper._control_value(item) for item in value]
+        if isinstance(value, dict):
+            return {key: SimulatorWrapper._control_value(item) for key, item in value.items()}
+        return value
+
+    @staticmethod
+    def _selectors(names):
+        return [names] if isinstance(names, str) else names
+
+    def control_request(self, request):
+        """Execute any mjctl JSON command locally; raises CommandError on invalid input.
+
+        Call control methods between physics steps on the simulation thread.
+        No remote endpoint or bridge is required for model/wrench operations.
+        """
+        return self.control.handle_request(self._control_value(request))
+
+    def set_contact_parameters(self, bodies, parameters=None, *, regex=False, **kwargs):
+        values = dict(parameters or {})
+        values.update(kwargs)
+        return self.control_request({'command': 'set_contact_parameters',
+                                     'bodies': self._selectors(bodies), 'parameters': values, 'regex': regex})
+
+    def set_friction(self, bodies, values, *, regex=False):
+        return self.set_contact_parameters(bodies, friction=values, regex=regex)
+
+    def set_body_properties(self, bodies, *, mass=None, com=None, regex=False):
+        properties = {}
+        if mass is not None:
+            properties['mass'] = mass
+        if com is not None:
+            properties['com'] = com
+        return self.control_request({'command': 'set_body_properties', 'bodies': self._selectors(bodies),
+                                     'properties': properties, 'regex': regex})
+
+    def add_payload(self, body_name, mass, position, *, regex=False):
+        return self.control_request({'command': 'add_payload', 'body': body_name,
+                                     'mass': mass, 'position': position, 'regex': regex})
+
+    def set_joint_torque_limits(self, joints, limit, *, regex=False):
+        return self.control_request({'command': 'set_joint_torque_limits',
+                                     'joints': self._selectors(joints), 'limit': limit, 'regex': regex})
+
+    def set_actuator_delay(self, seconds):
+        return self.control_request({'command': 'set_actuator_delay', 'delay': seconds})
+
+    def set_velocity_feedback_noise(self, joints, stddev, *, regex=False):
+        return self.control_request({'command': 'set_velocity_feedback_noise',
+                                     'joints': self._selectors(joints), 'stddev': stddev, 'regex': regex})
+
+    def restore(self):
+        """Restore mjctl-managed startup properties and clear applied forces, preserving state."""
+        return self.control_request({'command': 'restore'})
+
+    def apply_wrench(self, body_name, force=(0., 0., 0.), torque=(0., 0., 0.), *,
+                     frame='global', duration=None, regex=False):
+        """Apply a COM wrench (N, Nm), in global/world or local/body axes.
+
+        Without duration, replaces a persistent wrench on each selected body.
+        With duration in simulation seconds, adds a timed wrench; overlaps sum.
+        Persistent and timed wrenches share one manager with mjctl requests.
+        """
+        return self.control.apply_wrench(body_name, self._control_value(force), self._control_value(torque),
+                                         frame=frame, duration=self._control_value(duration), regex=regex)
+
+    def clear_wrenches(self, body_name=None):
+        self.control.clear_wrenches(body_name)
+        if body_name is None:
+            self.data.xfrc_applied[:] = 0
 
     @property
     def rgbd_frames(self):
@@ -295,12 +444,18 @@ class SimulatorWrapper:
             self.running = False
             return
         if now >= self._next_viewer_sync_wall:
-            if self.remote_control is not None or self.terrain_scanner is not None:
+            if self.control is not None or self.terrain_scanner is not None:
                 with self.viewer.lock():
                     self._update_visuals(self.viewer.user_scn)
             if self.base_velocity_plot is not None:
                 self.base_velocity_plot.sample(self.data)
                 self.viewer.set_figures(self.base_velocity_plot.overlays(self.viewer.viewport))
+            if self._status_text or self._status_text_was_visible:
+                if not callable(getattr(self.viewer, 'set_texts', None)):
+                    raise RuntimeError('Status overlays require a MuJoCo viewer with set_texts support')
+                self.viewer.set_texts([(mujoco.mjtFont.mjFONT_NORMAL, mujoco.mjtGridPos.mjGRID_TOPLEFT,
+                                       self._status_text, '')] if self._status_text else [])
+                self._status_text_was_visible = bool(self._status_text)
             self.viewer.sync(state_only=True)
             self.frames += 1
             self._next_viewer_sync_wall = now + period
@@ -308,7 +463,9 @@ class SimulatorWrapper:
             self.running = False
 
     def _respawn(self):
-        if getattr(self, 'remote_control', None) is not None:
+        if getattr(self, 'control', None) is not None:
+            self.clear_wrenches()
+        elif getattr(self, 'remote_control', None) is not None:
             self.remote_control.clear_wrenches()
         if not self._set_spawn_position():
             return
@@ -361,22 +518,21 @@ class SimulatorWrapper:
         self._handle_respawn_request()
         
         # set initial position if sim time is 0 (first step or after reset)
-        if self.data.time == 0.0:
+        if self.data.time == 0.0 and (not self._initial_position_initialized or self.last_sim_time > 0):
             if getattr(self, 'rgbd_manager', None) is not None:
                 self.rgbd_manager.reset()
             self._clear_velocity_plot()
             self._set_initial_position(self.data)
-            self.data.time = self.last_sim_time
+            if not self._custom_bridge:
+                self.data.time = self.last_sim_time
             self.last_sync_sim = self.data.time
 
-        # receive commands from bridge
-        self.xbot2_bridge.receive()
-
-        # Apply remote commands on the simulation thread. Wrenches are refreshed
-        # every step because MuJoCo treats xfrc_applied as persistent input.
+        # One shared manager applies local and remote mutations before sensing.
         if self.remote_control is not None:
             self.remote_control.process_requests()
-            self.remote_control.apply_wrenches()
+        self.control.apply_wrenches()
+        if self.xbot2_bridge is not None:
+            self.xbot2_bridge.receive()
 
     
     @_catch_interrupt
@@ -389,6 +545,7 @@ class SimulatorWrapper:
 
         # step simulation
         mujoco.mj_step(self.model, self.data)
+        self.physics_steps += 1
 
     @_catch_interrupt
     def post_step(self):
@@ -417,7 +574,8 @@ class SimulatorWrapper:
                 frame_id = self.model.body(self.terrain_scanner.body_id).name
                 self.terrain_scan_pub.publish(pointcloud_from_scan(self.terrain_scan, frame_id))
         if self.iter_counter % self.send_state_decimation == 0:
-            self.xbot2_bridge.send_state()
+            if self.xbot2_bridge is not None:
+                self.xbot2_bridge.send_state()
             if self.odometry_publisher is not None:
                 self.odometry_publisher.publish(self.data)
 
@@ -426,7 +584,7 @@ class SimulatorWrapper:
 
         # sync to target RTF at specified interval
         now = time.perf_counter()
-        if now - self.last_sync_wall >= self.sync_interval:
+        if self.enable_pacing and now - self.last_sync_wall >= self.sync_interval:
             wall_delta = now - self.last_sync_wall
             sim_delta = self.data.time - self.last_sync_sim
             sync_time = sim_delta/self.target_rtf - wall_delta + self.sync_error_integral
@@ -471,8 +629,9 @@ class SimulatorWrapper:
     def _update_visuals(self, scene: mujoco.MjvScene):
         """Rebuild all simulator overlays while holding the viewer lock."""
         scene.ngeom = 0
-        if self.remote_control is not None:
-            self.remote_control.update_visuals(scene)
+        control = getattr(self, 'control', self.remote_control)
+        if control is not None:
+            control.update_visuals(scene)
         if self.terrain_scan_visualization and self.terrain_scan is not None:
             self.terrain_scan.add_visuals(scene)
 
@@ -482,13 +641,15 @@ class SimulatorWrapper:
         self.post_step()
 
     def close(self):
+        self.clear_wrenches()
         if getattr(self, 'rgbd_manager', None) is not None:
             self.rgbd_manager.close()
         if self.remote_control is not None:
             self.remote_control.close()
         if self.viewer is not None:
             self.viewer.close()
-        self.xbot2_bridge.close()
+        if self.xbot2_bridge is not None:
+            self.xbot2_bridge.close()
 
 
     def _set_initial_position(self, data: mujoco.MjData):
@@ -500,7 +661,14 @@ class SimulatorWrapper:
                     data.actuator(joint).ctrl = q
             except KeyError as e:
                 print(f"[Simulator] Warning: joint '{joint}' not found in model, cannot set initial position.")
-        reset_integrators = getattr(getattr(self, 'xbot2_bridge', None),
+        if getattr(self, 'control', None) is not None:
+            self.clear_wrenches()
+        bridge = getattr(self, 'xbot2_bridge', None)
+        reset = getattr(bridge, 'reset', None)
+        if reset is not None:
+            reset()
+            return
+        reset_integrators = getattr(bridge,
                                     'reset_velocity_integrators', None)
         if reset_integrators is not None:
             reset_integrators()

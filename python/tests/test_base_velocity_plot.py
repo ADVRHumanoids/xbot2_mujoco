@@ -130,7 +130,7 @@ def test_invalid_body_and_unsupported_api(monkeypatch):
 def test_figures_coexist_with_force_and_terrain_visuals(monkeypatch):
     sim, calls = simulator(monkeypatch)
     events = []
-    sim.remote_control = SimpleNamespace(update_visuals=lambda scene: events.append('force'))
+    sim.control.update_visuals = lambda scene: events.append('force')
     sim.terrain_scanner = SimpleNamespace(scan=lambda data: sim.terrain_scan)
     sim.terrain_scan = SimpleNamespace(add_visuals=lambda scene: events.append('terrain'))
     sim.data.time = 2
