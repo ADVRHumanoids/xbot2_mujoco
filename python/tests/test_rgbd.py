@@ -57,6 +57,7 @@ def test_xml_reference_defaults_merge_and_repeated_finalization(generator):
     'camera="front" rate="inf"', 'camera="front" geom_groups="6"',
     'camera="front" geom_groups=""', 'camera="front" extra="1"',
     'camera="front" frame_id="/optical"', 'camera="front" topic="/"',
+    'camera="front" streams=""', 'camera="front" streams="ir"', 'camera="front" streams="color color"',
 ])
 def test_invalid_xml_settings(attributes):
     with pytest.raises((ValueError, TypeError)):
@@ -68,11 +69,20 @@ def test_invalid_xml_settings(attributes):
     '<rgbd camera="front"/><rgbd camera="front"/>',
     '<rgbd camera="front" topic="/image"/><rgbd camera="rear" topic="image/"/>',
     '<rgbd camera="front" frame_id="optical"/><rgbd camera="rear" frame_id="optical"/>',
+    '<rgbd camera="front" topic="/d435" streams="depth"/><rgbd camera="rear" topic="/d435"/>',
 ])
 def test_invalid_camera_references_and_duplicates(generator, settings):
     generator.merge_xml('<mujoco><worldbody><camera name="front"/><camera name="rear"/></worldbody>' + settings + '</mujoco>')
     with pytest.raises(ValueError):
         generator.generate_mjcf_string()
+
+
+def test_cameras_share_a_topic_prefix_with_different_streams(generator):
+    generator.merge_xml('<mujoco><worldbody><camera name="front"/><camera name="rear"/></worldbody>'
+                        '<rgbd camera="front" topic="/d435" streams="color"/>'
+                        '<rgbd camera="rear" topic="/d435" streams="depth"/></mujoco>')
+    generator.generate_mjcf_string()
+    assert [cfg.streams for cfg in generator.rgbd_cameras] == [('color',), ('depth',)]
 
 
 @pytest.mark.parametrize('attributes', ['projection="orthographic"', 'resolution="1 20"'])

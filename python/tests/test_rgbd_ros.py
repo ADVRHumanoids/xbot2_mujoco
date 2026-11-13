@@ -62,6 +62,21 @@ def test_publish_topics_qos_and_synchronized_camera_info(monkeypatch):
     assert transforms[0].child_frame_id == 'front_optical_frame'
 
 
+def test_publish_only_the_configured_streams(monkeypatch):
+    import tf2_ros
+    published = {}
+    def create(message_type, topic, qos):
+        published[topic] = []
+        return SimpleNamespace(publish=published[topic].append)
+    monkeypatch.setattr(tf2_ros, 'TransformBroadcaster', lambda node: SimpleNamespace(sendTransform=lambda t: None))
+    publisher = RgbdPublisher(SimpleNamespace(create_publisher=create),
+                              [RgbdCameraCfg('front', topic='/d435', streams=('depth',))])
+    original = frame()
+    publisher.publish(RgbdFrame(**{**vars(original), 'rgb': None}))
+    assert set(published) == {'/d435/depth/image_raw', '/d435/depth/camera_info'}
+    assert published['/d435/depth/image_raw'][0].encoding == '32FC1'
+
+
 @pytest.mark.parametrize('ros', [True, False])
 def test_simulator_camera_lifecycle_ros_optional_pause_and_respawn(monkeypatch, ros):
     import rclpy

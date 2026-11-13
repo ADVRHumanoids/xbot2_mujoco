@@ -122,3 +122,10 @@ def test_default_resolution_and_private_framebuffer_growth():
     m = mujoco.MjModel.from_xml_string('<mujoco><visual><global offwidth="64" offheight="48"/></visual><worldbody><camera name="front"/></worldbody></mujoco>')
     frame = render(m)
     assert frame.rgb.shape == (480, 640, 3)
+
+
+@pytest.mark.parametrize('streams', [('color',), ('depth',)])
+def test_only_the_configured_stream_is_rendered(streams):
+    frame = render(capture_model(), cfg=RgbdCameraCfg('front', streams=streams))
+    assert (frame.rgb is not None, frame.depth is not None) == ('color' in streams, 'depth' in streams)
+    assert (frame.rgb if frame.rgb is not None else frame.depth).shape[:2] == (120, 160)
