@@ -13,15 +13,16 @@ def messages_from_frame(frame, frame_id):
     """Convert a single coherent capture to color, depth, calibration and TF."""
     seconds, nanoseconds = divmod(round(frame.time * 1e9), 1_000_000_000)
     header = Header(frame_id=frame_id, stamp=Time(sec=seconds, nanosec=nanoseconds))
-    height, width = frame.depth.shape
+    height, width = (frame.depth if frame.depth is not None else frame.rgb).shape[:2]
 
     def image(array, encoding, step):
         return Image(header=header, height=height, width=width, encoding=encoding,
                      is_bigendian=int(sys.byteorder == 'big'), step=step,
                      data=np.ascontiguousarray(array).tobytes())
 
-    color = image(frame.rgb, 'rgb8', width * 3)
-    depth = image(frame.depth.astype(np.float32, copy=False), '32FC1', width * 4)
+    color = image(frame.rgb, 'rgb8', width * 3) if frame.rgb is not None else None
+    depth = (image(frame.depth.astype(np.float32, copy=False), '32FC1', width * 4)
+             if frame.depth is not None else None)
     projection = np.zeros((3, 4))
     projection[:, :3] = frame.intrinsic
     info = CameraInfo(
@@ -44,21 +45,21 @@ def messages_from_frame(frame, frame_id):
 class RgbdPublisher:
     def __init__(self, node, configs):
         from rclpy.qos import qos_profile_sensor_data
+        qos = lambda cfg: 10 if cfg.reliable else qos_profile_sensor_data
         from tf2_ros import TransformBroadcaster
         self.configs = {cfg.camera: cfg for cfg in configs}
         self.publishers = {}
         self.tf = TransformBroadcaster(node)
         for cfg in configs:
-            self.publishers[cfg.camera] = [
-                node.create_publisher(message_type, cfg.topic + suffix, qos_profile_sensor_data)
-                for message_type, suffix in (
-                    (Image, '/color/image_raw'), (Image, '/depth/image_raw'),
-                    (CameraInfo, '/color/camera_info'), (CameraInfo, '/depth/camera_info'),
-                )
-            ]
+            self.publishers[cfg.camera] = {
+                stream: (node.create_publisher(Image, f'{cfg.topic}/{stream}/image_raw', qos(cfg)),
+                         node.create_publisher(CameraInfo, f'{cfg.topic}/{stream}/camera_info', qos(cfg)))
+                for stream in cfg.streams
+            }
 
     def publish(self, frame):
         color, depth, info, transform = messages_from_frame(frame, self.configs[frame.camera].frame_id)
-        for publisher, message in zip(self.publishers[frame.camera], (color, depth, info, info)):
-            publisher.publish(message)
+        for stream, (image_publisher, info_publisher) in self.publishers[frame.camera].items():
+            image_publisher.publish(color if stream == 'color' else depth)
+            info_publisher.publish(info)
         self.tf.sendTransform(transform)
