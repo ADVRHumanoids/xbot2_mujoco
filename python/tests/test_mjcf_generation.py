@@ -262,3 +262,53 @@ def test_sensor_types(mj_model):
     assert mj_model.sensor_type[0] == mujoco.mjtSensor.mjSENS_ACCELEROMETER
     assert mj_model.sensor_type[1] == mujoco.mjtSensor.mjSENS_GYRO
 
+
+
+# ---------------------------------------------------------------------------
+# Meshes MuJoCo cannot load, file:// URIs
+# ---------------------------------------------------------------------------
+
+def _mesh_urdf(visual_uri, collision_uri):
+    return f'''<robot name="r">
+      <link name="base">
+        <inertial><mass value="1"/><inertia ixx="1" iyy="1" izz="1" ixy="0" ixz="0" iyz="0"/></inertial>
+        <visual><geometry><mesh filename="{visual_uri}"/></geometry></visual>
+        <collision><geometry><mesh filename="{collision_uri}"/></geometry></collision>
+      </link>
+    </robot>'''
+
+
+@pytest.fixture
+def box_obj(tmp_path):
+    """A unit box OBJ, and a .dae beside it with the same stem."""
+    obj = tmp_path / 'box.obj'
+    vertices = [f'v {x} {y} {z}' for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)]
+    faces = ['f 1 2 4 3', 'f 5 7 8 6', 'f 1 5 6 2', 'f 3 4 8 7', 'f 1 3 7 5', 'f 2 6 8 4']
+    obj.write_text('\n'.join(vertices + faces) + '\n')
+    (tmp_path / 'box.dae').write_text('<COLLADA/>')
+    return obj
+
+
+def test_dae_with_loadable_sibling_uses_it(box_obj, tmp_path):
+    dae = box_obj.with_suffix('.dae')
+    gen = MjcfGenerator(name='mesh_sibling', urdf_str=_mesh_urdf(f'file://{dae}', f'file://{dae}'),
+                        output_dir=str(tmp_path / 'out'))
+    model = mujoco.MjModel.from_xml_string(gen.generate_mjcf_string())
+    assert model.nmesh == 2 and model.ngeom == 2
+
+
+def test_mesh_without_loadable_sibling_drops_its_element(box_obj, tmp_path):
+    lonely = tmp_path / 'lonely.dae'
+    lonely.write_text('<COLLADA/>')
+    gen = MjcfGenerator(name='mesh_dropped', urdf_str=_mesh_urdf(f'file://{lonely}', str(box_obj)),
+                        output_dir=str(tmp_path / 'out'))
+    model = mujoco.MjModel.from_xml_string(gen.generate_mjcf_string())
+    assert model.ngeom == 1  # the collision box only
+
+
+def test_zero_size_primitive_drops_its_element(box_obj, tmp_path):
+    urdf = _mesh_urdf(str(box_obj), str(box_obj)).replace(
+        '</link>', '<collision><geometry><sphere radius="0"/></geometry></collision></link>')
+    gen = MjcfGenerator(name='degenerate', urdf_str=urdf, output_dir=str(tmp_path / 'out'))
+    model = mujoco.MjModel.from_xml_string(gen.generate_mjcf_string())
+    assert model.ngeom == 2  # the two meshes only

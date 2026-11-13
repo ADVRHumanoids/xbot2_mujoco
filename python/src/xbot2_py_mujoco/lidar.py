@@ -32,6 +32,7 @@ class LidarCfg:
     min_range: float = 0.05
     horizontal_samples: int = 900
     start_azimuth_deg: float = 0.0
+    horizontal_fov_deg: float = 360.0  # below 360: columns span it, both ends included
     geom_groups: tuple[int, ...] = (0, 2)
     exclude_body: str | None = None  # e.g. the body enclosing the sensor
     slices: int = 20  # traces per sweep; columns of a slice share one pose and time
@@ -59,6 +60,8 @@ class LidarCfg:
             raise ValueError('Lidar returns must be a positive integer')
         if not math.isfinite(self.start_azimuth_deg):
             raise ValueError('Lidar start_azimuth_deg must be finite')
+        if not math.isfinite(self.horizontal_fov_deg) or not 0 < self.horizontal_fov_deg <= 360:
+            raise ValueError('Lidar horizontal_fov_deg must be in (0, 360]')
         if self.backend not in BACKENDS:
             raise ValueError(f'Lidar backend must be one of {", ".join(BACKENDS)}')
         if not re.fullmatch(r'/?[A-Za-z_][A-Za-z_0-9]*(/[A-Za-z_][A-Za-z_0-9]*)*', self.topic):
@@ -76,14 +79,14 @@ class LidarCfg:
     @classmethod
     def from_xml(cls, element):
         allowed = {'site', 'elevations_deg', 'rate', 'topic', 'frame_id', 'backend', 'cutoff',
-                   'min_range', 'horizontal_samples', 'start_azimuth_deg', 'geom_groups',
+                   'min_range', 'horizontal_samples', 'start_azimuth_deg', 'horizontal_fov_deg', 'geom_groups',
                    'exclude_body', 'slices', 'returns'}
         if set(element.attrib) - allowed or len(element):
             raise ValueError('Unknown lidar attributes or child elements')
         optional = {}
         for name, convert in (('rate', float), ('topic', str), ('frame_id', str),
                               ('backend', str), ('cutoff', float), ('min_range', float),
-                              ('horizontal_samples', int), ('start_azimuth_deg', float),
+                              ('horizontal_samples', int), ('start_azimuth_deg', float), ('horizontal_fov_deg', float),
                               ('exclude_body', str), ('slices', int), ('returns', int)):
             if element.get(name) is not None:
                 optional[name] = convert(element.get(name))
@@ -121,8 +124,11 @@ class Lidar:
         self.cfg = cfg
         self._model = model
         rings = len(cfg.elevations_deg)
-        azimuth = (math.radians(cfg.start_azimuth_deg)
-                   - np.arange(cfg.horizontal_samples) * 2 * math.pi / cfg.horizontal_samples)
+        if cfg.horizontal_fov_deg < 360 and cfg.horizontal_samples > 1:
+            step = math.radians(cfg.horizontal_fov_deg) / (cfg.horizontal_samples - 1)
+        else:
+            step = math.radians(cfg.horizontal_fov_deg) / cfg.horizontal_samples
+        azimuth = math.radians(cfg.start_azimuth_deg) - np.arange(cfg.horizontal_samples) * step
         theta = np.repeat(azimuth, rings)
         phi = np.tile(np.radians(cfg.elevations_deg), cfg.horizontal_samples)
         self._theta = theta.astype(np.float32)

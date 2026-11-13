@@ -76,6 +76,15 @@ def test_start_azimuth_rotates_columns():
     np.testing.assert_allclose(points[1], (4.9, 0, 0), atol=1e-4)
 
 
+def test_horizontal_fov_spans_columns_with_both_ends():
+    model, data = scene()
+    # Columns clockwise from 45 deg over 90 deg: 45, 0, -45. The wall (+x) is the middle one.
+    points = full_scan(model, data, elevations_deg=(0.0,), horizontal_samples=3,
+                       start_azimuth_deg=45, horizontal_fov_deg=90).points
+    np.testing.assert_allclose(points[1], (4.9, 0, 0), atol=1e-4)
+    np.testing.assert_array_equal(points[[0, 2]], 0)  # at +-45 deg the 1 m wide wall is missed
+
+
 def test_excluded_groups_and_ranges_are_misses():
     model, data = scene(wall_group=3)
     np.testing.assert_array_equal(
@@ -213,6 +222,7 @@ def test_xml_unknown_site(tmp_path):
     'site="s" elevations_deg="0" extra="1"', 'site="s" elevations_deg="0" slices="0"',
     'site="s" elevations_deg="0" returns="0"',
     'site="s" elevations_deg="0" horizontal_samples="10" slices="11"',
+    'site="s" elevations_deg="0" horizontal_fov_deg="0"', 'site="s" elevations_deg="0" horizontal_fov_deg="361"',
 ])
 def test_invalid_xml_settings(attributes):
     with pytest.raises(ValueError):

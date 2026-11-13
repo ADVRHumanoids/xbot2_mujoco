@@ -10,6 +10,9 @@ from xbot2_py_mujoco.rgbd import RgbdCameraCfg, validate_cameras
 from xbot2_py_mujoco.lidar import LidarCfg, validate_lidars
 from xbot2_py_mujoco.imu import ImuCfg, validate_imus
 
+# Mesh formats MuJoCo loads
+MESH_FORMATS = ('.stl', '.obj', '.msh')
+
 class MjcfGenerator:
     
     def __init__(self, name: str, urdf_str: str, output_dir: str = None, copy_assets: bool = False):
@@ -116,9 +119,52 @@ class MjcfGenerator:
         return model, data
 
 
+    def _uri_to_path(uri, rospack):
+        if uri.startswith('package://'):
+            pkg_start = len('package://')
+            pkg_end = uri.find('/', pkg_start)
+            return rospack.get_path(uri[pkg_start:pkg_end]) + uri[pkg_end:]
+        if uri.startswith('file://'):
+            return uri[len('file://'):]
+        return uri
+
+
+    def _replace_unsupported_meshes(tree):
+        """Use a same-name sibling MuJoCo loads (e.g. a .dae's .stl), else drop the visual or collision."""
+        rospack = rospkg.RosPack()
+        for mesh in tree.xpath('//mesh[@filename]'):
+            uri = mesh.get('filename')
+            stem, ext = os.path.splitext(uri)
+            if ext.lower() in MESH_FORMATS:
+                continue
+            sibling = next((stem + e for e in MESH_FORMATS
+                            if os.path.isfile(MjcfGenerator._uri_to_path(stem + e, rospack))), None)
+            if sibling is not None:
+                mesh.set('filename', sibling)
+                continue
+            element = mesh.getparent().getparent()  # <visual> or <collision>
+            print(f'[MjcfGenerator] warning: MuJoCo cannot load mesh {uri}, dropping its <{element.tag}>')
+            element.getparent().remove(element)
+
+
+    def _drop_degenerate_primitives(tree):
+        """Drop the visual or collision of a zero-size primitive (e.g. a <sphere radius="0"/> placeholder)."""
+        for shape in tree.xpath('//geometry/box | //geometry/cylinder | //geometry/sphere'):
+            values = [float(v) for a in ('size', 'radius', 'length') for v in shape.get(a, '1').split()]
+            if min(values) > 0:
+                continue
+            element = shape.getparent().getparent()  # <visual> or <collision>
+            link = element.getparent()
+            print(f'[MjcfGenerator] warning: zero-size <{shape.tag}> in link {link.get("name")}, '
+                  f'dropping its <{element.tag}>')
+            link.remove(element)
+
+
     def _preprocess_urdf(XML):
         tree = etree.fromstring(XML.encode())
         etree.strip_tags(tree, etree.Comment)
+        MjcfGenerator._replace_unsupported_meshes(tree)
+        MjcfGenerator._drop_degenerate_primitives(tree)
         robot = tree.xpath('/robot')[0]
         mujoco = etree.Element("mujoco")
         compiler = etree.Element("compiler")
@@ -142,12 +188,8 @@ class MjcfGenerator:
             uri_end = urdf.find('"', uri_start)
             uri = urdf[uri_start:uri_end]
 
-            if uri.startswith('package://'):
-                pkg_start = len('package://')
-                pkg_end = uri.find('/', pkg_start)
-                pkg_name = uri[pkg_start:pkg_end]
-                uri = rospack.get_path(pkg_name) + uri[pkg_end:] 
-            
+            uri = MjcfGenerator._uri_to_path(uri, rospack)
+
             filename = os.path.basename(uri)
             dst_file = os.path.join(self.mj_assetsdir, str(seq_id) + '_' + filename)
             seq_id += 1
