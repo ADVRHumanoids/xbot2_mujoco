@@ -40,6 +40,7 @@ class LidarCfg:
     slices: int = 20  # traces per sweep; columns of a slice share one pose and time
     returns: int = 1  # each traced column written this many times (2: a dual return driver's)
     reliable: bool = False  # ROS QoS: reliable (depth 10, as ros_gz_bridge) or sensor data
+    scan_topic: str | None = None  # LaserScan of the ring nearest 0 deg, as gz's (None: none)
 
     def __post_init__(self):
         if not isinstance(self.site, str) or not self.site.strip():
@@ -69,6 +70,10 @@ class LidarCfg:
             raise ValueError(f'Lidar backend must be one of {", ".join(BACKENDS)}')
         if not re.fullmatch(r'/?[A-Za-z_][A-Za-z_0-9]*(/[A-Za-z_][A-Za-z_0-9]*)*', self.topic):
             raise ValueError('Lidar topic must be a valid ROS topic')
+        if self.scan_topic is not None and (
+                not re.fullmatch(r'/?[A-Za-z_][A-Za-z_0-9]*(/[A-Za-z_][A-Za-z_0-9]*)*', self.scan_topic)
+                or self.scan_topic.lstrip('/') == self.topic.lstrip('/')):
+            raise ValueError('Lidar scan_topic must be a valid ROS topic other than topic')
         frame = self.frame_id if self.frame_id is not None else self.site
         if not frame or frame.startswith('/') or any(c.isspace() for c in frame):
             raise ValueError('Lidar frame_id must be nonempty without a leading slash')
@@ -83,14 +88,15 @@ class LidarCfg:
     def from_xml(cls, element):
         allowed = {'site', 'elevations_deg', 'rate', 'topic', 'frame_id', 'backend', 'cutoff',
                    'min_range', 'horizontal_samples', 'start_azimuth_deg', 'horizontal_fov_deg', 'geom_groups',
-                   'exclude_body', 'slices', 'returns', 'reliable'}
+                   'exclude_body', 'slices', 'returns', 'reliable', 'scan_topic'}
         if set(element.attrib) - allowed or len(element):
             raise ValueError('Unknown lidar attributes or child elements')
         optional = {}
         for name, convert in (('rate', float), ('topic', str), ('frame_id', str),
                               ('backend', str), ('cutoff', float), ('min_range', float),
                               ('horizontal_samples', int), ('start_azimuth_deg', float), ('horizontal_fov_deg', float),
-                              ('exclude_body', str), ('slices', int), ('returns', int)):
+                              ('exclude_body', str), ('slices', int), ('returns', int),
+                              ('scan_topic', str)):
             if element.get(name) is not None:
                 optional[name] = convert(element.get(name))
         if element.get('geom_groups') is not None:
@@ -100,6 +106,13 @@ class LidarCfg:
         return cls(site=element.get('site', ''),
                    elevations_deg=tuple(float(e) for e in element.get('elevations_deg', '').split()),
                    **optional)
+
+
+def column_step(cfg: LidarCfg) -> float:
+    """Azimuth between columns [rad]: below 360 deg the columns span the fov, both ends included."""
+    if cfg.horizontal_fov_deg < 360 and cfg.horizontal_samples > 1:
+        return math.radians(cfg.horizontal_fov_deg) / (cfg.horizontal_samples - 1)
+    return math.radians(cfg.horizontal_fov_deg) / cfg.horizontal_samples
 
 
 def validate_lidars(model, configs):
@@ -129,11 +142,7 @@ class Lidar:
         self.cfg = cfg
         self._model = model
         rings = len(cfg.elevations_deg)
-        if cfg.horizontal_fov_deg < 360 and cfg.horizontal_samples > 1:
-            step = math.radians(cfg.horizontal_fov_deg) / (cfg.horizontal_samples - 1)
-        else:
-            step = math.radians(cfg.horizontal_fov_deg) / cfg.horizontal_samples
-        azimuth = math.radians(cfg.start_azimuth_deg) - np.arange(cfg.horizontal_samples) * step
+        azimuth = math.radians(cfg.start_azimuth_deg) - np.arange(cfg.horizontal_samples) * column_step(cfg)
         theta = np.repeat(azimuth, rings)
         phi = np.tile(np.radians(cfg.elevations_deg), cfg.horizontal_samples)
         self._theta = theta.astype(np.float32)

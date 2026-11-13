@@ -2,10 +2,12 @@
 
 import numpy as np
 from builtin_interfaces.msg import Time
-from sensor_msgs.msg import PointCloud2, PointField
+import math
+
+from sensor_msgs.msg import LaserScan, PointCloud2, PointField
 from std_msgs.msg import Header
 
-from xbot2_py_mujoco.lidar import LidarScan
+from xbot2_py_mujoco.lidar import LidarCfg, LidarScan, column_step
 
 # Hesai driver layout: x y z intensity (float32), ring (uint16), timestamp (float64, s).
 _DTYPE = np.dtype({'names': ['x', 'y', 'z', 'intensity', 'ring', 'timestamp'],
@@ -34,3 +36,24 @@ def pointcloud_from_scan(scan: LidarScan, frame_id: str) -> PointCloud2:
         data=cloud.tobytes(), is_dense=False,  # misses are (0, 0, 0), as the driver's
     )
 
+
+
+def laserscan_from_scan(scan: LidarScan, cfg: LidarCfg) -> LaserScan:
+    """The ring nearest 0 deg elevation as a gz LaserScan: first return of each column, angles
+    counter-clockwise, no return +inf, zero intensities, stamped at the sweep start."""
+    rings = len(cfg.elevations_deg)
+    ring = int(np.argmin(np.abs(np.asarray(cfg.elevations_deg))))
+    points = scan.points.reshape(cfg.horizontal_samples, cfg.returns, rings, 3)[:, 0, ring]
+    ranges = np.linalg.norm(points, axis=1)
+    ranges[ranges == 0] = np.inf
+    step = column_step(cfg)
+    angle_max = math.radians(cfg.start_azimuth_deg)  # columns run clockwise from it
+    seconds, nanoseconds = divmod(round(scan.time * 1e9), 1_000_000_000)
+    return LaserScan(
+        header=Header(frame_id=cfg.frame_id, stamp=Time(sec=seconds, nanosec=nanoseconds)),
+        angle_min=angle_max - step * (cfg.horizontal_samples - 1), angle_max=angle_max,
+        angle_increment=step, time_increment=0.0, scan_time=0.0,
+        range_min=cfg.min_range, range_max=cfg.cutoff,
+        ranges=ranges[::-1].astype(np.float32).tolist(),
+        intensities=[0.0] * cfg.horizontal_samples,
+    )

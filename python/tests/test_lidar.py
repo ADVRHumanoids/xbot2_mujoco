@@ -235,3 +235,44 @@ def test_xml_reliable(value, expected):
     attribute = '' if value is None else f' reliable="{value}"'
     cfg = LidarCfg.from_xml(etree.fromstring(f'<lidar site="s" elevations_deg="0"{attribute}/>'))
     assert cfg.reliable is expected
+
+
+def test_laserscan_is_the_zero_elevation_ring_counter_clockwise():
+    pytest.importorskip('sensor_msgs')
+    from xbot2_py_mujoco.lidar_ros import laserscan_from_scan
+    model, data = scene()
+    # Columns clockwise from 45 deg: 45, 0, -45; the wall (+x) is the middle one, on every ring
+    cfg = LidarCfg('lidar', (-5.0, 0.0, 5.0), horizontal_samples=3, start_azimuth_deg=45,
+                   horizontal_fov_deg=90, returns=2, slices=1, min_range=0.2, cutoff=10.0,
+                   scan_topic='/scan')
+    mujoco.mj_forward(model, data)
+    data.time = model.opt.timestep
+    msg = laserscan_from_scan(Lidar(model, cfg).step(data), cfg)
+    np.testing.assert_allclose((msg.angle_min, msg.angle_max, msg.angle_increment),
+                               (-np.pi / 4, np.pi / 4, np.pi / 4), atol=1e-6)
+    assert msg.ranges[0] == msg.ranges[2] == float('inf')
+    np.testing.assert_allclose(msg.ranges[1], 4.9, atol=1e-4)  # ring at 0 deg: straight at the wall
+    assert (msg.range_min, msg.range_max) == (0.2, 10.0)
+    assert list(msg.intensities) == [0.0] * 3 and msg.header.frame_id == 'lidar'
+
+
+def test_laserscan_angles_follow_the_column_order():
+    pytest.importorskip('sensor_msgs')
+    from xbot2_py_mujoco.lidar_ros import laserscan_from_scan
+    model, data = scene()
+    # Columns clockwise from 90 deg: 90, 45, 0; counter-clockwise the wall is the first range
+    cfg = LidarCfg('lidar', (0.0,), horizontal_samples=3, start_azimuth_deg=90,
+                   horizontal_fov_deg=90, slices=1)
+    mujoco.mj_forward(model, data)
+    data.time = model.opt.timestep
+    msg = laserscan_from_scan(Lidar(model, cfg).step(data), cfg)
+    np.testing.assert_allclose((msg.angle_min, msg.angle_max), (0, np.pi / 2), atol=1e-6)
+    np.testing.assert_allclose(msg.ranges[0], 4.9, atol=1e-4)
+    assert msg.ranges[1] == msg.ranges[2] == float('inf')
+
+
+def test_xml_scan_topic():
+    cfg = LidarCfg.from_xml(etree.fromstring('<lidar site="s" elevations_deg="0" scan_topic="/scan"/>'))
+    assert cfg.scan_topic == '/scan'
+    with pytest.raises(ValueError):
+        LidarCfg.from_xml(etree.fromstring('<lidar site="s" elevations_deg="0" topic="/p" scan_topic="p"/>'))

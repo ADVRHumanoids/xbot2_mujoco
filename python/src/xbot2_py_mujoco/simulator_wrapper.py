@@ -64,6 +64,7 @@ class SimulatorWrapper:
         self.lidars = [Lidar(model, cfg) for cfg in lidars or ()]
         self.lidar_scans: dict[str, LidarScan] = {}
         self.lidar_pubs = {}
+        self.lidar_scan_pubs = {}
         self.imus = [Imu(model, cfg) for cfg in imus or ()]
         self.imu_samples: dict[str, ImuSample] = {}
         self.imu_pubs = {}
@@ -152,9 +153,15 @@ class SimulatorWrapper:
                 from sensor_msgs.msg import PointCloud2
                 from rclpy.qos import qos_profile_sensor_data
                 for lidar in self.lidars:
+                    qos = 10 if lidar.cfg.reliable else qos_profile_sensor_data
                     self.lidar_pubs[lidar.cfg.site] = self.ros_node.create_publisher(
-                        PointCloud2, lidar.cfg.topic, 10 if lidar.cfg.reliable else qos_profile_sensor_data,
+                        PointCloud2, lidar.cfg.topic, qos,
                     )
+                    if lidar.cfg.scan_topic is not None:
+                        from sensor_msgs.msg import LaserScan
+                        self.lidar_scan_pubs[lidar.cfg.site] = self.ros_node.create_publisher(
+                            LaserScan, lidar.cfg.scan_topic, qos,
+                        )
             # Reliable, as ros_gz_bridge's and the robot's drivers: reliable subscribers (FAST-LIO's
             # IMU) get them too.
             if self.imus:
@@ -421,6 +428,10 @@ class SimulatorWrapper:
                 if publisher is not None:
                     from xbot2_py_mujoco.lidar_ros import pointcloud_from_scan
                     publisher.publish(pointcloud_from_scan(scan, lidar.cfg.frame_id))
+                scan_publisher = self.lidar_scan_pubs.get(lidar.cfg.site)
+                if scan_publisher is not None:
+                    from xbot2_py_mujoco.lidar_ros import laserscan_from_scan
+                    scan_publisher.publish(laserscan_from_scan(scan, lidar.cfg))
         for imu in self.imus:
             sample = imu.step(self.data)
             if sample is not None:
