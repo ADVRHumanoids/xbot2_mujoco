@@ -115,7 +115,7 @@ class MjXbot2Bridge:
         joint_state = JointState(
             q=[float(jh.qpos[0]) for jh in self.joint_handles],
             dq=velocity.tolist(),
-            tau=[float(jh.qfrc_smooth[0]) for jh in self.joint_handles],
+            tau=[float(jh.qfrc_actuator[0]) for jh in self.joint_handles],
             k=[float(self.model_act_handles[i].gainprm[0]) for i in range(len(self.joint_names))],
             d=[float(-self.model_act_handles[i].biasprm[2]) for i in range(len(self.joint_names))],
             qref=[self.qref[i] if self.velocity_integral[i] else float(a.ctrl[0])
