@@ -114,6 +114,9 @@ class SimulatorWrapper:
             if viewer_key_callback is None:
                 viewer_key_callback = self._viewer_key_callback
             self.viewer : Handle = launch_passive(model, self.data, key_callback=viewer_key_callback)
+            # Start with collision geoms (group 1) hidden; they can be shown from the viewer panel.
+            with self.viewer.lock():
+                self.viewer.opt.geomgroup[1] = 0
         else:
             self.viewer : Handle = None
 

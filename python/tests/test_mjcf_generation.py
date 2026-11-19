@@ -262,3 +262,42 @@ def test_sensor_types(mj_model):
     assert mj_model.sensor_type[0] == mujoco.mjtSensor.mjSENS_ACCELEROMETER
     assert mj_model.sensor_type[1] == mujoco.mjtSensor.mjSENS_GYRO
 
+
+
+# ---------------------------------------------------------------------------
+# Geom groups of the URDF import
+# ---------------------------------------------------------------------------
+
+def _is_visual(model, geom_id):
+    return model.geom_contype[geom_id] == 0 and model.geom_conaffinity[geom_id] == 0
+
+
+def test_urdf_visual_geoms_in_group_0_collision_geoms_in_group_1(urdf_str):
+    gen = MjcfGenerator(name='quadruped', urdf_str=urdf_str)
+    model = mujoco.MjModel.from_xml_string(gen.generate_mjcf_string())
+    visual = [_is_visual(model, i) for i in range(model.ngeom)]
+    assert any(visual) and not all(visual)
+    for i, is_visual in enumerate(visual):
+        assert model.geom_group[i] == (0 if is_visual else 1), f'geom {i}'
+
+
+def test_urdf_collision_only_link_in_group_0(urdf_str):
+    tree = etree.fromstring(urdf_str.encode())
+    link = tree.xpath('//link[@name="fl_foot_link"]')[0]
+    link.remove(link.find('visual'))
+    gen = MjcfGenerator(name='quadruped', urdf_str=etree.tostring(tree).decode())
+    model = mujoco.MjModel.from_xml_string(gen.generate_mjcf_string())
+    body_id = model.body('fl_foot_link').id
+    geoms = [i for i in range(model.ngeom) if model.geom_bodyid[i] == body_id]
+    assert geoms
+    for i in geoms:
+        assert not _is_visual(model, i)
+        assert model.geom_group[i] == 0
+
+
+def test_urdf_geom_groups_keep_collision_settings(urdf_str):
+    gen = MjcfGenerator(name='quadruped', urdf_str=urdf_str)
+    model = mujoco.MjModel.from_xml_string(gen.generate_mjcf_string())
+    imported = mujoco.MjModel.from_xml_path(gen.mj_urdf_path)
+    assert model.geom_contype.tolist() == imported.geom_contype.tolist()
+    assert model.geom_conaffinity.tolist() == imported.geom_conaffinity.tolist()

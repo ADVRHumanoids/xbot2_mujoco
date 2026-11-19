@@ -28,6 +28,7 @@ class Viewer:
         self.running = True
         self.sync = Mock()
         self.user_scn = SimpleNamespace(ngeom=0)
+        self.opt = mujoco.MjvOption()
 
     def is_running(self):
         return self.running
@@ -100,6 +101,11 @@ def test_default_keys_initialized_before_viewer_launch(make_sim):
     assert not sim._advance_requests
     with pytest.raises(AttributeError):
         sim.paused = True
+
+
+def test_viewer_starts_with_collision_group_hidden(make_sim):
+    sim, bridge, viewer, keys, clock = make_sim(viewer=True)
+    assert viewer.opt.geomgroup.tolist() == [1, 0, 1, 0, 0, 0]
 
 
 def test_custom_callback_fully_replaces_default(make_sim):

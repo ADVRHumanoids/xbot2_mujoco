@@ -52,12 +52,26 @@ class MjcfGenerator:
             self.mj_xml_tree = etree.fromstring(mj_xml)
             mujoco_tag = self.mj_xml_tree.xpath('/mujoco')[0]
             etree.strip_tags(self.mj_xml_tree, etree.Comment)
+        MjcfGenerator._assign_geom_groups(self.mj_xml_tree)
 
         # add compiler directives
         compiler = etree.Element("compiler")
         compiler.attrib['meshdir'] = self.mj_xml_dir
         compiler.attrib['texturedir'] = self.mj_xml_dir
         mujoco_tag.append(compiler)
+
+
+    @staticmethod
+    def _assign_geom_groups(tree):
+        """Put the geoms of the URDF import in this package's groups: visual geoms (contype and
+        conaffinity 0) in group 0, collision geoms in group 1. The collision geoms of a body without
+        visual geoms go in group 0 too, so that the link is still drawn where only visuals are."""
+        for body in tree.iter('body'):
+            geoms = body.findall('geom')
+            visual = [g.get('contype') == '0' and g.get('conaffinity') == '0' for g in geoms]
+            has_visual = any(visual)
+            for geom, is_visual in zip(geoms, visual):
+                geom.set('group', '0' if is_visual or not has_visual else '1')
 
 
     def merge_xml(self, xml_str: str | Path):

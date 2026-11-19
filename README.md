@@ -292,7 +292,10 @@ observations. No lidar or MJCF sensor configuration is needed:
 collisions. Both groups are excluded from raycasting, so they can still be
 hidden independently in the viewer. Assign terrain and any obstacles to scan to
 group **2** (or another included group). Configure these groups in your MJCF;
-the scanner does not assign or change them. The terrain generator utility
+the scanner does not assign or change them. A robot given as URDF gets these
+groups from `MjcfGenerator`: visual geoms in group 0, collision geoms in group 1,
+and the collision geoms of links without visuals in group 0, so cameras rendering
+groups 0 and 2 still draw them. The viewer starts with group 1 hidden. The terrain generator utility
 assigns group **2** to generated terrain geoms, including outer borders, through
 its `terrain` default class. For example:
 
