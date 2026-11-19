@@ -8,7 +8,7 @@ try:
     from simpleposes import PosePublisher
 except ImportError as e:
     raise ImportError("publishing link poses needs the simpleposes package "
-                      "(uv pip install -e path/to/simpleposes)") from e
+                      "(uv pip install \"simpleposes @ git+https://github.com/ADVRHumanoids/simpleposes.git\")") from e
 
 
 def _quat_mul(a: np.ndarray, b: np.ndarray) -> np.ndarray:

@@ -19,6 +19,7 @@ dependencies = [
     "PyYAML",
     "pyzmq",
     "xbot2_py_bridge @ git+https://github.com/ADVRHumanoids/xbot2_py_bridge.git@master#subdirectory=python",
+    "simpleposes @ git+https://github.com/ADVRHumanoids/simpleposes.git",
     "lxml",
     "rospkg"
 ]
