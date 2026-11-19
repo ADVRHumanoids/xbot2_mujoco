@@ -4,8 +4,10 @@ import subprocess
 import yaml
 import argparse
 import math
+import sys
 
 from xbot2_py_mujoco.mjcf_tools import MjcfGenerator
+from xbot2_py_mujoco.model_dump import print_mj_model
 from xbot2_py_mujoco.simulator_wrapper import SimulatorWrapper
 from xbot2_py_mujoco.terrain_scan import TerrainScanner
 
@@ -56,6 +58,9 @@ def parse_args(argv=None):
                    help='Command that generates extra MJCF XML file to merge (repeatable, in command-line order)')
     g.add_argument('--output-dir', metavar='DIR',  help='MjcfGenerator output directory')
     g.add_argument('--copy-assets', action='store_true', help='Copy assets instead of symlinking')
+    g.add_argument('--dump-model', metavar='PATH',
+                   help='Write a human-readable dump of the compiled MuJoCo model to PATH '
+                        '(bodies, joints, dofs, actuators, ..., then the full mj_printModel output)')
 
     # --- SimulatorWrapper args ---
     s = p.add_argument_group('SimulatorWrapper')
@@ -101,7 +106,21 @@ def parse_args(argv=None):
     scan.add_argument('--no-terrain-scan-visualization', action='store_true',
                       help='Hide scan spheres while still computing terrain heights')
 
-    return p.parse_args(argv)
+    poses = p.add_argument_group('Link poses (simpleposes)')
+    poses.add_argument('--pose-link', dest='pose_links', nargs=2, action='append', default=None,
+                       metavar=('LINK', 'FRAME'),
+                       help='Publish the pose of body LINK relative to body FRAME, "world" for the world frame '
+                            '(repeatable; needs the simpleposes package)')
+    poses.add_argument('--pose-endpoint', default='tcp://*:5800', metavar='ENDPOINT',
+                       help='Address the pose publisher binds to (default: tcp://*:5800)')
+    poses.add_argument('--pose-decimation', type=_positive_int, default=1, metavar='STEPS',
+                       help='Publish poses every this many simulation steps (default: 1)')
+
+    # ros2 launch passes each $(var ...) substitution as one argument, even when
+    # it is empty: drop blank arguments, so optional flags can be left empty
+    if argv is None:
+        argv = sys.argv[1:]
+    return p.parse_args([arg for arg in argv if arg.strip()])
 
 
 def _read_or_run(path_arg, cmd_arg, label):
@@ -145,6 +164,15 @@ def _detect_spawn_file(xml_merges):
     return None
 
 
+def _pose_links(pairs):
+    links = {}
+    for link, frame in pairs or []:
+        if link in links:
+            raise ValueError(f'--pose-link {link} given more than once')
+        links[link] = frame
+    return links
+
+
 def main():
 
     args = parse_args()
@@ -158,8 +186,9 @@ def main():
     if spawn_file is None and args.detect_spawn_locations:
         spawn_file = _detect_spawn_file(args.xml_merges)
     spawn_locations = _load_spawn_locations(spawn_file)
+    pose_links = _pose_links(args.pose_links)
 
-    # create the mjcf file (xml) from the urdf, merging extra xml files and 
+    # create the mjcf file (xml) from the urdf, merging extra xml files and
     # finally patching the result with information from the config yaml file
     gen = MjcfGenerator(name=args.name,
                         urdf_str=urdf,
@@ -175,6 +204,9 @@ def main():
 
     # create mujoco model from the generated mjcf xml string
     model = mujoco.MjModel.from_xml_string(gen.generate_mjcf_string())
+    if args.dump_model:
+        print_mj_model(model, full_dump=True, file=args.dump_model)
+        print(f'[Simulator] Model dump written to {args.dump_model}')
 
     terrain_scanner = None
     if args.terrain_scan_body:
@@ -209,6 +241,9 @@ def main():
         terrain_scan_visualization=not args.no_terrain_scan_visualization,
         terrain_scan_topic=args.terrain_scan_topic,
         rgbd_cameras=gen.rgbd_cameras,
+        pose_links=pose_links,
+        pose_endpoint=args.pose_endpoint,
+        pose_decimation=args.pose_decimation,
     )
 
     # main simulation loop, which runs until the viewer window is closed (if enabled) or the process is killed

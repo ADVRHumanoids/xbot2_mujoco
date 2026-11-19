@@ -39,7 +39,10 @@ class SimulatorWrapper:
                  terrain_scan_decimation: int = 100,
                  terrain_scan_visualization: bool = True,
                  terrain_scan_topic: str = '/heightscan',
-                 rgbd_cameras: list[RgbdCameraCfg] | None = None):
+                 rgbd_cameras: list[RgbdCameraCfg] | None = None,
+                 pose_links: dict[str, str] | None = None,
+                 pose_endpoint: str = 'tcp://*:5800',
+                 pose_decimation: int = 1):
 
         rgbd_cameras = tuple(rgbd_cameras or ())
         validate_cameras(model, rgbd_cameras)
@@ -50,6 +53,10 @@ class SimulatorWrapper:
                 or not isinstance(terrain_scan_decimation, int)
                 or terrain_scan_decimation <= 0):
             raise ValueError("terrain_scan_decimation must be a positive integer")
+        if (isinstance(pose_decimation, bool)
+                or not isinstance(pose_decimation, int)
+                or pose_decimation <= 0):
+            raise ValueError("pose_decimation must be a positive integer")
         if terrain_scanner is not None and terrain_scanner.model is not model:
             raise ValueError("terrain_scanner must use the simulator model")
         self.terrain_scanner = terrain_scanner
@@ -149,6 +156,14 @@ class SimulatorWrapper:
                                 actuator_bridge=self.xbot2_bridge)
             if remote_control_endpoint else None
         )
+
+        # link poses over simpleposes, imported only when requested
+        self.pose_decimation = pose_decimation
+        self.pose_publisher = None
+        if pose_links:
+            from xbot2_py_mujoco.pose_publish import BodyPosePublisher
+            self.pose_publisher = BodyPosePublisher(self.model, pose_links, pose_endpoint)
+            print(f"[Simulator] Publishing poses of {len(pose_links)} links on {self.pose_publisher.endpoint}")
 
         # variables
         self.q_init = q_init
@@ -385,6 +400,9 @@ class SimulatorWrapper:
                 from xbot2_py_mujoco.terrain_scan_ros import pointcloud_from_scan
                 frame_id = self.model.body(self.terrain_scanner.body_id).name
                 self.terrain_scan_pub.publish(pointcloud_from_scan(self.terrain_scan, frame_id))
+        if (self.pose_publisher is not None
+                and self.iter_counter % self.pose_decimation == 0):
+            self.pose_publisher.publish(self.data)
         if self.iter_counter % self.send_state_decimation == 0:
             self.xbot2_bridge.send_state()
 
@@ -452,6 +470,8 @@ class SimulatorWrapper:
             self.rgbd_manager.close()
         if self.remote_control is not None:
             self.remote_control.close()
+        if getattr(self, 'pose_publisher', None) is not None:
+            self.pose_publisher.close()
         if self.viewer is not None:
             self.viewer.close()
         self.xbot2_bridge.close()

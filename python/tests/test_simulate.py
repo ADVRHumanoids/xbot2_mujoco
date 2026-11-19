@@ -151,3 +151,10 @@ def test_cli_rejects_invalid_terrain_scan_values(options):
     with pytest.raises(SystemExit) as exc:
         parse_args(options)
     assert exc.value.code == 2
+
+
+def test_parse_args_ignores_blank_arguments(monkeypatch):
+    args = parse_args(['--urdf', 'robot.urdf', '', ' ', '--headless', '\n'])
+    assert args.urdf == 'robot.urdf' and args.headless
+    monkeypatch.setattr('sys.argv', ['simulate.py', '--urdf', 'robot.urdf', '', '  '])
+    assert parse_args().urdf == 'robot.urdf'
