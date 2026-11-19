@@ -18,6 +18,9 @@ dependencies = [
     "Pillow>=10.1",
     "PyYAML",
     "pyzmq",
+    "xbot2_py_bridge @ git+https://github.com/ADVRHumanoids/xbot2_py_bridge.git@master#subdirectory=python",
+    "lxml",
+    "rospkg"
 ]
 
 [project.scripts]
