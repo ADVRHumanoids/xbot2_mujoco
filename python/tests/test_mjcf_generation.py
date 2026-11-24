@@ -151,6 +151,28 @@ def test_merge_xml_adds_default_class(gen_with_config):
     assert default_leg, '<default class="robot_leg"> should be present after merge'
 
 
+@pytest.mark.parametrize('contents', [
+    'spawn_locations:\n  terrain_r0_c0_stairs: [1, 2, 3]\n',
+    'spawn_locations:\n  - [1, 2, 3]\n',
+])
+def test_merge_xml_ships_spawn_file(urdf_str, tmp_path, contents):
+    world = tmp_path / 'terrain.xml'
+    world.write_text('<mujoco><worldbody><geom name="ground" type="plane" size="1 1 .1"/></worldbody></mujoco>')
+    spawn_file = tmp_path / 'spawn_locations.yaml'
+    spawn_file.write_text(contents)
+    generator = MjcfGenerator('spawn_sidecar', urdf_str, output_dir=str(tmp_path / 'compiled'))
+    generator.merge_xml(world)
+    generator.generate_mjcf_string()
+    output = Path(generator.mj_xml_path).with_name('spawn_locations.yaml')
+    assert output.read_text() == contents
+    # Further merges without a sidecar must preserve the terrain's spawn file.
+    config = tmp_path / 'config' / 'config.xml'
+    config.parent.mkdir()
+    config.write_text('<mujoco/>')
+    generator.merge_xml(config)
+    assert output.read_text() == contents
+
+
 def test_merge_xml_preserves_default_classes_from_multiple_sources(urdf_str, config_xml_str):
     g = MjcfGenerator(name='quadruped_defaults_test', urdf_str=urdf_str)
     g.merge_xml(config_xml_str)

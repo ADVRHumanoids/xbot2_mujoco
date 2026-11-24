@@ -49,7 +49,7 @@ class SimulatorWrapper:
                  socket_path: str = None,
                  remote_control_endpoint: str = None,
                  actuator_delay_s: float = 0.0,
-                 spawn_locations: list[tuple[float, float, float]] = None,
+                 spawn_locations: list[tuple[float, float, float]] | dict[str, tuple[float, float, float]] = None,
                  terrain_scanner: TerrainScanner = None,
                  terrain_scan_decimation: int = 100,
                  terrain_scan_visualization: bool = True,
@@ -122,6 +122,8 @@ class SimulatorWrapper:
         explicit_spawn_locations = spawn_locations is not None
         if spawn_locations is None:
             spawn_locations = [(0.0, 0.0, 0.0)]
+        if isinstance(spawn_locations, dict):
+            spawn_locations = spawn_locations.values()
     
         # save model and create data
         self.model = model

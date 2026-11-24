@@ -104,6 +104,10 @@ class TerrainGeneratorCfg:
     and ``border_height`` define the outer wall. ``curriculum`` lays out
     terrain types by column and difficulty by row; otherwise types and
     difficulties are sampled randomly within ``difficulty_range``.
+    ``deterministic`` overrides curriculum and proportions: each slot on
+    ``terrain_type_axis`` gets one type in declaration order, while the other
+    axis linearly spans the difficulty endpoints (a single slot uses the minimum).
+    The type axis must have exactly as many slots as ``sub_terrains``.
     ``spawn_height`` is added to each generated spawn Z coordinate. Caching is
     controlled by ``use_cache`` and ``cache_dir``; ``seed`` makes generation
     reproducible.
@@ -124,6 +128,8 @@ class TerrainGeneratorCfg:
     difficulty_range: tuple[float, float] = (0.0, 1.0)
     spawn_height: float = 1.0
     seed: int | None = None
+    deterministic: bool = False
+    terrain_type_axis: str = "columns"
 
 
 @dataclass
@@ -187,7 +193,13 @@ class TerrainGenerator:
             raise ValueError("scales must be positive")
         if not c.sub_terrains:
             raise ValueError("sub_terrains must not be empty")
-        if (
+        if c.terrain_type_axis not in ("columns", "rows"):
+            raise ValueError('terrain_type_axis must be columns or rows')
+        if c.deterministic:
+            type_count = c.num_cols if c.terrain_type_axis == "columns" else c.num_rows
+            if type_count != len(c.sub_terrains):
+                raise ValueError('deterministic type axis must match the number of sub_terrains')
+        elif (
             any(x.proportion < 0 for x in c.sub_terrains.values())
             or sum(x.proportion for x in c.sub_terrains.values()) <= 0
         ):
@@ -304,20 +316,27 @@ class TerrainGenerator:
     def _generate(self):
         names = list(self.cfg.sub_terrains)
         cs = list(self.cfg.sub_terrains.values())
-        p = np.array([x.proportion for x in cs])
-        p = p / p.sum()
-        # IsaacLab assigns curriculum terrain types by column proportions.
-        ci = np.searchsorted(
-            np.cumsum(p),
-            np.arange(self.cfg.num_cols) / self.cfg.num_cols + 0.001,
-        )
+        if not self.cfg.deterministic:
+            p = np.array([x.proportion for x in cs])
+            p = p / p.sum()
+            # IsaacLab assigns curriculum terrain types by column proportions.
+            ci = np.searchsorted(
+                np.cumsum(p),
+                np.arange(self.cfg.num_cols) / self.cfg.num_cols + 0.001,
+            )
         lo, hi = self.cfg.difficulty_range
         self._patches = [
             [None] * self.cfg.num_cols for _ in range(self.cfg.num_rows)
         ]
         for c in range(self.cfg.num_cols):
             for r in range(self.cfg.num_rows):
-                if self.cfg.curriculum:
+                if self.cfg.deterministic:
+                    columns = self.cfg.terrain_type_axis == "columns"
+                    i = c if columns else r
+                    index = r if columns else c
+                    count = self.cfg.num_rows if columns else self.cfg.num_cols
+                    d = lo + (hi - lo) * index / max(count - 1, 1)
+                elif self.cfg.curriculum:
                     i = int(ci[c])
                     d = (
                         lo
@@ -716,10 +735,15 @@ class TerrainGenerator:
         (p.parent / "spawn_locations.yaml").write_text(
             yaml.safe_dump(
                 {
-                    "spawn_locations": (
-                        self.terrain_origins
-                        + np.array((0.0, 0.0, self.cfg.spawn_height))
-                    ).reshape(-1, 3).tolist()
+                    "spawn_locations": {
+                        (f"{self.terrain_types[r, c]}_{r if self.cfg.terrain_type_axis == 'columns' else c}"
+                         if self.cfg.deterministic else f"terrain_r{r}_c{c}_{self.terrain_types[r, c]}"): (
+                            self.terrain_origins[r, c]
+                            + np.array((0.0, 0.0, self.cfg.spawn_height))
+                        ).tolist()
+                        for r in range(self.cfg.num_rows)
+                        for c in range(self.cfg.num_cols)
+                    }
                 },
                 sort_keys=False,
             )

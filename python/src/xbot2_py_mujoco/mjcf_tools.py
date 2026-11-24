@@ -77,6 +77,11 @@ class MjcfGenerator:
                 destination = Path(self.mj_assetsdir) / source.name
                 shutil.copy2(source, destination)
                 asset.set('file', f'./assets/{destination.name}')
+            spawn_file = source_dir / 'spawn_locations.yaml'
+            if spawn_file.is_file():
+                destination = Path(self.mj_xml_dir) / spawn_file.name
+                if spawn_file.resolve() != destination.resolve():
+                    shutil.copy2(spawn_file, destination)
         self.mj_xml_tree = MjcfGenerator._tree_merge(self.mj_xml_tree, mj_opt_tree)
 
 

@@ -129,16 +129,19 @@ def _load_spawn_locations(path):
     if path is None:
         return [(0.0, 0.0, 0.0)]
     locations = yaml.safe_load(Path(path).read_text())
-    if isinstance(locations, dict):
-        locations = locations.get('spawn_locations')
+    if isinstance(locations, dict) and 'spawn_locations' in locations:
+        locations = locations['spawn_locations']
     if not locations:
         raise ValueError('Spawn file must contain at least one spawn location')
+    if isinstance(locations, dict):
+        locations = locations.values()
     try:
         locations = [tuple(float(value) for value in location) for location in locations]
     except (TypeError, ValueError) as exc:
         raise ValueError('Spawn locations must be [x, y, z] values') from exc
-    if any(len(location) != 3 for location in locations):
-        raise ValueError('Spawn locations must be [x, y, z] values')
+    if any(len(location) != 3 or not all(math.isfinite(value) for value in location)
+           for location in locations):
+        raise ValueError('Spawn locations must be finite [x, y, z] values')
     return locations
 
 

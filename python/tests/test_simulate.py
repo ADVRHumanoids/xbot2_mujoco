@@ -51,6 +51,16 @@ def test_detect_spawn_file_from_merged_xml(tmp_path):
     assert _detect_spawn_file([('cmd', 'generate-world')]) is None
 
 
+@pytest.mark.parametrize('contents', [
+    'spawn_locations:\n  stairs: [1, 2, 3]\n  rough: [4, 5, 6]\n',
+    'stairs: [1, 2, 3]\nrough: [4, 5, 6]\n',
+])
+def test_load_named_spawn_locations(tmp_path, contents):
+    spawn_file = tmp_path / 'spawn.yaml'
+    spawn_file.write_text(contents)
+    assert _load_spawn_locations(spawn_file) == [(1., 2., 3.), (4., 5., 6.)]
+
+
 def test_load_spawn_locations_rejects_invalid_shape(tmp_path):
     spawn_file = tmp_path / 'spawn.yaml'
     spawn_file.write_text('spawn_locations:\n  - [1, 2]\n')
@@ -61,6 +71,7 @@ def test_load_spawn_locations_rejects_invalid_shape(tmp_path):
 
 @pytest.mark.parametrize('spawn_locations, expected_position', [
     ([(1.0, 2.0, 0.5)], [1.0, 2.0, 0.5]),
+    ({'stairs': (1.0, 2.0, 0.5)}, [1.0, 2.0, 0.5]),
     (None, [0.0, 0.0, 1.0]),
 ])
 def test_startup_sets_spawn_before_viewer_and_bridge(monkeypatch, spawn_locations, expected_position):

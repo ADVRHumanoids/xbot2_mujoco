@@ -338,6 +338,17 @@ model = mujoco.MjModel.from_xml_string(mjcf_str)
   assets/            # mesh/texture files (symlinked or copied)
 ```
 
+# Deterministic terrain layout
+
+Set `TerrainGeneratorCfg(deterministic=True, terrain_type_axis="columns", ...)`
+to assign terrain types to columns in `sub_terrains` declaration order, ignoring
+`proportion` and `curriculum`. Set `num_cols` to the number of terrain types.
+Rows linearly span `difficulty_range`, including its minimum and maximum;
+a single difficulty row uses the minimum. Use `terrain_type_axis="rows"` to
+assign types to rows and interpolate difficulty across columns instead, with
+`num_rows` equal to the number of types. Keep a fixed `seed` for repeatable
+random grid and noise geometry within the deterministic layout.
+
 # Open stairs terrain
 
 The terrain generator supports `MeshOpenPyramidStairsTerrainCfg` and
@@ -381,7 +392,15 @@ tread over its lower neighbor. Thickness must be smaller than the minimum
 step height, and overlap must be nonnegative and smaller than `step_width`.
 Inverted stairs also require a positive opening above the landing. Generated
 terrain geoms use group **2**, and `spawn_locations.yaml` places spawns above
-each central landing using `spawn_height`.
+each central landing using `spawn_height`. Its `spawn_locations` map uses unique
+tile names, `{sub_terrain_name}_{rowid}` in deterministic mode (zero-based
+difficulty row index, or column index when types occupy rows), and
+`terrain_r{row}_c{column}_{sub_terrain_name}` otherwise, with `[x, y, z]` world
+positions as values. The simulator accepts both this map and legacy lists of
+positions, choosing a random position for startup and keyboard respawns.
+When `MjcfGenerator.merge_xml()` receives a terrain XML `Path`, it also copies
+the adjacent `spawn_locations.yaml` beside the final robot MJCF, so downstream
+rollout scripts can find the named positions automatically.
 
 # ROS 2 odometry
 

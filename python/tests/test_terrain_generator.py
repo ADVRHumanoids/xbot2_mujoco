@@ -56,6 +56,54 @@ def test_reproducible_seed_and_assets(tmp_path):
     )
 
 
+@pytest.mark.parametrize('axis', ['columns', 'rows'])
+@pytest.mark.parametrize('difficulty_count', [1, 4])
+def test_deterministic_layout_ignores_proportions_and_interpolates(axis, difficulty_count):
+    config = cfg()
+    config.deterministic = True
+    config.terrain_type_axis = axis
+    config.difficulty_range = (.2, .8)
+    names = list(config.sub_terrains)
+    config.num_rows, config.num_cols = (
+        (difficulty_count, len(names)) if axis == 'columns' else (len(names), difficulty_count)
+    )
+    for terrain in config.sub_terrains.values():
+        terrain.proportion = 0
+    first = tg.TerrainGenerator(config)
+    expected_types = np.tile(names, (difficulty_count, 1))
+    expected_difficulties = np.tile(np.linspace(.2, .8, difficulty_count)[:, None], (1, len(names)))
+    if axis == 'rows':
+        expected_types = expected_types.T
+        expected_difficulties = expected_difficulties.T
+    np.testing.assert_array_equal(first.terrain_types, expected_types)
+    np.testing.assert_allclose(first.difficulties, expected_difficulties)
+    # Neither sampling weights, curriculum nor the geometry seed affect layout.
+    for i, terrain in enumerate(config.sub_terrains.values()):
+        terrain.proportion = i + 1
+    config.seed = 7
+    config.curriculum = False
+    second = tg.TerrainGenerator(config)
+    np.testing.assert_array_equal(second.terrain_types, first.terrain_types)
+    np.testing.assert_array_equal(second.difficulties, first.difficulties)
+
+
+@pytest.mark.parametrize('axis', ['columns', 'rows'])
+def test_deterministic_type_axis_must_fit_all_types(axis):
+    config = cfg()
+    config.deterministic = True
+    config.terrain_type_axis = axis
+    config.num_rows = config.num_cols = 1
+    with pytest.raises(ValueError, match='type axis must match'):
+        tg.TerrainGenerator(config)
+
+
+def test_terrain_type_axis_validation():
+    config = cfg()
+    config.terrain_type_axis = 'diagonal'
+    with pytest.raises(ValueError, match='terrain_type_axis'):
+        tg.TerrainGenerator(config)
+
+
 def test_curriculum_layout_origins_and_mujoco_load(tmp_path):
     g = tg.TerrainGenerator(cfg())
     assert g.terrain_types[0].tolist() == list(cfg().sub_terrains)
@@ -162,6 +210,9 @@ def test_merge_with_mjcf_generator(tmp_path):
     )
     merger.merge_xml(world)
     model = mujoco.MjModel.from_xml_string(merger.generate_mjcf_string())
+    assert (tmp_path / 'robot' / 'spawn_locations.yaml').read_bytes() == (
+        tmp_path / 'spawn_locations.yaml'
+    ).read_bytes()
     assert model.nhfield == 1
     assert (
         mujoco.mj_name2id(
@@ -321,7 +372,7 @@ def test_open_stairs_geometry_and_collision(tmp_path, inverted, border_width, ov
                              np.array([0., 0., -1.]), groups, 1, -1, geom_id)
     assert distance == pytest.approx(1 - patch.origin_z)
     spawns = yaml.safe_load((tmp_path / "spawn_locations.yaml").read_text())
-    assert spawns["spawn_locations"][0] == pytest.approx(
+    assert spawns["spawn_locations"][f"terrain_r0_c0_{generator.terrain_types[0, 0]}"] == pytest.approx(
         (0, 0, patch.origin_z + config.spawn_height)
     )
 
@@ -390,4 +441,30 @@ def test_cli_saves_default_world(tmp_path, monkeypatch, capsys):
     spawns = yaml.safe_load(spawn_file.read_text())["spawn_locations"]
     assert len(spawns) == 1
     terrain_origin = tg.TerrainGenerator(small).terrain_origins.reshape(-1, 3)[0]
-    assert spawns[0][2] == pytest.approx(terrain_origin[2] + small.spawn_height)
+    assert next(iter(spawns.values()))[2] == pytest.approx(terrain_origin[2] + small.spawn_height)
+
+
+@pytest.mark.parametrize('mode', ['legacy', 'columns', 'rows'])
+def test_spawn_map_names_each_tile_and_roundtrips(tmp_path, mode):
+    from xbot2_py_mujoco.simulate import _load_spawn_locations
+
+    config = cfg()
+    if mode != 'legacy':
+        config.deterministic = True
+        config.terrain_type_axis = mode
+        if mode == 'rows':
+            config.num_rows, config.num_cols = config.num_cols, config.num_rows
+    generator = tg.TerrainGenerator(config)
+    generator.save(tmp_path / 'terrain.xml')
+    spawn_file = tmp_path / 'spawn_locations.yaml'
+    locations = yaml.safe_load(spawn_file.read_text())['spawn_locations']
+    assert len(locations) == generator.cfg.num_rows * generator.cfg.num_cols
+    for r in range(generator.cfg.num_rows):
+        for c in range(generator.cfg.num_cols):
+            if mode == 'legacy':
+                name = f'terrain_r{r}_c{c}_{generator.terrain_types[r, c]}'
+            else:
+                name = f'{generator.terrain_types[r, c]}_{r if mode == "columns" else c}'
+            expected = generator.terrain_origins[r, c] + [0, 0, generator.cfg.spawn_height]
+            assert locations[name] == pytest.approx(expected)
+    assert _load_spawn_locations(spawn_file) == [tuple(value) for value in locations.values()]
