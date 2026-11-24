@@ -814,3 +814,19 @@ def test_payload_regex_validates_all_matches_before_mutation(remote_server):
         })
     np.testing.assert_array_equal(remote_server.model.body_mass, original)
     assert not remote_server._payloads
+
+
+def test_standalone_server_close_clears_owned_wrenches(remote_server):
+    remote_server.handle_request({
+        'command': 'apply_wrench', 'body': 'box', 'force': [2, 0, 0],
+        'torque': [0, 0, 0], 'duration': 1,
+    })
+    remote_server.apply_wrenches()
+    assert remote_server.data.xfrc_applied[remote_server.model.body('box').id, 0] == 2
+
+    remote_server.close()
+    remote_server.close()
+
+    np.testing.assert_array_equal(remote_server.data.xfrc_applied, 0)
+    assert not remote_server.control._active_wrenches
+    assert remote_server.process_requests() == 0

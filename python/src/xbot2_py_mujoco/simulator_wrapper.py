@@ -58,7 +58,10 @@ class SimulatorWrapper:
                  base_velocity_plot_body: str = None,
                  enable_xbot2_bridge: bool = True,
                  bridge_factory: Callable[[mujoco.MjModel, mujoco.MjData], object] = None,
-                 enable_pacing: bool = True):
+                 enable_pacing: bool = True,
+                 viewer_backend: str = "native",
+                 web_port: int = 0,
+                 web_open_browser: bool = False):
 
         # A custom factory takes precedence over the default XBot2 bridge flag.
         self._custom_bridge = bridge_factory is not None
@@ -67,6 +70,11 @@ class SimulatorWrapper:
         self._status_text = ''
         self._status_text_was_visible = False
         self._status_font = None
+
+        if viewer_backend not in ("native", "web"):
+            raise ValueError("viewer_backend must be native or web")
+        if isinstance(web_port, bool) or not isinstance(web_port, int) or not 0 <= web_port <= 65535:
+            raise ValueError("web_port must be an integer between 0 and 65535")
 
         rgbd_cameras = tuple(rgbd_cameras or ())
         validate_cameras(model, rgbd_cameras)
@@ -144,7 +152,14 @@ class SimulatorWrapper:
         if viewer:
             if viewer_key_callback is None:
                 viewer_key_callback = self._viewer_key_callback
-            self.viewer : Handle = launch_passive(model, self.data, key_callback=viewer_key_callback)
+            if viewer_backend == "web":
+                from xbot2_py_mujoco.web_viewer import WebViewerHandle
+                self.viewer = WebViewerHandle(
+                    model, self.data, viewer_key_callback, self,
+                    port=web_port, open_browser=web_open_browser,
+                )
+            else:
+                self.viewer = launch_passive(model, self.data, key_callback=viewer_key_callback)
         else:
             self.viewer : Handle = None
 

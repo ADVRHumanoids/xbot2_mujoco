@@ -180,6 +180,45 @@ class MjcfGenerator:
         return res
     
     
+    def _remove_unused_sdf_assets(self):
+        """Drop unused procedural SDF meshes and their orphaned instances.
+
+        Studio 4.0.1's browser cannot execute native SDF plugins, even when
+        the plugin only generated an unused mesh. Keep all referenced assets,
+        including references in defaults, and defer cleanup if includes may
+        contain references we cannot see here.
+        """
+        root = self.mj_xml_tree
+        if root.xpath('.//include'):
+            return
+        instances = {
+            instance.get('name')
+            for group in root.xpath('./extension/plugin')
+            if group.get('plugin', '').startswith('mujoco.sdf.')
+            for instance in group.findall('instance')
+        }
+        referenced_meshes = set(root.xpath('.//@mesh'))
+        removed_instances = set()
+        for mesh in root.xpath('./asset/mesh[plugin]'):
+            if not mesh.get('name') or mesh.get('name') in referenced_meshes:
+                continue
+            plugins = mesh.findall('plugin')
+            if not all(plugin.get('plugin', '').startswith('mujoco.sdf.')
+                       or plugin.get('instance') in instances for plugin in plugins):
+                continue
+            removed_instances.update(plugin.get('instance') for plugin in plugins)
+            mesh.getparent().remove(mesh)
+        referenced_instances = set(root.xpath('.//plugin/@instance'))
+        for group in root.xpath('./extension/plugin'):
+            removed = False
+            for instance in group.findall('instance'):
+                name = instance.get('name')
+                if name in removed_instances and name not in referenced_instances:
+                    group.remove(instance)
+                    removed = True
+            if removed and not len(group):
+                group.getparent().remove(group)
+
     def _finalize_xml(self):
         # process <reference> tags by inserting their body content in place 
         # and removing the <reference> tag itself
@@ -236,6 +275,8 @@ class MjcfGenerator:
                 except ValueError:
                     print(f'Warning: <q_init> joint "{joint_name}" has non-numeric value "{joint_value}", skipping')
             mujoco_root.remove(q_init_elem)
+
+        self._remove_unused_sdf_assets()
 
         # Keep capture settings outside MuJoCo's schema, like q_init.
         elements = mujoco_root.findall('rgbd')

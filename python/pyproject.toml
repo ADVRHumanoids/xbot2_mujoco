@@ -13,7 +13,7 @@ authors = [
     { name = "IIT" },
 ]
 dependencies = [
-    "mujoco==3.8.0",
+    "mujoco==4.0.1",
     "numpy",
     "Pillow>=10.1",
     "PyYAML",

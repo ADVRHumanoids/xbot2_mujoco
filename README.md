@@ -9,6 +9,85 @@ The MuJoCo simulator interfaced with Xbot2. The design is based around two main 
    - manipulating the resulting XML with the custom `<reference>` and `<setattribute>` tags
  - The `MjXbot2Bridge`: connects the simulation to an instance of Xbot2 running in a separate executable; communication happens via a UNIX socket, and uses JSON for serialization
 
+## MuJoCo 4 and optional web viewer
+
+The Python package pins MuJoCo **4.0.1**. Upgrade in the same environment used
+by your simulator:
+
+```bash
+python -m pip install -e ./python
+```
+
+MuJoCo 4 splits its distribution into `mujoco-core`, `mujoco-studio`, and
+`mujoco-studio-wasm`. If upgrading from 3.x produces an import error about
+missing core bindings, repair the shared package files:
+
+```bash
+python -m pip install --force-reinstall --no-deps \
+  mujoco==4.0.1 mujoco-core==4.0.1 mujoco-studio==4.0.1
+```
+
+The native passive viewer remains the default. Opt in to the new Studio web
+viewer with the same URDF/XML options used for native simulation:
+
+```bash
+python -m xbot2_py_mujoco.simulate --urdf robot.urdf --xml world.xml \
+  --web-viewer --web-port 8080
+```
+
+Open `http://localhost:8080` in a browser, or add `--web-open-browser`.
+`--web-port 0` (the default) selects the first free port starting at 8080 and
+prints its URL. `--headless` and `--web-viewer` are mutually exclusive.
+From Python, use `SimulatorWrapper(model, viewer_backend="web", web_port=8080)`.
+`viewer=False` disables either backend. Studio imports only when requested.
+
+The simulator owns physics, XBot2 communication, ROS publishing, and pacing in
+both viewers. Space, Right Arrow, R, and +/− retain the wrapper's pause,
+advance, respawn, and RTF controls. Terrain scans, payload spheres, and force
+arrows are also streamed. Studio's pause/speed and single-step requests use the
+same wrapper controls; single-step advances approximately 16.7 ms. Studio's
+model-loading UI is disabled because replacing the model would invalidate the
+bridge and scanner. Studio history and control-noise simulation plugins are not
+installed. Browser tab closure leaves simulation and the server running for
+reconnection; use Ctrl+C in the simulator terminal to stop.
+
+MuJoCo 4.0.1's upstream web server listens on **all network interfaces** and
+has no authentication or encryption. Use a trusted network/firewall. For remote
+access, forward the port with `ssh -L 8080:localhost:8080 HOST` and visit
+localhost; this also satisfies the browser's secure-context requirement.
+Rendering runs in the browser, so the web viewer needs no display or GPU on the
+simulation host. RGB-D observation rendering still needs its own graphics backend.
+MJCF generation removes unreferenced `mujoco.sdf.*` mesh assets and their
+orphaned plugin instances. This fixes Kyon's otherwise unused torus asset
+crashing Studio's browser client; referenced meshes and collision geometry are
+preserved. Active native plugins still require support in the upstream browser
+build.
+See the [upstream web viewer documentation](https://mujoco.readthedocs.io/en/4.0.1/studio/web_viewers.html).
+
+The opt-in Kyon system test generates the robot from installed `kyon_mujoco`
+and `kyon_urdf` resources, then checks headless, native, and web modes with ROS,
+terrain scans, payload overlays, pause/resume, and timed advances. The web
+system test restricts its listener to localhost with a test-only socket override:
+
+```bash
+# Source ROS and your Kyon workspace first; activate the simulator environment.
+KYON_MUJOCO_TEST=1 xvfb-run -a python -m pytest \
+  python/tests/test_kyon_integration.py -v
+```
+
+To also exercise real browser rendering and keyboard controls, install Playwright
+in the test environment (`python -m pip install playwright`) and provide Chrome
+on PATH, or install its browser with `python -m playwright install chromium`:
+
+```bash
+KYON_MUJOCO_TEST=1 KYON_MUJOCO_BROWSER_TEST=1 xvfb-run -a python -m pytest \
+  python/tests/test_kyon_integration.py -v
+```
+
+Use a real display instead of `xvfb-run` when available. The regular regression
+suite is `MUJOCO_GL=egl python -m pytest python/tests -q`; Kyon system tests are
+skipped unless explicitly enabled.
+
 ## Velocity control with integral error
 
 For a joint controlled by velocity, use MuJoCo's built-in `intvelocity`

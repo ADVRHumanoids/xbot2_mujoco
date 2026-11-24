@@ -61,7 +61,12 @@ def parse_args(argv=None):
     s = p.add_argument_group('SimulatorWrapper')
     s.add_argument('--srdf',       metavar='PATH', help='Path to robot SRDF file')
     s.add_argument('--srdf-cmd',   metavar='CMD',  help='Command that generates the SRDF')
-    s.add_argument('--headless',              action='store_true', help='Disable MuJoCo viewer')
+    viewers = s.add_mutually_exclusive_group()
+    viewers.add_argument('--headless', action='store_true', help='Disable MuJoCo viewer')
+    viewers.add_argument('--web-viewer', action='store_true', help='Opt in to MuJoCo Studio web viewer')
+    s.add_argument('--web-port', type=int, choices=range(65536), default=0, metavar='PORT',
+                   help='Web viewer port (0 selects a free port starting at 8080)')
+    s.add_argument('--web-open-browser', action='store_true', help='Open the web viewer in a browser')
     s.add_argument('--viewer-fps',            type=int,   default=60,    metavar='N',   help='Viewer render fps (default: 60)')
     s.add_argument('--base-velocity-plot-body', metavar='BODY',
                    help='Show linear and angular velocity plots in this body frame')
@@ -194,6 +199,9 @@ def main():
         q_init=gen.q_init,
         viewer=not args.headless,
         viewer_fps=args.viewer_fps,
+        viewer_backend="web" if args.web_viewer else "native",
+        web_port=args.web_port,
+        web_open_browser=args.web_open_browser,
         base_velocity_plot_body=args.base_velocity_plot_body,
         ros=not args.disable_ros,
         ros_node_name=args.ros_node_name,

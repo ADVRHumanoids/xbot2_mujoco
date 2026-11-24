@@ -326,3 +326,51 @@ def test_sensor_types(mj_model):
     assert mj_model.sensor_type[0] == mujoco.mjtSensor.mjSENS_ACCELEROMETER
     assert mj_model.sensor_type[1] == mujoco.mjtSensor.mjSENS_GYRO
 
+
+
+def test_unused_sdf_asset_removed_without_changing_physics(gen):
+    import numpy as np
+    gen.merge_xml('''<mujoco>
+      <extension><plugin plugin="mujoco.sdf.torus">
+        <instance name="unused"><config key="radius1" value=".1"/>
+          <config key="radius2" value=".02"/></instance>
+      </plugin></extension>
+      <asset><mesh name="unused"><plugin instance="unused"/></mesh></asset>
+    </mujoco>''')
+    before = mujoco.MjModel.from_xml_string(etree.tostring(gen.mj_xml_tree).decode())
+    after = mujoco.MjModel.from_xml_string(gen.generate_mjcf_string())
+    assert before.nplugin == 1 and after.nplugin == 0
+    assert (after.nq, after.nv, after.ngeom) == (before.nq, before.nv, before.ngeom)
+    before_data, after_data = mujoco.MjData(before), mujoco.MjData(after)
+    for _ in range(10):
+        mujoco.mj_step(before, before_data)
+        mujoco.mj_step(after, after_data)
+    np.testing.assert_array_equal(after_data.qpos, before_data.qpos)
+    np.testing.assert_array_equal(after_data.qvel, before_data.qvel)
+
+
+@pytest.mark.parametrize('reference', [
+    '<worldbody><geom mesh="kept" type="mesh"/></worldbody>',
+    '<default><geom mesh="kept"/></default>',
+    '<include file="other.xml"/>',
+])
+def test_sdf_cleanup_keeps_potentially_referenced_assets(gen, reference):
+    gen.merge_xml('''<mujoco><extension><plugin plugin="mujoco.sdf.torus">
+      <instance name="kept"/></plugin></extension>
+      <asset><mesh name="kept"><plugin instance="kept"/></mesh></asset>
+    </mujoco>''')
+    gen.merge_xml('<mujoco>' + reference + '</mujoco>')
+    gen._finalize_xml()
+    assert gen.mj_xml_tree.xpath('./asset/mesh[@name="kept"]')
+    assert gen.mj_xml_tree.xpath('./extension/plugin/instance[@name="kept"]')
+
+
+def test_sdf_cleanup_keeps_instance_used_by_geom(gen):
+    gen.merge_xml('''<mujoco><extension><plugin plugin="mujoco.sdf.torus">
+      <instance name="kept"/></plugin></extension>
+      <asset><mesh name="unused"><plugin instance="kept"/></mesh></asset>
+      <worldbody><geom type="sdf"><plugin instance="kept"/></geom></worldbody>
+    </mujoco>''')
+    gen._finalize_xml()
+    assert not gen.mj_xml_tree.xpath('./asset/mesh[@name="unused"]')
+    assert gen.mj_xml_tree.xpath('./extension/plugin/instance[@name="kept"]')

@@ -132,3 +132,38 @@ def test_mjctl_transport_and_python_share_properties_and_wrenches(sim):
     finally:
         client.close()
         server.close()
+
+
+def test_remote_endpoint_shares_control_and_preserves_forces_on_server_close(sim):
+    connected = SimulatorWrapper(
+        sim.model, viewer=False, ros=False, enable_xbot2_bridge=False,
+        enable_pacing=False, remote_control_endpoint='inproc://shared-control-lifecycle',
+    )
+    client = zmq.Context.instance().socket(zmq.REQ)
+    client.setsockopt(zmq.LINGER, 0)
+    client.setsockopt(zmq.RCVTIMEO, 1000)
+    client.connect(connected.remote_control.endpoint)
+    try:
+        assert connected.remote_control.control is connected.control
+        connected.apply_wrench('robot', [1, 0, 0])
+        client.send_json({
+            'id': 'timed', 'command': 'apply_wrench', 'body': 'robot',
+            'force': [2, 0, 0], 'torque': [0, 0, 0], 'duration': 1,
+        })
+        connected.control.apply_wrenches = Mock(wraps=connected.control.apply_wrenches)
+
+        connected.run()
+
+        response = client.recv_json()
+        assert response['ok'] and response['id'] == 'timed'
+        connected.control.apply_wrenches.assert_called_once_with()
+        body = connected.model.body('robot').id
+        assert connected.data.xfrc_applied[body, 0] == 3
+
+        connected.remote_control.close()
+        connected.run()
+        assert connected.data.xfrc_applied[body, 0] == 3
+    finally:
+        client.close()
+        connected.close()
+    np.testing.assert_array_equal(connected.data.xfrc_applied, 0)
